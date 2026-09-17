@@ -33,6 +33,23 @@ Use lowercase `snake_case`. Coordinates and indexes are derived by `src/assets/s
 ### UI
 `reticle`, `reticle_lock`, `marker_confirm`, `marker_unverified`, `question`, `exclamation`, `grid_dot`, `grid_cross`, `scanline_h`, `scanline_v`, `corner_tl`, `corner_tr`, `corner_bl`, `corner_br`, `panel`, `cursor`
 
+## Orientation conventions
+
+Phase 13C fixed these conventions so map data can compose the library without distorting it:
+
+- **Linear assets are authored east-west.** `road_straight`, `road_curve`, `road_intersection`,
+  `dirt_track`, `rail`, `bridge`, `fence`, `gate` and `pipeline` run left to right. A north-south
+  run sets `rotation: 90` on the map item and swaps the footprint, rather than stretching an
+  east-west asset down a north-south rectangle.
+- **Vehicles head east.** Every vehicle and civilian decoy points right, matching authored
+  footprints that are wider than they are tall.
+- **Buildings are roof plans**, seen from directly above, with a ridge line and two roof planes.
+- **Light comes from the upper left**, so cast shadows fall to the lower right on every frame.
+- **Terrain tiles bleed to the frame edge** and wrap their texture so they tile seamlessly; each
+  frame is clipped to its own 64x64 cell.
+- **Long runs are segmented.** A fence or pipeline is placed as ~64-unit segments so post and
+  saddle spacing stays constant instead of stretching with the run.
+
 ## Anchoring and hit areas
 
 World objects should normally use origin `0.5, 0.5`; terrain tiles use `0, 0`; UI overlays use `0.5, 0.5`. Gameplay hit areas remain metadata-driven and must never be inferred from transparent pixels. Recommended minimum logical hit areas are roughly 40×48 for small vehicles, 48×52 for larger vehicles and a forgiving authored footprint for structures. Mobile presentation should still yield approximately 44 CSS pixels of usable touch target.
