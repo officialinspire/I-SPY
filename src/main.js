@@ -8,16 +8,25 @@ import MissionBriefingScene from './scenes/MissionBriefingScene.js';
 import EnhancedReconScene from './scenes/EnhancedReconScene.js';
 import ResultsScene from './scenes/ResultsScene.js';
 
+const devicePixelRatio = Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : 1;
+const renderResolution = Math.min(
+  GAME_CONFIG.rendering.maxDevicePixelRatio,
+  Math.max(1, devicePixelRatio),
+);
+
 const config = {
   type: Phaser.AUTO,
   parent: 'app',
   backgroundColor: GAME_CONFIG.palette.black,
-  pixelArt: true,
+  resolution: renderResolution,
+  pixelArt: false,
   roundPixels: true,
   render: {
-    antialias: false,
-    pixelArt: true,
+    antialias: true,
+    antialiasGL: true,
+    pixelArt: false,
     roundPixels: true,
+    powerPreference: 'high-performance',
   },
   scale: {
     mode: Phaser.Scale.RESIZE,
