@@ -2,14 +2,20 @@
 
 Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 
+## Live demo
+
+https://officialinspire.github.io/I-SPY/
+
 ## Demo status
 
-**Original Phases 0–11 implemented.** Runtime/package version: **`1.0.0-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B graphics-quality work implemented.** Runtime/package version: **`1.1.0-demo`**.
 
 I SPY currently includes:
 
 - Phaser 3 + Vite browser-game foundation
 - Responsive desktop/mobile scene flow
+- HiDPI rendering up to 2x device resolution
+- 2x supersampled SVG sprite rasterization while preserving logical map sizes
 - Four-tone Cold War / old-handheld visual language
 - Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
 - Pan, zoom, reset, coordinate grid, pause, timer, and reconnaissance HUD
@@ -23,8 +29,15 @@ I SPY currently includes:
 - Runtime-generated terminal SFX and optional haptics
 - Persistent master/SFX/haptics/scanline/image-grain settings
 - Reduced-motion support
+- GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the release-candidate audit and remaining external browser/build verification.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit and `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass.
+
+## Graphics quality
+
+Phase 12A/12B improves image clarity without changing gameplay coordinates or hit boxes. The Phaser backing canvas now follows the device pixel ratio up to 2x, antialiasing is enabled for text/graphics/vector-derived textures, CSS no longer forces the final canvas through pixelated scaling, and each 64x64 logical SVG frame is rasterized internally at 128x128 before display.
+
+The visual style remains intentionally monochrome and retro; the higher-density pipeline is meant to make the existing art direction cleaner rather than replace it with a different aesthetic.
 
 ## Audio, feedback, and settings
 
@@ -145,7 +158,7 @@ npm run build
 - `src/ui/` — shared UI and presentation helpers
 - `assets/maps/` — authored reconnaissance map data
 - `assets/sprites/` — production art sheets
-- `docs/` — art, map, generator, presentation, feedback, and release-audit specifications
+- `docs/` — art, map, generator, presentation, feedback, graphics, and release-audit specifications
 
 ## Roadmap status
 
@@ -161,5 +174,5 @@ npm run build
 - Phase 9 — Cold War presentation ✅
 - Phase 10 — Audio / haptics / settings ✅
 - Phase 11 — MVP release audit ✅
-
-A successful local/CI production build plus browser smoke test is still required before treating the demo as externally verified for deployment.
+- Phase 12A — HiDPI rendering sharpness ✅
+- Phase 12B — Sprite raster-quality pass ✅
