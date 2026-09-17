@@ -115,23 +115,80 @@ export function createAuthoredReconMap(scene, map = DEFAULT_RECON_MAP) {
   }
 
   const root = scene.add.container(0, 0);
+  const entityVisuals = new Map();
   const renderLayerIds = ['terrain', 'vegetation', 'infrastructure', 'structures', 'objects', 'recon-clues'];
   for (const id of renderLayerIds) {
     const layer = getMapLayer(map, id);
     if (!layer) continue;
-    if (layer.type === 'areas') (layer.areas ?? []).forEach((area) => addArea(scene, root, area));
-    else (layer.items ?? []).forEach((item) => addSprite(scene, root, item));
+    if (layer.type === 'areas') {
+      (layer.areas ?? []).forEach((area) => addArea(scene, root, area));
+    } else {
+      (layer.items ?? []).forEach((item) => {
+        const visual = addSprite(scene, root, item);
+        if (layer.type === 'entities' && item.id && visual) entityVisuals.set(item.id, visual);
+      });
+    }
   }
 
-  const entities = (getMapLayer(map, 'objects')?.items ?? []).map((entity) => ({ ...entity }));
+  const entities = (getMapLayer(map, 'objects')?.items ?? []).map((entity) => ({ ...entity, clueTags: [...(entity.clueTags ?? [])] }));
   const spawnZones = (getMapLayer(map, 'spawn-zones')?.zones ?? []).map((zone) => ({ ...zone, accepts: [...(zone.accepts ?? [])] }));
   const metadata = { ...(getMapLayer(map, 'metadata')?.data ?? {}) };
 
-  return { root, map, entities, spawnZones, metadata, validation };
+  return { root, map, entities, entityVisuals, spawnZones, metadata, validation };
+}
+
+export function applyReconOperations(scene, world, operations = []) {
+  for (const operation of operations) {
+    if (!operation?.type) continue;
+
+    if (operation.type === 'move_entity') {
+      const entity = world.entities.find((item) => item.id === operation.entityId);
+      const visual = world.entityVisuals.get(operation.entityId);
+      if (!entity || !visual || !Number.isFinite(operation.x) || !Number.isFinite(operation.y)) {
+        console.warn(`[I SPY change warning] Unable to move entity '${operation.entityId ?? 'unknown'}'.`);
+        continue;
+      }
+      entity.x = operation.x;
+      entity.y = operation.y;
+      entity.hidden = false;
+      visual.setVisible(true).setPosition(entity.x + entity.width / 2, entity.y + entity.height / 2);
+      continue;
+    }
+
+    if (operation.type === 'hide_entity' || operation.type === 'remove_entity') {
+      const entity = world.entities.find((item) => item.id === operation.entityId);
+      const visual = world.entityVisuals.get(operation.entityId);
+      if (!entity || !visual) {
+        console.warn(`[I SPY change warning] Unable to hide entity '${operation.entityId ?? 'unknown'}'.`);
+        continue;
+      }
+      entity.hidden = true;
+      visual.setVisible(false);
+      continue;
+    }
+
+    if (operation.type === 'add_entity' && operation.entity) {
+      const entity = { ...operation.entity, clueTags: [...(operation.entity.clueTags ?? [])] };
+      if (!entity.id || world.entities.some((item) => item.id === entity.id)) {
+        console.warn(`[I SPY change warning] Invalid or duplicate added entity '${entity.id ?? 'unknown'}'.`);
+        continue;
+      }
+      const visual = addSprite(scene, world.root, entity);
+      if (!visual) continue;
+      world.entities.push(entity);
+      world.entityVisuals.set(entity.id, visual);
+      continue;
+    }
+
+    if (operation.type === 'add_sprite' && operation.sprite) {
+      addSprite(scene, world.root, operation);
+    }
+  }
+  return world;
 }
 
 export function entityAtPoint(x, y, entities) {
-  return (entities ?? []).find((entity) => x >= entity.x && x <= entity.x + entity.width && y >= entity.y && y <= entity.y + entity.height) ?? null;
+  return (entities ?? []).find((entity) => !entity.hidden && x >= entity.x && x <= entity.x + entity.width && y >= entity.y && y <= entity.y + entity.height) ?? null;
 }
 
 export function getSpawnZonesByTag(spawnZones, tag) {
