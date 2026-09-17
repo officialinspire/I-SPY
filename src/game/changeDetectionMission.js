@@ -28,6 +28,7 @@ export function createChangeDetectionMission(map = DEFAULT_RECON_MAP) {
     changeType: CHANGE_TYPES.VEHICLE_MOVED,
     passA: { id: 'A', label: 'PASS A', time: '05:12 ZULU' },
     passB: { id: 'B', label: 'PASS B', time: '05:27 ZULU' },
+    focus: { x: 1730, y: 760, zoom: 0.75 },
     passBOperations: [
       { type: 'move_entity', entityId: target.id, x: destination.x, y: destination.y },
     ],
