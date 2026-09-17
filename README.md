@@ -2,70 +2,61 @@
 
 Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 
-## Current development status
+## Demo status
 
-**Phases 0–9 implemented.**
+**Original Phases 0–11 implemented.** Runtime/package version: **`1.0.0-demo`**.
+
+I SPY currently includes:
 
 - Phaser 3 + Vite browser-game foundation
 - Responsive desktop/mobile scene flow
-- Monochrome Cold War / old-handheld presentation
-- Satellite-link acquisition boot sequence and imagery-channel handoff
-- Classified intelligence-terminal framing across menu, briefing and results
-- Global restrained CRT scanlines, vignette and synchronization roll with reduced-motion support
-- Typewriter-style intelligence tasking briefings
-- Pan, zoom, reset, coordinate grid, pause and reconnaissance HUD
-- Selectable reconnaissance entities with target marking, confirmation and false-identification handling
-- LOCATE mission mode with briefing, countdown, scoring and results
-- COUNT mission mode with designated analysis region, decoy-aware category counting, numeric controls, retries, countdown, scoring and results
-- CHANGE mission mode with aligned PASS A / PASS B imagery, toggle comparison, synchronized wide-screen split view, marking, countdown, scoring and results
-- Seeded replayable mission generator for LOCATE, COUNT and CHANGE
-- Spawn-zone-aware target/decoy placement with generated clue packages and solvability validation
-- Seeded image grain, haze and contrast variation for generated missions
-- 80-frame four-tone production sprite library with named Phaser frames
-- Data-driven authored map format with runtime validation
-- State-driven recon changes derived from one authored map rather than duplicated terrain files
-- First production sector: `WOODLAND CORRIDOR 7`
-- Tagged spawn zones for roads, forest concealment, compound vehicles, fields, structures, radar sites, civilian areas and clue placement
+- Four-tone Cold War / old-handheld visual language
+- Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
+- Pan, zoom, reset, coordinate grid, pause, timer, and reconnaissance HUD
+- LOCATE missions with target marking, false-identification handling, scoring, and results
+- COUNT missions with designated regions, decoys, numeric submission, retries, and scoring
+- CHANGE missions with aligned PASS A/PASS B imagery and synchronized wide-screen split comparison
+- Seeded replayable RANDOM missions for LOCATE, COUNT, and CHANGE
+- Spawn-zone-aware target/decoy placement and solvability validation
+- 80-frame production sprite library
+- Authored map/state system built around `WOODLAND CORRIDOR 7`
+- Runtime-generated terminal SFX and optional haptics
+- Persistent master/SFX/haptics/scanline/image-grain settings
+- Reduced-motion support
 
-## Phase 9 presentation system
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the release-candidate audit and remaining external browser/build verification.
 
-The presentation layer now treats I SPY as a fictional Cold War-era imagery-analysis console rather than a generic game UI.
+## Audio, feedback, and settings
 
-Presentation elements include:
+Phase 10 adds a dependency-free Web Audio feedback system with restrained terminal/radio cues for UI taps, imagery acquisition, marking, confirmations, incorrect identifications, the final ten seconds, mission completion, and mission failure.
 
-- short `SATELLITE LINK ACQUISITION` boot sequence
-- orbital telemetry and encrypted-link status text
-- restrained CRT scanlines and vignette applied at the canvas shell
-- slow, low-opacity synchronization roll
-- reusable terminal-border / classification chrome
-- `RESTRICTED // TRAINING USE` markings
-- intelligence tasking orders with file numbers and `EYES ONLY` labeling
-- fast typewriter briefing reveal
-- `ACQUIRE IMAGERY` transition into reconnaissance gameplay
-- formal post-mission intelligence debrief and disposition language
+Settings are stored locally on the device and include:
 
-Effects are intentionally subtle so reconnaissance imagery remains readable. `prefers-reduced-motion` disables the synchronization roll and skips/shortens presentation animation.
+- Master level: 100 / 75 / 50 / 25 / 0 percent
+- Sound effects: on/off
+- Haptics: on/off
+- CRT scanlines: on/off
+- Recon image grain: on/off
 
-See `docs/PHASE-9-PRESENTATION.md` for implementation details and presentation constraints.
+Unsupported Web Audio and vibration APIs fail silently and do not block gameplay. See `docs/PHASE-10-FEEDBACK.md`.
 
 ## Random mission generator
 
-`RANDOM MISSION` creates a replayable mission from a deterministic seed. The generator can choose LOCATE, COUNT or CHANGE and then varies compatible object placement, decoys, clue sprites, time limits, briefing text and subtle imagery degradation.
+`RANDOM MISSION` creates a replayable mission from a deterministic seed. The generator can choose LOCATE, COUNT, or CHANGE and varies compatible object placement, decoys, clue sprites, time limits, briefing text, and subtle imagery degradation.
 
-The generator validates the resulting mission before play. Invalid generations are retried up to the configured attempt limit; if no valid result can be created, I SPY falls back to the authored mission instead of presenting an impossible puzzle.
+The generator validates the mission before play. Invalid generations are retried up to the configured attempt limit; if no valid result can be created, I SPY falls back to an authored mission instead of presenting an impossible puzzle.
 
 Developer/query controls:
 
-- `?seed=COLDWAR-77` — reproduce a specific generated mission
+- `?seed=COLDWAR-77` — reproduce a generated mission
 - `?mode=LOCATE` — constrain generation to LOCATE
 - `?mode=COUNT` — constrain generation to COUNT
 - `?mode=CHANGE` — constrain generation to CHANGE
-- `?debugMission=1` — display the active generator seed/attempt in the briefing and recon HUD
-- Parameters can be combined, e.g. `?seed=COLDWAR-77&mode=CHANGE&debugMission=1`
+- `?debugMission=1` — display generator seed/attempt metadata
+- `?debugTargets=1` — show selectable entity hit boxes
+- `?debugMap=1` — show spawn-zone bounds
 
-The results screen retains the mission seed so a generated scenario can be replayed or shared.
-
-See `docs/PHASE-8-GENERATOR.md` for the generator contract and validation rules.
+Example: `?seed=COLDWAR-77&mode=CHANGE&debugMission=1`
 
 ## Mission modes
 
@@ -78,20 +69,20 @@ Scoring:
 - Correct identification: +1000
 - False identification: -250 each
 - Remaining-time bonus: +5 per second
-- Perfect mission bonus: +500 when completed with zero false identifications
+- Perfect mission bonus: +500 with zero false identifications
 
 ### COUNT
 
-Inspect the highlighted reconnaissance region and submit the number of objects matching the requested category. The authored mission, **Operation Tally Sheet**, asks the player to count military vehicles inside **Grid Delta-3** while civilian and unrelated objects act as visual decoys.
+Inspect the highlighted reconnaissance region and submit the number of objects matching the requested category. Civilian and unrelated objects can act as visual decoys.
 
 Controls:
 
-- On-screen `-` / `+` buttons adjust the count
-- `SUBMIT COUNT` validates the answer
-- Keyboard digits enter a count directly
-- Backspace edits the entered count
-- Arrow Up / Arrow Down adjust the count
-- Enter submits
+- On-screen `-` / `+`
+- `SUBMIT COUNT`
+- Keyboard digits
+- Backspace
+- Arrow Up / Arrow Down
+- Enter
 
 Scoring:
 
@@ -102,16 +93,15 @@ Scoring:
 
 ### CHANGE
 
-Compare two aligned satellite passes and identify the object that changed. The authored mission, **Operation Second Look**, tracks a military jeep that changes position between PASS A and PASS B.
+Compare two aligned satellite passes and identify the changed object.
 
 Controls:
 
-- `VIEW PASS A / VIEW PASS B` toggles the two aligned passes
-- Keyboard `A` / `B` switches directly between passes
-- `MARK CHANGE` selects the changed object in either pass
-- On viewports 980 px or wider, `SPLIT VIEW` shows PASS A on the left and PASS B on the right
-- Split-view pan and zoom stay synchronized
-- Keyboard `S` toggles split view on supported viewport widths
+- `VIEW PASS A / VIEW PASS B`
+- Keyboard `A` / `B`
+- `MARK CHANGE`
+- `SPLIT VIEW` at 980 px+ viewport width
+- Keyboard `S` toggles split view
 
 Scoring:
 
@@ -120,37 +110,16 @@ Scoring:
 - Remaining-time bonus: +5 per second
 - Perfect mission bonus: +500 with zero false identifications
 
-## Authored map and state system
+## Art and presentation
 
-The first map lives at `assets/maps/woodland-corridor-7.json`. It contains separate terrain, vegetation, infrastructure, structure, object, recon-clue, spawn-zone and metadata layers.
-
-`src/world/authoredReconMap.js` validates every required layer, sprite reference, entity id and spawn-zone boundary before rendering the sector. Runtime entity/state operations allow generated missions and PASS B changes to be applied without hand-authoring duplicate maps.
-
-Supported runtime state operations currently include:
-
-- move entity
-- hide/remove entity
-- add entity
-- add sprite/change clue
-
-Debug helpers:
-
-- `?debugTargets=1` — show selectable entity hit boxes
-- `?debugMap=1` — show spawn-zone bounds
-- `?debugMission=1` — show generator seed metadata
-
-See `docs/PHASE-5-MAP.md`, `docs/PHASE-6-COUNT.md`, `docs/PHASE-7-CHANGE.md`, `docs/PHASE-8-GENERATOR.md`, and `docs/PHASE-9-PRESENTATION.md` for mode, map, generator and presentation contracts.
-
-## Sprite system
-
-Production art lives in `assets/sprites/`. Phase 4 established five authored SVG sheets with 80 named 64×64 frames using a strict four-tone palette:
+Production art lives in `assets/sprites/` and uses a strict four-tone palette:
 
 - black `#0B0B0B`
 - charcoal `#333333`
 - light gray `#BDBDBD`
 - off-white `#F6F6EE`
 
-See `docs/ART-DIRECTION.md`, `docs/SPRITE-SHEET.md`, and `docs/SPRITE-ASSET-INDEX.md`.
+The presentation layer uses classified-console framing, a short satellite acquisition sequence, typewriter briefing text, restrained CRT scanlines/vignette, and formal intelligence debrief language. Effects are intentionally subtle so reconnaissance imagery remains readable.
 
 ## Development
 
@@ -167,12 +136,30 @@ npm run build
 
 ## Project structure
 
-- `src/scenes/` — Phaser scene flow
-- `src/game/` — mission definitions, scoring and seeded generation
-- `src/world/` — authored-map renderer, state operations and map helpers
+- `src/scenes/` — Phaser scene flow and recon feedback wrapper
+- `src/game/` — mission definitions, scoring, and seeded generation
+- `src/world/` — authored-map renderer, state operations, and map helpers
 - `src/assets/` — runtime sprite manifest/registration
+- `src/audio/` — synthesized feedback engine
+- `src/settings/` — persistent user preferences
 - `src/ui/` — shared UI and presentation helpers
 - `assets/maps/` — authored reconnaissance map data
 - `assets/sprites/` — production art sheets
-- `docs/` — art, map, generator and presentation specifications
-- `public/` — static public assets
+- `docs/` — art, map, generator, presentation, feedback, and release-audit specifications
+
+## Roadmap status
+
+- Phase 0 — Foundation ✅
+- Phase 1 — Recon map engine ✅
+- Phase 2 — Target identification ✅
+- Phase 3 — LOCATE ✅
+- Phase 4 — Sprite system ✅
+- Phase 5 — Authored woodland map ✅
+- Phase 6 — COUNT ✅
+- Phase 7 — CHANGE ✅
+- Phase 8 — Seeded mission generator ✅
+- Phase 9 — Cold War presentation ✅
+- Phase 10 — Audio / haptics / settings ✅
+- Phase 11 — MVP release audit ✅
+
+A successful local/CI production build plus browser smoke test is still required before treating the demo as externally verified for deployment.

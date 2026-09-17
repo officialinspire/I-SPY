@@ -1,4 +1,5 @@
 import { GAME_CONFIG } from '../runtime-config.js';
+import { feedback, unlockAudio } from '../audio/feedback.js';
 
 export function createButton(scene, x, y, label, onPress, options = {}) {
   const width = options.width ?? 270;
@@ -26,9 +27,13 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   background.on('pointerover', () => setHover(true));
   background.on('pointerout', () => setHover(false));
-  background.on('pointerdown', () => background.setScale(0.98));
+  background.on('pointerdown', () => {
+    unlockAudio();
+    background.setScale(0.98);
+  });
   background.on('pointerup', () => {
     background.setScale(1);
+    feedback('button', 8);
     onPress?.();
   });
 

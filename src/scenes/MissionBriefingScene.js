@@ -4,6 +4,7 @@ import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion, typeText } from '../ui/presentation.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
+import { feedback } from '../audio/feedback.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
@@ -83,6 +84,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
   beginRecon() {
     if (this.transitioning) return;
     this.transitioning = true;
+    feedback('acquire', [10, 18, 10]);
     this.begin.setVisible(false);
     this.back.setVisible(false);
     this.acquisition.setText('SATELLITE PASS SELECTED\nACQUIRING ORBITAL IMAGERY...').setVisible(true);
