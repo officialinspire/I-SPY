@@ -4,11 +4,15 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 
 ## Current development status
 
-**Phases 0–8 implemented.**
+**Phases 0–9 implemented.**
 
 - Phaser 3 + Vite browser-game foundation
 - Responsive desktop/mobile scene flow
 - Monochrome Cold War / old-handheld presentation
+- Satellite-link acquisition boot sequence and imagery-channel handoff
+- Classified intelligence-terminal framing across menu, briefing and results
+- Global restrained CRT scanlines, vignette and synchronization roll with reduced-motion support
+- Typewriter-style intelligence tasking briefings
 - Pan, zoom, reset, coordinate grid, pause and reconnaissance HUD
 - Selectable reconnaissance entities with target marking, confirmation and false-identification handling
 - LOCATE mission mode with briefing, countdown, scoring and results
@@ -22,6 +26,27 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 - State-driven recon changes derived from one authored map rather than duplicated terrain files
 - First production sector: `WOODLAND CORRIDOR 7`
 - Tagged spawn zones for roads, forest concealment, compound vehicles, fields, structures, radar sites, civilian areas and clue placement
+
+## Phase 9 presentation system
+
+The presentation layer now treats I SPY as a fictional Cold War-era imagery-analysis console rather than a generic game UI.
+
+Presentation elements include:
+
+- short `SATELLITE LINK ACQUISITION` boot sequence
+- orbital telemetry and encrypted-link status text
+- restrained CRT scanlines and vignette applied at the canvas shell
+- slow, low-opacity synchronization roll
+- reusable terminal-border / classification chrome
+- `RESTRICTED // TRAINING USE` markings
+- intelligence tasking orders with file numbers and `EYES ONLY` labeling
+- fast typewriter briefing reveal
+- `ACQUIRE IMAGERY` transition into reconnaissance gameplay
+- formal post-mission intelligence debrief and disposition language
+
+Effects are intentionally subtle so reconnaissance imagery remains readable. `prefers-reduced-motion` disables the synchronization roll and skips/shortens presentation animation.
+
+See `docs/PHASE-9-PRESENTATION.md` for implementation details and presentation constraints.
 
 ## Random mission generator
 
@@ -114,7 +139,7 @@ Debug helpers:
 - `?debugMap=1` — show spawn-zone bounds
 - `?debugMission=1` — show generator seed metadata
 
-See `docs/PHASE-5-MAP.md`, `docs/PHASE-6-COUNT.md`, `docs/PHASE-7-CHANGE.md`, and `docs/PHASE-8-GENERATOR.md` for mode and map contracts.
+See `docs/PHASE-5-MAP.md`, `docs/PHASE-6-COUNT.md`, `docs/PHASE-7-CHANGE.md`, `docs/PHASE-8-GENERATOR.md`, and `docs/PHASE-9-PRESENTATION.md` for mode, map, generator and presentation contracts.
 
 ## Sprite system
 
@@ -146,8 +171,8 @@ npm run build
 - `src/game/` — mission definitions, scoring and seeded generation
 - `src/world/` — authored-map renderer, state operations and map helpers
 - `src/assets/` — runtime sprite manifest/registration
-- `src/ui/` — shared UI helpers
+- `src/ui/` — shared UI and presentation helpers
 - `assets/maps/` — authored reconnaissance map data
 - `assets/sprites/` — production art sheets
-- `docs/` — art, map and integration specifications
+- `docs/` — art, map, generator and presentation specifications
 - `public/` — static public assets
