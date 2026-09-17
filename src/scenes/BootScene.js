@@ -62,19 +62,33 @@ export default class BootScene extends Phaser.Scene {
   layout(gameSize) {
     const { width, height } = gameSize;
     this.chrome.layout(gameSize);
+    const compact = width < 560;
+    const short = height < 500;
     const cx = width / 2;
-    const cy = height * 0.43;
-    const radius = Math.max(30, Math.min(52, width * 0.08));
+    const cy = short ? height * 0.44 : height * 0.43;
+    const radius = Math.max(short ? 24 : 30, Math.min(short ? 42 : 54, width * (compact ? 0.09 : 0.075)));
+    const framePad = compact ? 24 : 34;
 
     this.graphics.clear();
-    drawReticle(this.graphics, cx, cy, radius, 0.7);
-    this.graphics.lineStyle(1, 0xbdbdbd, 0.35);
-    this.graphics.strokeRect(cx - radius - 34, cy - radius - 34, radius * 2 + 68, radius * 2 + 68);
-    this.graphics.lineBetween(cx - radius - 34, cy + radius + 52, cx + radius + 34, cy + radius + 52);
+    this.graphics.fillStyle(0x171717, 0.22).fillRect(cx - radius - framePad, cy - radius - framePad, (radius + framePad) * 2, (radius + framePad) * 2);
+    drawReticle(this.graphics, cx, cy, radius, 0.74);
+    this.graphics.lineStyle(1, 0xbdbdbd, 0.36);
+    this.graphics.strokeRect(cx - radius - framePad, cy - radius - framePad, (radius + framePad) * 2, (radius + framePad) * 2);
+    this.graphics.lineStyle(1, 0xbdbdbd, 0.25);
+    this.graphics.lineBetween(cx - radius - framePad, cy + radius + framePad + 16, cx + radius + framePad, cy + radius + framePad + 16);
 
-    this.sweep.setPosition(cx - radius - 30, cy).setSize(2, radius * 2 + 60);
-    this.title.setFontSize(width < 520 ? 16 : 22).setPosition(cx, cy - radius - 64);
-    this.status.setPosition(cx, cy + radius + 76).setWordWrapWidth(Math.min(560, width - 50));
-    this.telemetry.setPosition(cx, cy + radius + 122).setVisible(height >= 480);
+    this.sweep.setPosition(cx - radius - framePad + 4, cy).setSize(2, radius * 2 + framePad * 1.5);
+    this.title
+      .setFontSize(compact ? (short ? 13 : 16) : (short ? 18 : 22))
+      .setPosition(cx, cy - radius - framePad - (short ? 28 : 38))
+      .setWordWrapWidth(Math.min(620, width - 36));
+    this.status
+      .setFontSize(compact ? 10 : 12)
+      .setPosition(cx, cy + radius + framePad + (short ? 36 : 48))
+      .setWordWrapWidth(Math.min(580, width - 36));
+    this.telemetry
+      .setFontSize(compact ? 8 : 10)
+      .setPosition(cx, cy + radius + framePad + (short ? 67 : 88))
+      .setVisible(height >= 430);
   }
 }
