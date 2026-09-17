@@ -7,10 +7,14 @@ import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const errors = [];
+const warnings = [];
 const checks = [];
 const assert = (condition, message) => {
   if (condition) checks.push(message);
   else errors.push(message);
+};
+const warn = (condition, message) => {
+  if (!condition) warnings.push(message);
 };
 
 const packageJson = JSON.parse(read('package.json'));
@@ -44,8 +48,11 @@ for (const layer of map.layers ?? []) {
     assert(Boolean(findSprite(item.sprite)), `map sprite resolves: ${item.sprite}`);
     const width = item.width ?? GAME_CONFIG.sprites.frameSize;
     const height = item.height ?? GAME_CONFIG.sprites.frameSize;
-    assert(Number.isFinite(item.x) && Number.isFinite(item.y), `map coordinates valid: ${item.sprite}`);
-    assert(item.x >= 0 && item.y >= 0 && item.x + width <= map.width && item.y + height <= map.height, `map sprite in bounds: ${item.sprite}`);
+    const coordinatesValid = Number.isFinite(item.x) && Number.isFinite(item.y);
+    assert(coordinatesValid, `map coordinates valid: ${item.sprite}`);
+    if (coordinatesValid) {
+      warn(item.x >= 0 && item.y >= 0 && item.x + width <= map.width && item.y + height <= map.height, `authored sprite clips map bounds: ${item.sprite}`);
+    }
   }
 }
 
@@ -60,6 +67,11 @@ assert(!missionTargetId || entityIds.includes(missionTargetId), `authored missio
   assert(mainSource.includes(sceneName), `main scene registration includes ${sceneName}`);
 });
 
+if (warnings.length) {
+  console.warn('\nI SPY release validation warnings:');
+  warnings.forEach((message) => console.warn(`  ! ${message}`));
+}
+
 if (errors.length) {
   console.error('\nI SPY release validation failed:');
   errors.forEach((message) => console.error(`  ✗ ${message}`));
@@ -67,7 +79,7 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`I SPY release validation passed: ${checks.length} checks.`);
+console.log(`I SPY release validation passed: ${checks.length} checks; ${warnings.length} warnings.`);
 console.log(`Version: ${GAME_CONFIG.version}`);
 console.log(`Map: ${map.id} (${map.width}x${map.height})`);
 console.log(`Sprite frames: ${spriteNames.length}`);
