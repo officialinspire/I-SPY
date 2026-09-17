@@ -12,6 +12,7 @@ export default class ResultsScene extends Phaser.Scene {
     const success = data.success === true;
     const mission = data.mission ?? createLocateMission();
     const score = data.score ?? { baseScore: 0, timeBonus: 0, perfectBonus: 0, totalScore: 0 };
+    const seedLine = mission.seed ? `\nMISSION SEED: ${mission.seed}` : '';
 
     this.title = this.add.text(0, 0, success ? 'MISSION COMPLETE' : 'MISSION FAILED', {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '32px', color: GAME_CONFIG.palette.offWhite,
@@ -19,11 +20,11 @@ export default class ResultsScene extends Phaser.Scene {
 
     let bodyText;
     if (mission.mode === 'COUNT') {
-      bodyText = `REGION: ${mission.region?.label ?? 'UNKNOWN'}\nCATEGORY: ${mission.targetCategoryLabel ?? 'UNKNOWN'}\nSUBMITTED COUNT: ${data.submittedAnswer ?? 0}\nCORRECT COUNT: ${data.correctAnswer ?? mission.expectedCount ?? 0}\nTIME: ${data.elapsedSeconds ?? 0}s\nINCORRECT SUBMISSIONS: ${data.incorrectSubmissions ?? 0}\n\nBASE SCORE: ${score.baseScore ?? 0}\nANSWER PENALTY: -${score.answerPenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+      bodyText = `REGION: ${mission.region?.label ?? 'UNKNOWN'}\nCATEGORY: ${mission.targetCategoryLabel ?? 'UNKNOWN'}\nSUBMITTED COUNT: ${data.submittedAnswer ?? 0}\nCORRECT COUNT: ${data.correctAnswer ?? mission.expectedCount ?? 0}\nTIME: ${data.elapsedSeconds ?? 0}s\nINCORRECT SUBMISSIONS: ${data.incorrectSubmissions ?? 0}${seedLine}\n\nBASE SCORE: ${score.baseScore ?? 0}\nANSWER PENALTY: -${score.answerPenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
     } else if (mission.mode === 'CHANGE') {
-      bodyText = `CHANGE TYPE: ${(mission.changeType ?? 'UNKNOWN').replaceAll('_', ' ').toUpperCase()}\nCHANGED OBJECT: ${mission.targetLabel ?? 'UNKNOWN'}\nMARKED PASS: ${data.markedPass ?? 'N/A'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}\n\nINTELLIGENCE ASSESSMENT:\n${mission.changeSummary ?? 'CHANGE CONFIRMED.'}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+      bodyText = `CHANGE TYPE: ${(mission.changeType ?? 'UNKNOWN').replaceAll('_', ' ').toUpperCase()}\nCHANGED OBJECT: ${mission.targetLabel ?? 'UNKNOWN'}\nMARKED PASS: ${data.markedPass ?? 'N/A'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}${seedLine}\n\nINTELLIGENCE ASSESSMENT:\n${mission.changeSummary ?? 'CHANGE CONFIRMED.'}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
     } else {
-      bodyText = `TARGET: ${data.targetLabel ?? 'UNKNOWN'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+      bodyText = `TARGET: ${data.targetLabel ?? 'UNKNOWN'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}${seedLine}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
     }
 
     this.body = this.add.text(0, 0, bodyText, {
