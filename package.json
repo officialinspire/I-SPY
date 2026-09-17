@@ -1,10 +1,11 @@
 {
   "name": "i-spy",
   "private": true,
-  "version": "1.2.0-demo",
+  "version": "1.2.1-demo",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "validate": "node scripts/validate-release.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
