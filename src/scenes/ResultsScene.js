@@ -27,20 +27,20 @@ export default class ResultsScene extends Phaser.Scene {
       fontSize: '11px',
       color: GAME_CONFIG.palette.gray,
       letterSpacing: 1,
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0.5);
     this.title = this.add.text(0, 0, success ? 'MISSION COMPLETE' : 'MISSION FAILED', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '32px',
       color: GAME_CONFIG.palette.offWhite,
       letterSpacing: 2,
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0.5);
     this.scoreText = this.add.text(0, 0, `TOTAL SCORE // ${score.totalScore ?? 0}`, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '18px',
       fontStyle: 'bold',
       color: GAME_CONFIG.palette.white,
       letterSpacing: 1,
-    }).setOrigin(0.5);
+    }).setOrigin(1, 0.5);
 
     let bodyText;
     if (mission.mode === 'COUNT') {
@@ -57,13 +57,13 @@ export default class ResultsScene extends Phaser.Scene {
       color: GAME_CONFIG.palette.lightGray,
       lineSpacing: 6,
       align: 'left',
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0);
 
     this.disposition = this.add.text(0, 0, success ? 'INTELLIGENCE DISPOSITION: ACCEPTED' : 'INTELLIGENCE DISPOSITION: INCOMPLETE', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
       color: GAME_CONFIG.palette.gray,
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0.5);
 
     this.retry = createButton(this, 0, 0, 'RESTART MISSION', () => this.scene.start('MissionBriefing', { mission }), { width: 250, fontSize: 16 });
     this.menu = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), { width: 250, fontSize: 16 });
@@ -77,25 +77,46 @@ export default class ResultsScene extends Phaser.Scene {
   layout(gameSize) {
     const { width, height } = gameSize;
     this.chrome.layout(gameSize);
-    const compact = width < 540;
-    const panelWidth = Math.min(720, width - (compact ? 28 : 64));
-    const panelTop = Math.max(58, height * 0.08);
-    const panelBottom = height - 132;
+    const compact = width < 600;
+    const short = height < 560;
+    const sideMargin = compact ? 18 : 36;
+    const panelWidth = Math.min(860, width - sideMargin * 2);
+    const panelLeft = width / 2 - panelWidth / 2;
+    const controlsHeight = compact ? 116 : 82;
+    const panelTop = Math.max(54, short ? 52 : height * 0.07);
+    const panelBottom = Math.max(panelTop + 230, height - controlsHeight - 22);
+    const panelHeight = panelBottom - panelTop;
+    const paddingX = compact ? 18 : 30;
 
     this.panelGraphics.clear();
-    this.panelGraphics.fillStyle(0x171717, 0.34).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(180, panelBottom - panelTop));
-    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.36).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(180, panelBottom - panelTop));
-    this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.52).lineBetween(width / 2 - panelWidth / 2, panelTop + 48, width / 2 + panelWidth / 2, panelTop + 48);
+    this.panelGraphics.fillStyle(0x171717, 0.4).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.38).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.58).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
+    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.24).lineBetween(panelLeft + paddingX, panelTop + 124, panelLeft + panelWidth - paddingX, panelTop + 124);
+    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.22).lineBetween(panelLeft + paddingX, panelBottom - 32, panelLeft + panelWidth - paddingX, panelBottom - 32);
 
-    this.kicker.setPosition(width / 2, panelTop + 18);
-    this.title.setFontSize(compact ? 24 : 32).setPosition(width / 2, panelTop + 76);
-    this.scoreText.setFontSize(compact ? 15 : 18).setPosition(width / 2, panelTop + 112);
+    this.kicker.setFontSize(compact ? 9 : 11).setPosition(panelLeft + paddingX, panelTop + 24);
+    this.title.setFontSize(compact ? 23 : (short ? 26 : 32)).setPosition(panelLeft + paddingX, panelTop + 82);
+    this.scoreText.setFontSize(compact ? 14 : 18).setPosition(panelLeft + panelWidth - paddingX, panelTop + 82);
+
+    const bodyTop = panelTop + (short ? 136 : 145);
     this.body
-      .setFontSize(compact ? 11 : 14)
-      .setPosition(width / 2, panelTop + (panelBottom - panelTop) * 0.59)
-      .setWordWrapWidth(panelWidth - (compact ? 28 : 70));
-    this.disposition.setPosition(width / 2, panelBottom - 16).setVisible(height >= 470);
-    this.retry.setPosition(width / 2, height - 96);
-    this.menu.setPosition(width / 2, height - 46);
+      .setFontSize(short ? (compact ? 9 : 10) : (compact ? 11 : 13))
+      .setLineSpacing(short ? 2 : 5)
+      .setPosition(panelLeft + paddingX, bodyTop)
+      .setWordWrapWidth(panelWidth - paddingX * 2);
+
+    this.disposition
+      .setFontSize(compact ? 8 : 10)
+      .setPosition(panelLeft + paddingX, panelBottom - 17)
+      .setVisible(height >= 430);
+
+    if (compact) {
+      this.retry.setPosition(width / 2, height - 90);
+      this.menu.setPosition(width / 2, height - 42);
+    } else {
+      this.retry.setPosition(width / 2 - 135, height - 48);
+      this.menu.setPosition(width / 2 + 135, height - 48);
+    }
   }
 }
