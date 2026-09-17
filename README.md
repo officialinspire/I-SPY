@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B graphics-quality work implemented.** Runtime/package version: **`1.1.0-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C polish work implemented.** Runtime/package version: **`1.2.0-demo`**.
 
 I SPY currently includes:
 
@@ -16,6 +16,7 @@ I SPY currently includes:
 - Responsive desktop/mobile scene flow
 - HiDPI rendering up to 2x device resolution
 - 2x supersampled SVG sprite rasterization while preserving logical map sizes
+- Responsive intelligence-console layout with compact/short-screen handling
 - Four-tone Cold War / old-handheld visual language
 - Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
 - Pan, zoom, reset, coordinate grid, pause, timer, and reconnaissance HUD
@@ -31,13 +32,19 @@ I SPY currently includes:
 - Reduced-motion support
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit and `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, and `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass.
 
 ## Graphics quality
 
-Phase 12A/12B improves image clarity without changing gameplay coordinates or hit boxes. The Phaser backing canvas now follows the device pixel ratio up to 2x, antialiasing is enabled for text/graphics/vector-derived textures, CSS no longer forces the final canvas through pixelated scaling, and each 64x64 logical SVG frame is rasterized internally at 128x128 before display.
+Phase 12A/12B improves image clarity without changing gameplay coordinates or hit boxes. The Phaser backing canvas follows the device pixel ratio up to 2x, antialiasing is enabled for text/graphics/vector-derived textures, CSS no longer forces the final canvas through pixelated scaling, and each 64x64 logical SVG frame is rasterized internally at 128x128 before display.
 
 The visual style remains intentionally monochrome and retro; the higher-density pipeline is meant to make the existing art direction cleaner rather than replace it with a different aesthetic.
+
+## Layout quality
+
+Phase 12C improves composition and responsiveness across Boot, Main Menu, Settings, Mission Briefing, Recon, and Results. Wide menus use a two-column mission console; compact screens retain stacked controls with tighter safe spacing; briefing and debrief screens use left-aligned intelligence-document grids; and Recon groups mission controls into dedicated control rails.
+
+CHANGE split view now has a stronger center divider plus explicit PASS A / PASS B labels while preserving the existing synchronized camera behavior. Gameplay coordinates, validation, scoring, map data, and generator logic are unchanged.
 
 ## Audio, feedback, and settings
 
@@ -149,7 +156,7 @@ npm run build
 
 ## Project structure
 
-- `src/scenes/` — Phaser scene flow and recon feedback wrapper
+- `src/scenes/` — Phaser scene flow and recon feedback/layout wrapper
 - `src/game/` — mission definitions, scoring, and seeded generation
 - `src/world/` — authored-map renderer, state operations, and map helpers
 - `src/assets/` — runtime sprite manifest/registration
@@ -158,7 +165,7 @@ npm run build
 - `src/ui/` — shared UI and presentation helpers
 - `assets/maps/` — authored reconnaissance map data
 - `assets/sprites/` — production art sheets
-- `docs/` — art, map, generator, presentation, feedback, graphics, and release-audit specifications
+- `docs/` — art, map, generator, presentation, feedback, graphics, layout, and release-audit specifications
 
 ## Roadmap status
 
@@ -176,3 +183,4 @@ npm run build
 - Phase 11 — MVP release audit ✅
 - Phase 12A — HiDPI rendering sharpness ✅
 - Phase 12B — Sprite raster-quality pass ✅
+- Phase 12C — Responsive layout and UI polish ✅
