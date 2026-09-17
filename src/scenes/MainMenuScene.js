@@ -190,16 +190,17 @@ export default class MainMenuScene extends Phaser.Scene {
     }
 
     const settingsPanelWidth = Math.min(420, width - 36);
-    const settingsPanelHeight = Math.min(410, height - 90);
-    const settingsTop = Math.max(62, height / 2 - settingsPanelHeight / 2);
+    const settingsPanelHeight = Math.min(410, Math.max(270, height - 60));
+    const settingsTop = Math.max(30, height / 2 - settingsPanelHeight / 2);
     this.settingsGraphics.clear();
     if (this.settingsOpen) {
       this.settingsGraphics.fillStyle(0x171717, 0.97).fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
       this.settingsGraphics.lineStyle(2, 0xf6f6ee, 0.74).strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsTitle.setPosition(width / 2, settingsTop + 35);
-      this.settingsHint.setPosition(width / 2, settingsTop + 62);
-      const settingsStartY = settingsTop + 105;
-      const settingsSpacing = Math.min(50, Math.max(43, (settingsPanelHeight - 130) / this.settingsButtons.length));
+      this.settingsTitle.setPosition(width / 2, settingsTop + 28).setFontSize(height < 400 ? 16 : 20);
+      this.settingsHint.setPosition(width / 2, settingsTop + 52).setVisible(height >= 330);
+      const settingsStartY = settingsTop + (height < 400 ? 80 : 94);
+      const availableSpan = Math.max(170, settingsPanelHeight - (height < 400 ? 112 : 126));
+      const settingsSpacing = Math.min(50, Math.max(34, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
       this.settingsButtons.forEach((button, index) => button.setPosition(width / 2, settingsStartY + index * settingsSpacing));
     }
 
