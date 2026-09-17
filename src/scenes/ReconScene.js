@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
-import { createAuthoredReconMap, entityAtPoint } from '../world/authoredReconMap.js';
+import { createAuthoredReconMap, applyReconOperations, entityAtPoint } from '../world/authoredReconMap.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 import { validateCountAnswer, calculateCountScore } from '../game/countMission.js';
+import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
 
 export default class ReconScene extends Phaser.Scene {
   constructor() { super('Recon'); }
@@ -11,6 +12,7 @@ export default class ReconScene extends Phaser.Scene {
   create(data = {}) {
     this.mission = data.mission ?? createLocateMission();
     this.isCountMode = this.mission.mode === 'COUNT';
+    this.isChangeMode = this.mission.mode === 'CHANGE';
     this.falseIdentifications = 0;
     this.incorrectSubmissions = 0;
     this.answerValue = 0;
@@ -19,15 +21,12 @@ export default class ReconScene extends Phaser.Scene {
     this.missionEnded = false;
     this.marking = false;
     this.candidate = null;
+    this.activePass = 'A';
+    this.splitView = false;
+    this.compareCamera = null;
 
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
-    const world = createAuthoredReconMap(this);
-    this.worldLayer = world.root;
-    this.map = world.map;
-    this.entities = world.entities;
-    this.spawnZones = world.spawnZones;
-    this.mapMetadata = world.metadata;
-
+    this.createWorldState();
     this.cameras.main.setBounds(0, 0, this.map.width, this.map.height);
     this.resetCamera(false);
     this.createHud();
@@ -40,6 +39,29 @@ export default class ReconScene extends Phaser.Scene {
     this.scale.on('resize', this.onResize, this);
     this.events.once('shutdown', () => this.cleanup());
     this.onResize(this.scale.gameSize);
+  }
+
+  createWorldState() {
+    if (this.isChangeMode) {
+      this.worldA = createAuthoredReconMap(this);
+      this.worldB = createAuthoredReconMap(this);
+      applyReconOperations(this, this.worldB, this.mission.passBOperations ?? []);
+      this.worldB.root.setVisible(false);
+      this.worldLayer = this.worldA.root;
+      this.map = this.worldA.map;
+      this.entities = this.worldA.entities;
+      this.passEntities = { A: this.worldA.entities, B: this.worldB.entities };
+      this.spawnZones = this.worldA.spawnZones;
+      this.mapMetadata = this.worldA.metadata;
+      return;
+    }
+
+    const world = createAuthoredReconMap(this);
+    this.worldLayer = world.root;
+    this.map = world.map;
+    this.entities = world.entities;
+    this.spawnZones = world.spawnZones;
+    this.mapMetadata = world.metadata;
   }
 
   createHud() {
@@ -66,9 +88,10 @@ export default class ReconScene extends Phaser.Scene {
     this.commonButtons = [this.pauseButton, this.resetButton];
 
     if (this.isCountMode) this.createCountControls();
+    else if (this.isChangeMode) this.createChangeControls();
     else this.createLocateControls();
 
-    [...this.commonButtons, ...(this.locateButtons ?? []), ...(this.countButtons ?? [])].forEach((button) => {
+    [...this.commonButtons, ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])].forEach((button) => {
       button.background.setScrollFactor(0).setDepth(1002);
       button.text.setScrollFactor(0).setDepth(1003);
     });
@@ -77,6 +100,8 @@ export default class ReconScene extends Phaser.Scene {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '12px', color: GAME_CONFIG.palette.offWhite,
       backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 10, y: 7 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1010).setVisible(false);
+
+    if (this.isChangeMode) this.updatePassStatus();
   }
 
   createLocateControls() {
@@ -97,6 +122,21 @@ export default class ReconScene extends Phaser.Scene {
       backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 14, y: 6 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
     this.countButtons = [this.decrementButton, this.incrementButton, this.submitCountButton];
+  }
+
+  createChangeControls() {
+    this.markButton = createButton(this, 0, 0, 'MARK CHANGE', () => this.armMarking(), { width: 150, height: 36, fontSize: 12 });
+    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12 });
+    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12 });
+    this.passButton = createButton(this, 0, 0, 'VIEW PASS B', () => this.togglePass(), { width: 142, height: 36, fontSize: 11 });
+    this.splitButton = createButton(this, 0, 0, 'SPLIT VIEW', () => this.toggleSplitView(), { width: 132, height: 36, fontSize: 11 });
+    this.confirmButton.setVisible(false);
+    this.cancelButton.setVisible(false);
+    this.passStatusText = this.add.text(0, 0, '', {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '13px', color: GAME_CONFIG.palette.offWhite,
+      backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 10, y: 6 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+    this.changeButtons = [this.markButton, this.confirmButton, this.cancelButton, this.passButton, this.splitButton];
   }
 
   createGridOverlay() {
@@ -136,7 +176,10 @@ export default class ReconScene extends Phaser.Scene {
     }
     if (this.debugTargets) {
       this.debugGraphics.lineStyle(2, 0xf6f6ee, 0.9);
-      this.entities.forEach((entity) => this.debugGraphics.strokeRect(entity.x, entity.y, entity.width, entity.height));
+      const entities = this.isChangeMode ? this.passEntities[this.activePass] : this.entities;
+      entities.forEach((entity) => {
+        if (!entity.hidden) this.debugGraphics.strokeRect(entity.x, entity.y, entity.width, entity.height);
+      });
     }
   }
 
@@ -144,22 +187,30 @@ export default class ReconScene extends Phaser.Scene {
     this.dragging = false;
     this.paused = false;
     this.pinchDistance = null;
+    this.dragCamera = null;
 
     this.input.on('pointerdown', (pointer) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
       if (!this.isCountMode && this.marking) { this.placeCandidate(pointer); return; }
+      const context = this.getPointerContext(pointer);
       this.dragging = true;
+      this.dragCamera = context.camera;
       this.lastPointer = { x: pointer.x, y: pointer.y };
     });
     this.input.on('pointermove', (pointer) => {
       if (!this.paused) this.updateCoordinates(pointer);
       if (!this.dragging || !pointer.isDown || this.paused || this.marking) return;
-      const camera = this.cameras.main;
+      const camera = this.dragCamera ?? this.cameras.main;
       camera.scrollX -= (pointer.x - this.lastPointer.x) / camera.zoom;
       camera.scrollY -= (pointer.y - this.lastPointer.y) / camera.zoom;
+      if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
       this.lastPointer = { x: pointer.x, y: pointer.y };
     });
-    this.input.on('pointerup', () => { this.dragging = false; this.pinchDistance = null; });
+    this.input.on('pointerup', () => {
+      this.dragging = false;
+      this.dragCamera = null;
+      this.pinchDistance = null;
+    });
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
       this.zoomAt(pointer, deltaY > 0 ? -GAME_CONFIG.recon.zoomStep : GAME_CONFIG.recon.zoomStep);
@@ -182,7 +233,14 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   handleKeyboard(event) {
-    if (!this.isCountMode || this.paused || this.missionEnded) return;
+    if (this.paused || this.missionEnded) return;
+    if (this.isChangeMode) {
+      if (event.key.toLowerCase() === 'a') this.setActivePass('A');
+      else if (event.key.toLowerCase() === 'b') this.setActivePass('B');
+      else if (event.key.toLowerCase() === 's') this.toggleSplitView();
+      return;
+    }
+    if (!this.isCountMode) return;
     if (event.key === 'ArrowUp' || event.key === '+') this.adjustAnswer(1);
     else if (event.key === 'ArrowDown' || event.key === '-') this.adjustAnswer(-1);
     else if (event.key === 'Enter') this.submitCount();
@@ -190,13 +248,24 @@ export default class ReconScene extends Phaser.Scene {
     else if (/^[0-9]$/.test(event.key)) this.setAnswer(this.answerValue === 0 ? Number(event.key) : this.answerValue * 10 + Number(event.key));
   }
 
+  getPointerContext(pointer) {
+    if (!this.isChangeMode) return { camera: this.cameras.main, passId: null, entities: this.entities };
+    if (this.splitView && this.compareCamera && pointer.x >= this.scale.gameSize.width / 2) {
+      return { camera: this.compareCamera, passId: 'B', entities: this.passEntities.B };
+    }
+    const passId = this.splitView ? 'A' : this.activePass;
+    return { camera: this.cameras.main, passId, entities: this.passEntities[passId] };
+  }
+
   isHudPoint(pointer) {
     if (pointer.y < GAME_CONFIG.recon.hudHeight) return true;
-    const bottomGuard = this.isCountMode ? 72 : (this.scale.gameSize.width < 680 ? 64 : 0);
+    const compact = this.scale.gameSize.width < 680;
+    const bottomGuard = this.isCountMode ? 72 : (this.isChangeMode ? (compact ? 126 : 72) : (compact ? 64 : 0));
     return bottomGuard > 0 && pointer.y > this.scale.gameSize.height - bottomGuard;
   }
 
   adjustAnswer(delta) { this.setAnswer(this.answerValue + delta); }
+
   setAnswer(value) {
     this.answerValue = Phaser.Math.Clamp(Math.floor(Number(value) || 0), 0, GAME_CONFIG.count.maxAnswer);
     this.answerText?.setText(String(this.answerValue).padStart(2, '0'));
@@ -221,22 +290,24 @@ export default class ReconScene extends Phaser.Scene {
     this.selectionGraphics.clear();
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
-    this.markButton.setLabel('SELECT OBJECT');
-    this.flashStatus('MARKING ACTIVE // TAP AN OBJECT');
+    this.markButton.setLabel(this.isChangeMode ? 'SELECT CHANGE' : 'SELECT OBJECT');
+    this.flashStatus(this.isChangeMode ? 'CHANGE MARKING ACTIVE // TAP THE CHANGED OBJECT' : 'MARKING ACTIVE // TAP AN OBJECT');
   }
 
   placeCandidate(pointer) {
-    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const entity = entityAtPoint(world.x, world.y, this.entities);
-    this.candidate = { x: world.x, y: world.y, entity };
+    const context = this.getPointerContext(pointer);
+    const world = context.camera.getWorldPoint(pointer.x, pointer.y);
+    const entity = entityAtPoint(world.x, world.y, context.entities);
+    this.candidate = { x: world.x, y: world.y, entity, passId: context.passId };
     this.selectionGraphics.clear();
-    this.selectionGraphics.lineStyle(4, 0xf6f6ee, 1).strokeCircle(world.x, world.y, 26 / this.cameras.main.zoom);
+    this.selectionGraphics.lineStyle(4, 0xf6f6ee, 1).strokeCircle(world.x, world.y, 26 / context.camera.zoom);
     this.selectionGraphics.lineBetween(world.x - 34, world.y, world.x + 34, world.y);
     this.selectionGraphics.lineBetween(world.x, world.y - 34, world.x, world.y + 34);
     this.confirmButton.setVisible(true);
     this.cancelButton.setVisible(true);
     this.markButton.setLabel('MARK PENDING');
-    this.flashStatus(entity ? 'IDENTIFICATION READY // CONFIRM OR CANCEL' : 'NO CLEAR OBJECT // CONFIRM OR CANCEL');
+    const passLabel = this.isChangeMode ? ` // ${context.passId === 'B' ? 'PASS B' : 'PASS A'}` : '';
+    this.flashStatus(entity ? `IDENTIFICATION READY${passLabel} // CONFIRM OR CANCEL` : `NO CLEAR OBJECT${passLabel} // CONFIRM OR CANCEL`);
   }
 
   cancelCandidate() {
@@ -245,26 +316,128 @@ export default class ReconScene extends Phaser.Scene {
     this.selectionGraphics.clear();
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
-    this.markButton.setLabel('MARK TARGET');
+    this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
     this.flashStatus('MARK CANCELLED');
   }
 
   confirmCandidate() {
     if (!this.candidate || this.missionEnded) return;
-    const result = validateIdentification(this.mission, this.candidate.entity);
+    const result = this.isChangeMode
+      ? validateChangeIdentification(this.mission, this.candidate.entity, this.candidate.passId)
+      : validateIdentification(this.mission, this.candidate.entity);
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.marking = false;
-    this.markButton.setLabel('MARK TARGET');
+    this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
     if (result.correct) {
-      this.flashStatus('CONFIRMED');
+      this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'CONFIRMED');
       this.time.delayedCall(350, () => this.finishMission(true));
       return;
     }
     this.falseIdentifications += 1;
-    this.flashStatus(`UNVERIFIED // FALSE ID ${this.falseIdentifications}`);
+    this.flashStatus(`${this.isChangeMode ? 'CHANGE UNVERIFIED' : 'UNVERIFIED'} // FALSE ID ${this.falseIdentifications}`);
     this.selectionGraphics.clear();
     this.candidate = null;
+  }
+
+  togglePass() {
+    if (!this.isChangeMode || this.splitView) return;
+    this.setActivePass(this.activePass === 'A' ? 'B' : 'A');
+  }
+
+  setActivePass(passId, showMessage = true) {
+    if (!this.isChangeMode || !['A', 'B'].includes(passId)) return;
+    if (this.splitView) {
+      if (showMessage) this.flashStatus('SPLIT VIEW ACTIVE // LEFT A / RIGHT B');
+      return;
+    }
+    if (this.candidate) this.cancelCandidate();
+    this.activePass = passId;
+    this.worldA.root.setVisible(passId === 'A');
+    this.worldB.root.setVisible(passId === 'B');
+    this.passButton.setLabel(passId === 'A' ? 'VIEW PASS B' : 'VIEW PASS A');
+    this.updatePassStatus();
+    if (this.debugTargets) this.drawDebugBounds();
+    if (showMessage) this.flashStatus(`${passId === 'A' ? 'PASS A' : 'PASS B'} ACQUIRED`);
+  }
+
+  updatePassStatus() {
+    if (!this.isChangeMode || !this.passStatusText) return;
+    if (this.splitView) {
+      this.passStatusText.setText('SPLIT COMPARISON // LEFT: PASS A // RIGHT: PASS B');
+    } else {
+      const pass = this.activePass === 'A' ? this.mission.passA : this.mission.passB;
+      this.passStatusText.setText(`${pass?.label ?? `PASS ${this.activePass}`} // ${pass?.time ?? 'TIME UNKNOWN'}`);
+    }
+  }
+
+  toggleSplitView() {
+    if (!this.isChangeMode || this.missionEnded) return;
+    if (this.scale.gameSize.width < GAME_CONFIG.change.splitViewMinWidth) {
+      this.flashStatus(`SPLIT VIEW REQUIRES ${GAME_CONFIG.change.splitViewMinWidth}px+ WIDTH`);
+      return;
+    }
+    if (this.splitView) this.disableSplitView();
+    else this.enableSplitView();
+  }
+
+  enableSplitView() {
+    if (this.splitView || !this.isChangeMode) return;
+    if (this.candidate) this.cancelCandidate();
+    this.splitView = true;
+    this.worldA.root.setVisible(true);
+    this.worldB.root.setVisible(true);
+    const { width, height } = this.scale.gameSize;
+    const half = Math.floor(width / 2);
+    this.compareCamera = this.cameras.add(half, 0, width - half, height, false, 'PassB');
+    this.compareCamera.setBounds(0, 0, this.map.width, this.map.height);
+    this.compareCamera.setBackgroundColor(GAME_CONFIG.palette.black);
+    this.compareCamera.setZoom(this.cameras.main.zoom);
+    this.compareCamera.scrollX = this.cameras.main.scrollX;
+    this.compareCamera.scrollY = this.cameras.main.scrollY;
+
+    this.cameras.main.ignore(this.worldB.root);
+    this.compareCamera.ignore(this.worldA.root);
+    this.compareCamera.ignore(this.getUiObjects());
+    this.passButton.setVisible(false);
+    this.splitButton.setLabel('EXIT SPLIT');
+    this.updatePassStatus();
+    this.onResize(this.scale.gameSize);
+    this.flashStatus('SPLIT VIEW // LEFT PASS A // RIGHT PASS B');
+  }
+
+  disableSplitView(showMessage = true) {
+    if (!this.splitView) return;
+    this.splitView = false;
+    this.worldA.root.cameraFilter = 0;
+    this.worldB.root.cameraFilter = 0;
+    this.getUiObjects().forEach((object) => { if (object) object.cameraFilter = 0; });
+    if (this.compareCamera) {
+      this.cameras.remove(this.compareCamera, true);
+      this.compareCamera = null;
+    }
+    this.worldA.root.setVisible(this.activePass === 'A');
+    this.worldB.root.setVisible(this.activePass === 'B');
+    this.passButton.setVisible(true);
+    this.splitButton.setLabel('SPLIT VIEW');
+    this.updatePassStatus();
+    this.onResize(this.scale.gameSize);
+    if (showMessage) this.flashStatus(`${this.activePass === 'A' ? 'PASS A' : 'PASS B'} SINGLE VIEW`);
+  }
+
+  getUiObjects() {
+    const objects = [this.hud, this.statusText, this.answerText, this.passStatusText];
+    const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
+    buttons.forEach((button) => objects.push(button.background, button.text));
+    return objects.filter(Boolean);
+  }
+
+  syncChangeCameras(sourceCamera = this.cameras.main) {
+    if (!this.splitView || !this.compareCamera) return;
+    const target = sourceCamera === this.compareCamera ? this.cameras.main : this.compareCamera;
+    target.setZoom(sourceCamera.zoom);
+    target.scrollX = sourceCamera.scrollX;
+    target.scrollY = sourceCamera.scrollY;
   }
 
   startMissionTimer() {
@@ -286,6 +459,7 @@ export default class ReconScene extends Phaser.Scene {
     this.timerEvent?.remove(false);
     const remainingSeconds = Math.max(0, Math.floor(this.remainingSeconds));
     const elapsedSeconds = Math.max(0, Math.ceil(this.mission.timeLimitSeconds - remainingSeconds));
+
     if (this.isCountMode) {
       const score = calculateCountScore({ success, incorrectSubmissions: this.incorrectSubmissions, remainingSeconds });
       this.scene.start('Results', {
@@ -296,6 +470,17 @@ export default class ReconScene extends Phaser.Scene {
       });
       return;
     }
+
+    if (this.isChangeMode) {
+      const score = calculateChangeScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds });
+      this.scene.start('Results', {
+        success, mission: this.mission, elapsedSeconds, score,
+        falseIdentifications: this.falseIdentifications,
+        markedPass: this.candidate?.passId ?? this.activePass,
+      });
+      return;
+    }
+
     const score = calculateLocateScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds });
     this.scene.start('Results', {
       success, mission: this.mission, targetLabel: this.mission.targetLabel, elapsedSeconds,
@@ -304,19 +489,23 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   zoomAt(screenPoint, delta) {
-    const camera = this.cameras.main;
+    const context = this.getPointerContext(screenPoint);
+    const camera = context.camera;
     const before = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom));
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
   }
 
   updateCoordinates(pointer) {
-    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const context = this.getPointerContext(pointer);
+    const world = context.camera.getWorldPoint(pointer.x, pointer.y);
     const x = Phaser.Math.Clamp(Math.round(world.x), 0, this.map.width);
     const y = Phaser.Math.Clamp(Math.round(world.y), 0, this.map.height);
-    this.coordText.setText(`MAP: ${this.map.id.toUpperCase()} // GRID: ${String(x).padStart(4, '0')} / ${String(y).padStart(4, '0')}`);
+    const passText = this.isChangeMode ? ` // ${context.passId ?? this.activePass}` : '';
+    this.coordText.setText(`MAP: ${this.map.id.toUpperCase()}${passText} // GRID: ${String(x).padStart(4, '0')} / ${String(y).padStart(4, '0')}`);
   }
 
   resetCamera(showMessage = true) {
@@ -324,9 +513,12 @@ export default class ReconScene extends Phaser.Scene {
     if (this.isCountMode && this.mission.region) {
       const region = this.mission.region;
       view = { x: region.x + region.width / 2, y: region.y + region.height / 2, zoom: 0.68 };
+    } else if (this.isChangeMode && this.mission.focus) {
+      view = this.mission.focus;
     }
     this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom));
     this.cameras.main.centerOn(view.x ?? this.map.width / 2, view.y ?? this.map.height / 2);
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (showMessage) this.flashStatus('VIEW RECENTERED');
   }
 
@@ -363,6 +555,15 @@ export default class ReconScene extends Phaser.Scene {
     this.timerText.setPosition(width - 16, 13);
     const compact = width < 680;
 
+    if (this.isChangeMode && this.splitView && width < GAME_CONFIG.change.splitViewMinWidth) {
+      this.disableSplitView(false);
+      return;
+    }
+    if (this.isChangeMode && this.splitView && this.compareCamera) {
+      const half = Math.floor(width / 2);
+      this.compareCamera.setViewport(half, 0, width - half, height);
+    }
+
     if (this.isCountMode) {
       const y = height - 34;
       this.decrementButton.setPosition(compact ? 34 : width / 2 - 170, y);
@@ -372,6 +573,22 @@ export default class ReconScene extends Phaser.Scene {
       this.resetButton.setPosition(compact ? width / 2 - 70 : width - 181, compact ? height - 86 : 48);
       this.pauseButton.setPosition(compact ? width / 2 + 70 : width - 58, compact ? height - 86 : 48);
       this.statusText.setPosition(width / 2, height - (compact ? 136 : 84));
+    } else if (this.isChangeMode) {
+      const split = this.splitView;
+      const usableWidth = split ? Math.floor(width / 2) : width;
+      const y = height - 34;
+      this.markButton.setPosition(split ? usableWidth * 0.20 : (compact ? 78 : width / 2 - 150), y);
+      this.passButton.setPosition(compact ? width - 82 : width / 2, y);
+      this.splitButton.setPosition(split ? usableWidth * 0.78 : width / 2 + 150, y);
+      this.splitButton.setVisible(width >= GAME_CONFIG.change.splitViewMinWidth);
+      if (split) this.passButton.setVisible(false);
+      else this.passButton.setVisible(true);
+      this.resetButton.setPosition(split ? usableWidth - 170 : (compact ? width / 2 - 70 : width - 181), compact ? height - 84 : 48);
+      this.pauseButton.setPosition(split ? usableWidth - 55 : (compact ? width / 2 + 70 : width - 58), compact ? height - 84 : 48);
+      this.confirmButton.setPosition(split ? usableWidth / 2 - 60 : width / 2 - 60, height - (compact ? 132 : 82));
+      this.cancelButton.setPosition(split ? usableWidth / 2 + 60 : width / 2 + 60, height - (compact ? 132 : 82));
+      this.passStatusText.setPosition(split ? usableWidth / 2 : width / 2, GAME_CONFIG.recon.hudHeight + 24);
+      this.statusText.setPosition(split ? usableWidth / 2 : width / 2, height - (compact ? 178 : 126));
     } else {
       this.markButton.setPosition(compact ? 88 : width - 340, compact ? height - 34 : 48);
       this.resetButton.setPosition(compact ? width / 2 : width - 181, compact ? height - 34 : 48);
@@ -388,6 +605,7 @@ export default class ReconScene extends Phaser.Scene {
   cleanup() {
     this.timerEvent?.remove(false);
     this.statusTimer?.remove(false);
+    if (this.splitView) this.disableSplitView(false);
     this.scale.off('resize', this.onResize, this);
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();

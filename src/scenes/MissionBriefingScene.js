@@ -14,9 +14,15 @@ export default class MissionBriefingScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const regionLine = this.mission.region ? `\nREGION: ${this.mission.region.label}` : '';
-    const countInstruction = this.mission.mode === 'COUNT' ? '\n\nCOUNT ONLY THE REQUESTED CATEGORY. CIVILIAN OR UNRELATED OBJECTS MAY BE PRESENT.' : '';
+    const countInstruction = this.mission.mode === 'COUNT'
+      ? '\n\nCOUNT ONLY THE REQUESTED CATEGORY. CIVILIAN OR UNRELATED OBJECTS MAY BE PRESENT.'
+      : '';
+    const changeInstruction = this.mission.mode === 'CHANGE'
+      ? `\n\n${this.mission.passA?.label ?? 'PASS A'}: ${this.mission.passA?.time ?? 'UNKNOWN'}\n${this.mission.passB?.label ?? 'PASS B'}: ${this.mission.passB?.time ?? 'UNKNOWN'}\nCOMPARE BOTH PASSES. TERRAIN ALIGNMENT IS IDENTICAL; MARK THE CHANGED OBJECT.`
+      : '';
+
     this.briefing = this.add.text(0, 0,
-      `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${this.mission.sector}\nMODE: ${this.mission.mode}${regionLine}\n\nOBJECTIVE:\n${this.mission.objective}${countInstruction}\n\nTIME WINDOW: ${this.mission.timeLimitSeconds} SECONDS`,
+      `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${this.mission.sector}\nMODE: ${this.mission.mode}${regionLine}\n\nOBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}\n\nTIME WINDOW: ${this.mission.timeLimitSeconds} SECONDS`,
       { fontFamily: GAME_CONFIG.typography.family, fontSize: '18px', color: GAME_CONFIG.palette.offWhite, lineSpacing: 7, align: 'left' }
     ).setOrigin(0.5);
 
@@ -28,9 +34,9 @@ export default class MissionBriefingScene extends Phaser.Scene {
 
   layout(gameSize) {
     const { width, height } = gameSize;
-    this.header.setPosition(width / 2, 38);
-    this.briefing.setFontSize(width < 540 ? 13 : 18).setWordWrapWidth(Math.min(700, width - 44)).setPosition(width / 2, height * 0.40);
-    this.begin.setPosition(width / 2, height - 112);
-    this.back.setPosition(width / 2, height - 52);
+    this.header.setPosition(width / 2, 36);
+    this.briefing.setFontSize(width < 540 ? 12 : 17).setWordWrapWidth(Math.min(720, width - 40)).setPosition(width / 2, height * 0.40);
+    this.begin.setPosition(width / 2, height - 108);
+    this.back.setPosition(width / 2, height - 50);
   }
 }
