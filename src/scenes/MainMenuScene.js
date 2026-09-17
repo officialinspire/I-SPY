@@ -48,22 +48,26 @@ export default class MainMenuScene extends Phaser.Scene {
       color: GAME_CONFIG.palette.gray,
     }).setOrigin(0.5);
 
-    this.buttons = [
+    this.primaryButtons = [
       createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission()),
       createButton(this, 0, 0, 'LOCATE MISSION', () => this.scene.start('MissionBriefing', { mission: createLocateMission() })),
       createButton(this, 0, 0, 'COUNT MISSION', () => this.scene.start('MissionBriefing', { mission: createCountMission() })),
       createButton(this, 0, 0, 'CHANGE MISSION', () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() })),
-      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nRANDOM: SEEDED REPLAYABLE MISSION\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT')),
-      createButton(this, 0, 0, 'SETTINGS', () => this.openSettings()),
     ];
+    this.secondaryButtons = [
+      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nRANDOM: SEEDED REPLAYABLE MISSION\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT'), { width: 220, height: 42, fontSize: 14 }),
+      createButton(this, 0, 0, 'SETTINGS', () => this.openSettings(), { width: 220, height: 42, fontSize: 14 }),
+    ];
+    this.buttons = [...this.primaryButtons, ...this.secondaryButtons];
 
     this.notice = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '13px',
       color: GAME_CONFIG.palette.offWhite,
-      align: 'center',
+      align: 'left',
+      lineSpacing: 5,
       backgroundColor: GAME_CONFIG.palette.nearBlack,
-      padding: { x: 18, y: 14 },
+      padding: { x: 20, y: 16 },
     }).setOrigin(0.5).setDepth(40).setVisible(false);
 
     this.createSettingsPanel();
@@ -166,46 +170,68 @@ export default class MainMenuScene extends Phaser.Scene {
 
   layout(gameSize) {
     const { width, height } = gameSize;
-    const compact = width < 520;
+    const compact = width < 560;
+    const short = height < 560;
+    const desktopGrid = width >= 760;
     this.chrome.layout(gameSize);
 
-    this.title.setFontSize(compact ? 48 : 68).setPosition(width / 2, Math.max(82, height * 0.14));
-    this.subtitle.setPosition(width / 2, this.title.y + 52).setWordWrapWidth(Math.min(560, width - 44));
-    this.consoleLabel.setPosition(width / 2, this.subtitle.y + 31);
+    const titleY = short ? 70 : Math.max(88, height * 0.135);
+    this.title.setFontSize(compact ? (short ? 38 : 46) : (short ? 52 : 66)).setPosition(width / 2, titleY);
+    this.subtitle.setFontSize(compact ? 11 : 14).setPosition(width / 2, this.title.y + (short ? 38 : 49)).setWordWrapWidth(Math.min(620, width - 40));
+    this.consoleLabel.setPosition(width / 2, this.subtitle.y + (short ? 24 : 30)).setVisible(height >= 390);
 
-    const startY = Math.max(this.consoleLabel.y + 48, height * 0.32);
-    const spacing = compact ? 45 : 49;
-    this.buttons.forEach((button, index) => button.setPosition(width / 2, startY + index * spacing));
+    const missionStartY = Math.max(this.consoleLabel.visible ? this.consoleLabel.y + (short ? 34 : 48) : this.subtitle.y + 36, short ? 150 : height * 0.32);
+    let panelTop;
+    let panelBottom;
 
-    const panelWidth = Math.min(compact ? width - 48 : 430, width - 40);
-    const panelTop = startY - 29;
-    const panelBottom = startY + (this.buttons.length - 1) * spacing + 29;
-    this.panelGraphics.clear();
-    if (!this.settingsOpen) {
-      this.panelGraphics.fillStyle(0x171717, 0.42).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, panelBottom - panelTop);
-      this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.32).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, panelBottom - panelTop);
-      this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.58);
-      this.panelGraphics.lineBetween(width / 2 - panelWidth / 2, panelTop, width / 2 - panelWidth / 2 + 18, panelTop);
-      this.panelGraphics.lineBetween(width / 2 + panelWidth / 2 - 18, panelBottom, width / 2 + panelWidth / 2, panelBottom);
+    if (desktopGrid) {
+      const columnGap = Math.min(320, Math.max(286, width * 0.30));
+      const leftX = width / 2 - columnGap / 2;
+      const rightX = width / 2 + columnGap / 2;
+      const rowGap = short ? 47 : 56;
+      this.primaryButtons[0].setPosition(leftX, missionStartY);
+      this.primaryButtons[1].setPosition(rightX, missionStartY);
+      this.primaryButtons[2].setPosition(leftX, missionStartY + rowGap);
+      this.primaryButtons[3].setPosition(rightX, missionStartY + rowGap);
+      this.secondaryButtons[0].setPosition(width / 2 - 120, missionStartY + rowGap * 2);
+      this.secondaryButtons[1].setPosition(width / 2 + 120, missionStartY + rowGap * 2);
+      panelTop = missionStartY - 34;
+      panelBottom = missionStartY + rowGap * 2 + 32;
+    } else {
+      const spacing = short ? 39 : 47;
+      this.buttons.forEach((button, index) => button.setPosition(width / 2, missionStartY + index * spacing));
+      panelTop = missionStartY - 31;
+      panelBottom = missionStartY + (this.buttons.length - 1) * spacing + 31;
     }
 
-    const settingsPanelWidth = Math.min(420, width - 36);
-    const settingsPanelHeight = Math.min(410, Math.max(270, height - 60));
-    const settingsTop = Math.max(30, height / 2 - settingsPanelHeight / 2);
+    const panelWidth = Math.min(desktopGrid ? 680 : (compact ? width - 34 : 430), width - 28);
+    this.panelGraphics.clear();
+    if (!this.settingsOpen) {
+      this.panelGraphics.fillStyle(0x171717, 0.46).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
+      this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.34).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
+      this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.62);
+      this.panelGraphics.lineBetween(width / 2 - panelWidth / 2, panelTop, width / 2 - panelWidth / 2 + 22, panelTop);
+      this.panelGraphics.lineBetween(width / 2 + panelWidth / 2 - 22, panelBottom, width / 2 + panelWidth / 2, panelBottom);
+    }
+
+    const settingsPanelWidth = Math.min(520, width - 28);
+    const settingsPanelHeight = Math.min(450, Math.max(300, height - 42));
+    const settingsTop = Math.max(21, height / 2 - settingsPanelHeight / 2);
     this.settingsGraphics.clear();
     if (this.settingsOpen) {
-      this.settingsGraphics.fillStyle(0x171717, 0.97).fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsGraphics.lineStyle(2, 0xf6f6ee, 0.74).strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsTitle.setPosition(width / 2, settingsTop + 28).setFontSize(height < 400 ? 16 : 20);
-      this.settingsHint.setPosition(width / 2, settingsTop + 52).setVisible(height >= 330);
-      const settingsStartY = settingsTop + (height < 400 ? 80 : 94);
-      const availableSpan = Math.max(170, settingsPanelHeight - (height < 400 ? 112 : 126));
-      const settingsSpacing = Math.min(50, Math.max(34, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
+      this.settingsGraphics.fillStyle(0x171717, 0.985).fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
+      this.settingsGraphics.lineStyle(2, 0xf6f6ee, 0.78).strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
+      this.settingsGraphics.lineStyle(1, 0xbdbdbd, 0.4).lineBetween(width / 2 - settingsPanelWidth / 2 + 18, settingsTop + 66, width / 2 + settingsPanelWidth / 2 - 18, settingsTop + 66);
+      this.settingsTitle.setPosition(width / 2, settingsTop + 29).setFontSize(short ? 16 : 20);
+      this.settingsHint.setPosition(width / 2, settingsTop + 50).setVisible(height >= 350);
+      const settingsStartY = settingsTop + (short ? 84 : 98);
+      const availableSpan = Math.max(178, settingsPanelHeight - (short ? 116 : 132));
+      const settingsSpacing = Math.min(52, Math.max(35, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
       this.settingsButtons.forEach((button, index) => button.setPosition(width / 2, settingsStartY + index * settingsSpacing));
     }
 
-    this.status.setPosition(width / 2, height - 37).setVisible(height >= 420 && !this.settingsOpen);
-    this.linkIndicator?.setPosition(Math.max(34, width / 2 - 242), height - 37).setVisible(width >= 620 && height >= 420 && !this.settingsOpen);
-    this.notice.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(640, width - 44));
+    this.status.setPosition(width / 2, height - 30).setVisible(height >= 430 && !this.settingsOpen);
+    this.linkIndicator?.setPosition(Math.max(34, width / 2 - 255), height - 30).setVisible(width >= 660 && height >= 430 && !this.settingsOpen);
+    this.notice.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(620, width - 36));
   }
 }
