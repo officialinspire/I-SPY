@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createLocateMission } from '../game/locateMission.js';
+import { getGeneratorOptions } from '../game/missionGenerator.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
@@ -13,7 +14,10 @@ export default class MissionBriefingScene extends Phaser.Scene {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '14px', color: GAME_CONFIG.palette.gray,
     }).setOrigin(0.5);
 
+    const generatorOptions = getGeneratorOptions();
     const regionLine = this.mission.region ? `\nREGION: ${this.mission.region.label}` : '';
+    const generatedLine = this.mission.generated ? '\nSOURCE: PROCEDURAL RECON TASKING' : '';
+    const seedLine = generatorOptions.debugMission && this.mission.seed ? `\nGENERATOR SEED: ${this.mission.seed}\nGENERATION ATTEMPT: ${this.mission.generationAttempt ?? 'FALLBACK'}` : '';
     const countInstruction = this.mission.mode === 'COUNT'
       ? '\n\nCOUNT ONLY THE REQUESTED CATEGORY. CIVILIAN OR UNRELATED OBJECTS MAY BE PRESENT.'
       : '';
@@ -22,7 +26,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
       : '';
 
     this.briefing = this.add.text(0, 0,
-      `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${this.mission.sector}\nMODE: ${this.mission.mode}${regionLine}\n\nOBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}\n\nTIME WINDOW: ${this.mission.timeLimitSeconds} SECONDS`,
+      `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${this.mission.sector}\nMODE: ${this.mission.mode}${regionLine}${generatedLine}${seedLine}\n\nOBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}\n\nTIME WINDOW: ${this.mission.timeLimitSeconds} SECONDS`,
       { fontFamily: GAME_CONFIG.typography.family, fontSize: '18px', color: GAME_CONFIG.palette.offWhite, lineSpacing: 7, align: 'left' }
     ).setOrigin(0.5);
 
@@ -34,8 +38,8 @@ export default class MissionBriefingScene extends Phaser.Scene {
 
   layout(gameSize) {
     const { width, height } = gameSize;
-    this.header.setPosition(width / 2, 36);
-    this.briefing.setFontSize(width < 540 ? 12 : 17).setWordWrapWidth(Math.min(720, width - 40)).setPosition(width / 2, height * 0.40);
+    this.header.setPosition(width / 2, 34);
+    this.briefing.setFontSize(width < 540 ? 12 : 16).setWordWrapWidth(Math.min(740, width - 40)).setPosition(width / 2, height * 0.40);
     this.begin.setPosition(width / 2, height - 108);
     this.back.setPosition(width / 2, height - 50);
   }
