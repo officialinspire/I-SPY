@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome } from '../ui/presentation.js';
 import { createLocateMission } from '../game/locateMission.js';
+import { feedback } from '../audio/feedback.js';
 
 export default class ResultsScene extends Phaser.Scene {
   constructor() { super('Results'); }
@@ -69,6 +70,8 @@ export default class ResultsScene extends Phaser.Scene {
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
     this.layout(this.scale.gameSize);
+
+    this.time.delayedCall(120, () => feedback(success ? 'complete' : 'fail', success ? [12, 20, 24] : [24, 35, 24]));
   }
 
   layout(gameSize) {
