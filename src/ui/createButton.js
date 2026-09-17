@@ -24,18 +24,24 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     background.setFillStyle(hovered ? GAME_CONFIG.palette.offWhite : GAME_CONFIG.palette.nearBlack);
     text.setColor(hovered ? GAME_CONFIG.palette.black : GAME_CONFIG.palette.offWhite);
   };
+  const resetPress = () => background.setScale(1);
 
   background.on('pointerover', () => setHover(true));
-  background.on('pointerout', () => setHover(false));
+  background.on('pointerout', () => {
+    setHover(false);
+    resetPress();
+  });
   background.on('pointerdown', () => {
     unlockAudio();
     background.setScale(0.98);
   });
   background.on('pointerup', () => {
-    background.setScale(1);
+    resetPress();
     feedback('button', 8);
     onPress?.();
   });
+  background.on('pointerupoutside', resetPress);
+  background.on('pointercancel', resetPress);
 
   return {
     background,
@@ -43,7 +49,13 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     width,
     height,
     setPosition(nx, ny) { background.setPosition(nx, ny); text.setPosition(nx, ny); },
-    setVisible(visible) { background.setVisible(visible); text.setVisible(visible); if (visible) background.setInteractive({ useHandCursor: true }); else background.disableInteractive(); },
+    setVisible(visible) {
+      resetPress();
+      background.setVisible(visible);
+      text.setVisible(visible);
+      if (visible) background.setInteractive({ useHandCursor: true });
+      else background.disableInteractive();
+    },
     setLabel(nextLabel) { text.setText(nextLabel); },
   };
 }
