@@ -18,6 +18,10 @@ export default class EnhancedReconScene extends ReconScene {
       color: GAME_CONFIG.palette.gray,
       letterSpacing: 1,
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1001);
+    this.splitDivider = this.add.rectangle(0, 0, 3, 10, 0xf6f6ee, 0.58)
+      .setScrollFactor(0)
+      .setDepth(1002)
+      .setVisible(false);
     this.splitLeftLabel = this.add.text(0, 0, 'PASS A // EARLIER IMAGE', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
@@ -39,8 +43,6 @@ export default class EnhancedReconScene extends ReconScene {
       ...super.getUiObjects(),
       this.layoutChrome,
       this.railLabel,
-      this.splitLeftLabel,
-      this.splitRightLabel,
     ].filter(Boolean);
   }
 
@@ -123,12 +125,12 @@ export default class EnhancedReconScene extends ReconScene {
     if (this.isChangeMode && this.splitView) {
       const half = Math.floor(width / 2);
       const bottom = railHeight > 0 ? height - railHeight : height;
-      this.layoutChrome.lineStyle(2, 0xf6f6ee, 0.62).lineBetween(half, hudHeight, half, bottom);
-      this.layoutChrome.fillStyle(0x0b0b0b, 0.34).fillRect(half - 2, hudHeight, 4, Math.max(0, bottom - hudHeight));
+      this.splitDivider.setPosition(half, hudHeight + (bottom - hudHeight) / 2).setSize(3, Math.max(0, bottom - hudHeight)).setVisible(true);
       this.splitLeftLabel.setPosition(half * 0.5, hudHeight + 20).setVisible(true);
       this.splitRightLabel.setPosition(half + (width - half) * 0.5, hudHeight + 20).setVisible(true);
       this.passStatusText?.setPosition(half * 0.5, hudHeight + 50);
     } else {
+      this.splitDivider.setVisible(false);
       this.splitLeftLabel.setVisible(false);
       this.splitRightLabel.setVisible(false);
     }
