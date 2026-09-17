@@ -4,7 +4,7 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 
 ## Current development status
 
-**Phases 0–3 implemented.**
+**Phases 0–4 implemented.**
 
 - Phaser 3 + Vite browser-game foundation
 - Responsive desktop/mobile scene flow
@@ -15,6 +15,9 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 - MARK TARGET workflow with temporary marker, confirm and cancel
 - LOCATE mission mode with mission briefing, countdown, false-identification tracking and results
 - Centralized scoring values and reusable mission-validation helpers
+- 80-frame authored four-tone reconnaissance sprite library
+- Runtime sprite manifest and named Phaser frame registration
+- Locked Cold War / old-handheld art-direction specification
 
 ## Locate scoring
 
@@ -22,6 +25,14 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 - False identification: -250 each
 - Remaining-time bonus: +5 per second
 - Perfect mission bonus: +500 when completed with zero false identifications
+
+## Phase 4 sprite library
+
+Production art lives in `assets/sprites/` as five transparent SVG sprite sheets: environment, infrastructure, targets/installations, intel clues/decoys/change states, and UI overlays. Every sheet uses 64×64 deterministic frames and a strict four-tone palette.
+
+`src/assets/spriteManifest.js` is the runtime source of truth for sheet keys, asset URLs, frame names, categories and coordinates. `BootScene` preloads the SVG sheets and registers named Phaser frames without changing the current gameplay map.
+
+See `docs/ART-DIRECTION.md` and `docs/SPRITE-SHEET.md` for the complete visual and integration contract.
 
 ## Debug target bounds
 
@@ -46,7 +57,8 @@ npm run build
 - `src/game/` — reusable mission validation and scoring logic
 - `src/world/` — reconnaissance map and entity metadata
 - `src/ui/` — shared UI helpers
-- `assets/` — future maps, sprites, and UI art
+- `src/assets/` — sprite manifest and texture-frame registration
+- `assets/sprites/` — production sprite sheets
+- `assets/maps/` — future authored map data
+- `docs/` — art and integration specifications
 - `public/` — static public assets
-
-The current graphics are intentionally generated placeholders. A later phase will replace them with the authored black-and-white reconnaissance sprite sheet and tilemap system.
