@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'i-spy-settings-v1';
 
 const DEFAULTS = Object.freeze({
-  masterVolume: 0.7,
+  masterVolume: 0.75,
   sfxEnabled: true,
   hapticsEnabled: true,
   scanlinesEnabled: true,
