@@ -13,6 +13,7 @@ export default class ReconScene extends Phaser.Scene {
     this.mission = data.mission ?? createLocateMission();
     this.isCountMode = this.mission.mode === 'COUNT';
     this.isChangeMode = this.mission.mode === 'CHANGE';
+    this.debugMission = new URLSearchParams(window.location.search).get('debugMission') === '1';
     this.falseIdentifications = 0;
     this.incorrectSubmissions = 0;
     this.answerValue = 0;
@@ -32,6 +33,7 @@ export default class ReconScene extends Phaser.Scene {
     this.createHud();
     this.createGridOverlay();
     this.createMissionOverlay();
+    this.createAtmosphereOverlay();
     this.createSelectionOverlay();
     this.bindInput();
     this.startMissionTimer();
@@ -42,9 +44,12 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createWorldState() {
+    const commonOperations = this.mission.worldOperations ?? [];
     if (this.isChangeMode) {
       this.worldA = createAuthoredReconMap(this);
       this.worldB = createAuthoredReconMap(this);
+      applyReconOperations(this, this.worldA, commonOperations);
+      applyReconOperations(this, this.worldB, commonOperations);
       applyReconOperations(this, this.worldB, this.mission.passBOperations ?? []);
       this.worldB.root.setVisible(false);
       this.worldLayer = this.worldA.root;
@@ -53,15 +58,23 @@ export default class ReconScene extends Phaser.Scene {
       this.passEntities = { A: this.worldA.entities, B: this.worldB.entities };
       this.spawnZones = this.worldA.spawnZones;
       this.mapMetadata = this.worldA.metadata;
+      this.applyGeneratedContrast([this.worldA.root, this.worldB.root]);
       return;
     }
 
     const world = createAuthoredReconMap(this);
+    applyReconOperations(this, world, commonOperations);
     this.worldLayer = world.root;
     this.map = world.map;
     this.entities = world.entities;
     this.spawnZones = world.spawnZones;
     this.mapMetadata = world.metadata;
+    this.applyGeneratedContrast([world.root]);
+  }
+
+  applyGeneratedContrast(roots) {
+    const contrast = Phaser.Math.Clamp(this.mission.visualModifiers?.contrast ?? 1, 0.82, 1);
+    roots.forEach((root) => root?.setAlpha(contrast));
   }
 
   createHud() {
@@ -69,7 +82,8 @@ export default class ReconScene extends Phaser.Scene {
     this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(1000);
     this.hudBackground = this.add.rectangle(0, 0, 10, hudHeight, 0x0b0b0b, 0.96).setOrigin(0);
     this.hudBorder = this.add.rectangle(0, hudHeight - 2, 10, 2, 0xe8e8df).setOrigin(0);
-    this.missionText = this.add.text(16, 12, `${this.mission.operation} // ${this.mission.mode}`, {
+    const seedText = this.debugMission && this.mission.seed ? ` // SEED ${this.mission.seed}` : '';
+    this.missionText = this.add.text(16, 12, `${this.mission.operation} // ${this.mission.mode}${seedText}`, {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '14px', color: GAME_CONFIG.palette.offWhite,
     });
     this.objectiveText = this.add.text(16, 39, `OBJECTIVE: ${this.mission.objective}`, {
@@ -157,6 +171,38 @@ export default class ReconScene extends Phaser.Scene {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '18px', color: GAME_CONFIG.palette.offWhite,
       backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 8, y: 5 },
     }).setDepth(921);
+  }
+
+  createAtmosphereOverlay() {
+    this.atmosphereGraphics = this.add.graphics().setScrollFactor(0).setDepth(930);
+    this.redrawAtmosphere(this.scale.gameSize.width, this.scale.gameSize.height);
+  }
+
+  redrawAtmosphere(width, height) {
+    if (!this.atmosphereGraphics) return;
+    this.atmosphereGraphics.clear();
+    const modifiers = this.mission.visualModifiers;
+    if (!modifiers) return;
+
+    const haze = Phaser.Math.Clamp(modifiers.haze ?? 0, 0, 0.1);
+    if (haze > 0) this.atmosphereGraphics.fillStyle(0xf6f6ee, haze).fillRect(0, 0, width, height);
+
+    const grain = Phaser.Math.Clamp(modifiers.grain ?? 0, 0, 0.25);
+    if (grain <= 0) return;
+    let state = 2166136261;
+    for (const character of String(this.mission.seed ?? this.mission.id ?? 'I-SPY')) {
+      state ^= character.charCodeAt(0);
+      state = Math.imul(state, 16777619) >>> 0;
+    }
+    const next = () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 4294967296;
+    };
+    const points = Math.floor((width * height / 5200) * (grain / 0.1));
+    this.atmosphereGraphics.fillStyle(0xf6f6ee, Math.min(0.12, grain * 0.5));
+    for (let index = 0; index < points; index += 1) {
+      this.atmosphereGraphics.fillRect(Math.floor(next() * width), Math.floor(next() * height), next() > 0.82 ? 2 : 1, 1);
+    }
   }
 
   createSelectionOverlay() {
@@ -387,6 +433,7 @@ export default class ReconScene extends Phaser.Scene {
     this.splitView = true;
     this.worldA.root.setVisible(true);
     this.worldB.root.setVisible(true);
+    this.atmosphereGraphics?.setVisible(false);
     const { width, height } = this.scale.gameSize;
     const half = Math.floor(width / 2);
     this.compareCamera = this.cameras.add(half, 0, width - half, height, false, 'PassB');
@@ -418,6 +465,7 @@ export default class ReconScene extends Phaser.Scene {
     }
     this.worldA.root.setVisible(this.activePass === 'A');
     this.worldB.root.setVisible(this.activePass === 'B');
+    this.atmosphereGraphics?.setVisible(true);
     this.passButton.setVisible(true);
     this.splitButton.setLabel('SPLIT VIEW');
     this.updatePassStatus();
@@ -426,7 +474,7 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   getUiObjects() {
-    const objects = [this.hud, this.statusText, this.answerText, this.passStatusText];
+    const objects = [this.hud, this.statusText, this.answerText, this.passStatusText, this.atmosphereGraphics];
     const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
     buttons.forEach((button) => objects.push(button.background, button.text));
     return objects.filter(Boolean);
@@ -553,6 +601,7 @@ export default class ReconScene extends Phaser.Scene {
     this.hudBackground.width = width;
     this.hudBorder.width = width;
     this.timerText.setPosition(width - 16, 13);
+    if (!this.splitView) this.redrawAtmosphere(width, height);
     const compact = width < 680;
 
     if (this.isChangeMode && this.splitView && width < GAME_CONFIG.change.splitViewMinWidth) {
