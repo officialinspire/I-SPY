@@ -24,12 +24,12 @@ export default class MissionBriefingScene extends Phaser.Scene {
       fontSize: '13px',
       color: GAME_CONFIG.palette.lightGray,
       letterSpacing: 2,
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0.5);
     this.documentCode = this.add.text(0, 0, `FILE: ${this.mission.id ?? 'UNASSIGNED'} // EYES ONLY`, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
       color: GAME_CONFIG.palette.gray,
-    }).setOrigin(0.5);
+    }).setOrigin(1, 0.5);
 
     const generatorOptions = getGeneratorOptions();
     const regionLine = this.mission.region ? `\nREGION: ${this.mission.region.label}` : '';
@@ -46,11 +46,11 @@ export default class MissionBriefingScene extends Phaser.Scene {
 
     this.briefing = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '16px',
+      fontSize: '15px',
       color: GAME_CONFIG.palette.offWhite,
-      lineSpacing: 7,
+      lineSpacing: 6,
       align: 'left',
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0);
 
     this.stamp = this.add.text(0, 0, 'RESTRICTED', {
       fontFamily: GAME_CONFIG.typography.family,
@@ -98,25 +98,47 @@ export default class MissionBriefingScene extends Phaser.Scene {
   layout(gameSize) {
     const { width, height } = gameSize;
     this.chrome.layout(gameSize);
-    const compact = width < 540;
-    const panelWidth = Math.min(780, width - (compact ? 28 : 70));
-    const panelTop = Math.max(64, height * 0.10);
-    const panelBottom = height - 136;
+    const compact = width < 600;
+    const short = height < 560;
+    const sideMargin = compact ? 18 : 36;
+    const panelWidth = Math.min(900, width - sideMargin * 2);
+    const panelLeft = width / 2 - panelWidth / 2;
+    const controlsHeight = compact ? 118 : 82;
+    const panelTop = Math.max(54, short ? 52 : height * 0.07);
+    const panelBottom = Math.max(panelTop + 210, height - controlsHeight - 22);
+    const panelHeight = panelBottom - panelTop;
+    const paddingX = compact ? 18 : 30;
 
     this.documentGraphics.clear();
-    this.documentGraphics.fillStyle(0x171717, 0.38).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
-    this.documentGraphics.lineStyle(1, 0xbdbdbd, 0.38).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
-    this.documentGraphics.lineStyle(2, 0xf6f6ee, 0.55).lineBetween(width / 2 - panelWidth / 2, panelTop + 44, width / 2 + panelWidth / 2, panelTop + 44);
+    this.documentGraphics.fillStyle(0x171717, 0.42).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.documentGraphics.lineStyle(1, 0xbdbdbd, 0.4).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.documentGraphics.lineStyle(2, 0xf6f6ee, 0.58).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
+    this.documentGraphics.lineStyle(1, 0xbdbdbd, 0.22).lineBetween(panelLeft + paddingX, panelBottom - 30, panelLeft + panelWidth - paddingX, panelBottom - 30);
 
-    this.header.setPosition(width / 2, panelTop + 20);
-    this.documentCode.setPosition(width / 2, panelTop + 58).setVisible(height >= 430);
+    this.header.setFontSize(compact ? 11 : 13).setPosition(panelLeft + paddingX, panelTop + 24);
+    this.documentCode.setFontSize(compact ? 8 : 10).setPosition(panelLeft + panelWidth - paddingX, panelTop + 24).setVisible(width >= 470);
+
+    const briefingTop = panelTop + (short ? 62 : 70);
+    const briefingFont = short ? (compact ? 9 : 10) : (compact ? 11 : 14);
     this.briefing
-      .setFontSize(compact ? 11 : 15)
-      .setWordWrapWidth(panelWidth - (compact ? 30 : 64))
-      .setPosition(width / 2, panelTop + (panelBottom - panelTop) * 0.55);
-    this.stamp.setPosition(width / 2 + panelWidth * 0.32, panelTop + 68).setVisible(width >= 500);
-    this.begin.setPosition(width / 2, height - 100);
-    this.back.setPosition(width / 2, height - 48);
-    this.acquisition.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(520, width - 44));
+      .setFontSize(briefingFont)
+      .setLineSpacing(short ? 2 : 5)
+      .setWordWrapWidth(panelWidth - paddingX * 2)
+      .setPosition(panelLeft + paddingX, briefingTop);
+
+    this.stamp
+      .setFontSize(short ? 11 : 14)
+      .setPosition(panelLeft + panelWidth - (compact ? 58 : 82), panelBottom - 52)
+      .setVisible(width >= 540 && height >= 430);
+
+    if (compact) {
+      this.begin.setPosition(width / 2, height - 91);
+      this.back.setPosition(width / 2, height - 43);
+    } else {
+      this.begin.setPosition(width / 2 - 115, height - 48);
+      this.back.setPosition(width / 2 + 150, height - 48);
+    }
+
+    this.acquisition.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(520, width - 36));
   }
 }
