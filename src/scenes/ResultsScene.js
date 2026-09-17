@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome } from '../ui/presentation.js';
+import { createFocusGroup } from '../ui/focusGroup.js';
+import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { feedback } from '../audio/feedback.js';
 
@@ -31,14 +33,14 @@ export default class ResultsScene extends Phaser.Scene {
     this.title = this.add.text(0, 0, success ? 'MISSION COMPLETE' : 'MISSION FAILED', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '32px',
-      color: GAME_CONFIG.palette.offWhite,
+      color: success ? UI_TOKENS.text.positiveBright : UI_TOKENS.text.negative,
       letterSpacing: 2,
     }).setOrigin(0, 0.5);
     this.scoreText = this.add.text(0, 0, `TOTAL SCORE // ${score.totalScore ?? 0}`, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '18px',
       fontStyle: 'bold',
-      color: GAME_CONFIG.palette.white,
+      color: UI_TOKENS.text.attention,
       letterSpacing: 1,
     }).setOrigin(1, 0.5);
 
@@ -62,11 +64,12 @@ export default class ResultsScene extends Phaser.Scene {
     this.disposition = this.add.text(0, 0, success ? 'INTELLIGENCE DISPOSITION: ACCEPTED' : 'INTELLIGENCE DISPOSITION: INCOMPLETE', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: GAME_CONFIG.palette.gray,
+      color: success ? UI_TOKENS.text.positive : UI_TOKENS.text.negative,
     }).setOrigin(0, 0.5);
 
-    this.retry = createButton(this, 0, 0, 'RESTART MISSION', () => this.scene.start('MissionBriefing', { mission }), { width: 250, fontSize: 16 });
-    this.menu = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), { width: 250, fontSize: 16 });
+    this.retry = createButton(this, 0, 0, 'RESTART MISSION', () => this.scene.start('MissionBriefing', { mission }), { width: 250, fontSize: 16, variant: 'primary' });
+    this.menu = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), { width: 250, fontSize: 16, variant: 'secondary' });
+    this.focusGroup = createFocusGroup(this, [this.retry, this.menu]);
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
     this.layout(this.scale.gameSize);
@@ -91,11 +94,12 @@ export default class ResultsScene extends Phaser.Scene {
     const headerDividerY = panelTop + (narrowHeader ? 146 : 124);
 
     this.panelGraphics.clear();
-    this.panelGraphics.fillStyle(0x171717, 0.4).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
-    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.38).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
-    this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.58).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
-    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.24).lineBetween(panelLeft + paddingX, headerDividerY, panelLeft + panelWidth - paddingX, headerDividerY);
-    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.22).lineBetween(panelLeft + paddingX, panelBottom - 32, panelLeft + panelWidth - paddingX, panelBottom - 32);
+    const statusAccent = hexToNumber(this.data?.success === true ? UI_TOKENS.color.phosphor : UI_TOKENS.color.rust);
+    this.panelGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), UI_TOKENS.surface.panelAlpha).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.panelGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.panelBorder), UI_TOKENS.surface.panelBorderAlpha).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.panelGraphics.lineStyle(2, statusAccent, 0.7).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
+    this.panelGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.24).lineBetween(panelLeft + paddingX, headerDividerY, panelLeft + panelWidth - paddingX, headerDividerY);
+    this.panelGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.22).lineBetween(panelLeft + paddingX, panelBottom - 32, panelLeft + panelWidth - paddingX, panelBottom - 32);
 
     this.kicker.setFontSize(compact ? 9 : 11).setPosition(panelLeft + paddingX, panelTop + 24);
     this.title.setFontSize(compact ? 23 : (short ? 26 : 32)).setPosition(panelLeft + paddingX, panelTop + 82);

@@ -44,6 +44,12 @@ export function playFeedback(eventName) {
     case 'button':
       tone(620, 42, 0.035, 0, 'square');
       break;
+    case 'hover':
+      tone(880, 16, 0.009, 0, 'square');
+      break;
+    case 'focus':
+      tone(520, 24, 0.016, 0, 'square');
+      break;
     case 'mark':
       tone(460, 55, 0.045, 0, 'square');
       break;

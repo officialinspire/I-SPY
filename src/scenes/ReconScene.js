@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
+import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createAuthoredReconMap, applyReconOperations, entityAtPoint } from '../world/authoredReconMap.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 import { validateCountAnswer, calculateCountScore } from '../game/countMission.js';
@@ -81,7 +82,7 @@ export default class ReconScene extends Phaser.Scene {
     const hudHeight = GAME_CONFIG.recon.hudHeight;
     this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(1000);
     this.hudBackground = this.add.rectangle(0, 0, 10, hudHeight, 0x0b0b0b, 0.96).setOrigin(0);
-    this.hudBorder = this.add.rectangle(0, hudHeight - 2, 10, 2, 0xe8e8df).setOrigin(0);
+    this.hudBorder = this.add.rectangle(0, hudHeight - 2, 10, 2, hexToNumber(UI_TOKENS.color.phosphorDim)).setOrigin(0);
     const seedText = this.debugMission && this.mission.seed ? ` // SEED ${this.mission.seed}` : '';
     this.missionText = this.add.text(16, 12, `${this.mission.operation} // ${this.mission.mode}${seedText}`, {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '14px', color: GAME_CONFIG.palette.offWhite,
@@ -93,22 +94,21 @@ export default class ReconScene extends Phaser.Scene {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: GAME_CONFIG.palette.gray,
     });
     this.timerText = this.add.text(0, 15, this.formatTime(this.remainingSeconds), {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '16px', color: GAME_CONFIG.palette.offWhite,
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '16px', color: UI_TOKENS.text.body,
     }).setOrigin(1, 0);
+    this.timerColor = UI_TOKENS.text.body;
     this.hud.add([this.hudBackground, this.hudBorder, this.missionText, this.objectiveText, this.coordText, this.timerText]);
 
-    this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13 });
-    this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12 });
+    this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13, variant: 'secondary' });
+    this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12, variant: 'secondary' });
     this.commonButtons = [this.pauseButton, this.resetButton];
 
     if (this.isCountMode) this.createCountControls();
     else if (this.isChangeMode) this.createChangeControls();
     else this.createLocateControls();
 
-    [...this.commonButtons, ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])].forEach((button) => {
-      button.background.setScrollFactor(0).setDepth(1002);
-      button.text.setScrollFactor(0).setDepth(1003);
-    });
+    [...this.commonButtons, ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])]
+      .forEach((button) => button.setScrollFactor(0).setDepth(1002));
 
     this.statusText = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '12px', color: GAME_CONFIG.palette.offWhite,
@@ -119,31 +119,31 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createLocateControls() {
-    this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.armMarking(), { width: 170, height: 36, fontSize: 13 });
-    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12 });
-    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12 });
+    this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.armMarking(), { width: 170, height: 36, fontSize: 13, variant: 'tactical' });
+    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success' });
+    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger' });
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.locateButtons = [this.markButton, this.confirmButton, this.cancelButton];
   }
 
   createCountControls() {
-    this.decrementButton = createButton(this, 0, 0, '−', () => this.adjustAnswer(-1), { width: 46, height: 38, fontSize: 22 });
-    this.incrementButton = createButton(this, 0, 0, '+', () => this.adjustAnswer(1), { width: 46, height: 38, fontSize: 22 });
-    this.submitCountButton = createButton(this, 0, 0, 'SUBMIT COUNT', () => this.submitCount(), { width: 150, height: 38, fontSize: 12 });
+    this.decrementButton = createButton(this, 0, 0, '−', () => this.adjustAnswer(-1), { width: 46, height: 38, fontSize: 22, variant: 'tactical', accent: false });
+    this.incrementButton = createButton(this, 0, 0, '+', () => this.adjustAnswer(1), { width: 46, height: 38, fontSize: 22, variant: 'tactical', accent: false });
+    this.submitCountButton = createButton(this, 0, 0, 'SUBMIT COUNT', () => this.submitCount(), { width: 150, height: 38, fontSize: 12, variant: 'primary' });
     this.answerText = this.add.text(0, 0, '00', {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '22px', color: GAME_CONFIG.palette.offWhite,
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '22px', color: UI_TOKENS.text.positiveBright,
       backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 14, y: 6 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
     this.countButtons = [this.decrementButton, this.incrementButton, this.submitCountButton];
   }
 
   createChangeControls() {
-    this.markButton = createButton(this, 0, 0, 'MARK CHANGE', () => this.armMarking(), { width: 150, height: 36, fontSize: 12 });
-    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12 });
-    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12 });
-    this.passButton = createButton(this, 0, 0, 'VIEW PASS B', () => this.togglePass(), { width: 142, height: 36, fontSize: 11 });
-    this.splitButton = createButton(this, 0, 0, 'SPLIT VIEW', () => this.toggleSplitView(), { width: 132, height: 36, fontSize: 11 });
+    this.markButton = createButton(this, 0, 0, 'MARK CHANGE', () => this.armMarking(), { width: 150, height: 36, fontSize: 12, variant: 'tactical' });
+    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success' });
+    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger' });
+    this.passButton = createButton(this, 0, 0, 'VIEW PASS B', () => this.togglePass(), { width: 142, height: 36, fontSize: 11, variant: 'tactical' });
+    this.splitButton = createButton(this, 0, 0, 'SPLIT VIEW', () => this.toggleSplitView(), { width: 132, height: 36, fontSize: 11, variant: 'tactical' });
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.passStatusText = this.add.text(0, 0, '', {
@@ -337,6 +337,7 @@ export default class ReconScene extends Phaser.Scene {
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.markButton.setLabel(this.isChangeMode ? 'SELECT CHANGE' : 'SELECT OBJECT');
+    this.markButton.setSelected(true);
     this.flashStatus(this.isChangeMode ? 'CHANGE MARKING ACTIVE // TAP THE CHANGED OBJECT' : 'MARKING ACTIVE // TAP AN OBJECT');
   }
 
@@ -363,6 +364,7 @@ export default class ReconScene extends Phaser.Scene {
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
+    this.markButton.setSelected(false);
     this.flashStatus('MARK CANCELLED');
   }
 
@@ -375,6 +377,7 @@ export default class ReconScene extends Phaser.Scene {
     this.cancelButton.setVisible(false);
     this.marking = false;
     this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
+    this.markButton.setSelected(false);
     if (result.correct) {
       this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'CONFIRMED');
       this.time.delayedCall(350, () => this.finishMission(true));
@@ -447,7 +450,7 @@ export default class ReconScene extends Phaser.Scene {
     this.compareCamera.ignore(this.worldA.root);
     this.compareCamera.ignore(this.getUiObjects());
     this.passButton.setVisible(false);
-    this.splitButton.setLabel('EXIT SPLIT');
+    this.splitButton.setLabel('EXIT SPLIT').setSelected(true);
     this.updatePassStatus();
     this.onResize(this.scale.gameSize);
     this.flashStatus('SPLIT VIEW // LEFT PASS A // RIGHT PASS B');
@@ -467,7 +470,7 @@ export default class ReconScene extends Phaser.Scene {
     this.worldB.root.setVisible(this.activePass === 'B');
     this.atmosphereGraphics?.setVisible(true);
     this.passButton.setVisible(true);
-    this.splitButton.setLabel('SPLIT VIEW');
+    this.splitButton.setLabel('SPLIT VIEW').setSelected(false);
     this.updatePassStatus();
     this.onResize(this.scale.gameSize);
     if (showMessage) this.flashStatus(`${this.activePass === 'A' ? 'PASS A' : 'PASS B'} SINGLE VIEW`);
@@ -476,7 +479,7 @@ export default class ReconScene extends Phaser.Scene {
   getUiObjects() {
     const objects = [this.hud, this.statusText, this.answerText, this.passStatusText, this.atmosphereGraphics];
     const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
-    buttons.forEach((button) => objects.push(button.background, button.text));
+    buttons.forEach((button) => objects.push(...button.getObjects()));
     return objects.filter(Boolean);
   }
 
@@ -496,6 +499,7 @@ export default class ReconScene extends Phaser.Scene {
         const elapsed = (this.time.now - this.missionStartedAt - (this.totalPausedMs ?? 0)) / 1000;
         this.remainingSeconds = Math.max(0, this.mission.timeLimitSeconds - elapsed);
         this.timerText.setText(this.formatTime(this.remainingSeconds));
+        this.updateTimerStyle();
         if (this.remainingSeconds <= 0) this.finishMission(false);
       },
     });
@@ -581,8 +585,25 @@ export default class ReconScene extends Phaser.Scene {
       this.totalPausedMs = (this.totalPausedMs ?? 0) + (this.time.now - this.pauseStartedAt);
       this.pauseStartedAt = null;
     }
-    this.pauseButton.setLabel(this.paused ? 'RESUME' : 'PAUSE');
+    this.pauseButton.setLabel(this.paused ? 'RESUME' : 'PAUSE').setVariant(this.paused ? 'warning' : 'secondary');
+    this.setMissionControlsEnabled(!this.paused);
     this.flashStatus(this.paused ? 'RECON PAUSED // ESC TO RESUME' : 'RECON RESUMED');
+  }
+
+  /** Mission actions read as unavailable while the recon feed is held. */
+  setMissionControlsEnabled(enabled) {
+    [...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])]
+      .forEach((button) => button?.setEnabled(enabled));
+  }
+
+  updateTimerStyle() {
+    const { cautionSeconds, criticalSeconds } = GAME_CONFIG.recon;
+    let color = UI_TOKENS.text.body;
+    if (this.remainingSeconds <= criticalSeconds) color = UI_TOKENS.text.negative;
+    else if (this.remainingSeconds <= cautionSeconds) color = UI_TOKENS.text.attention;
+    if (color === this.timerColor) return;
+    this.timerColor = color;
+    this.timerText.setColor(color);
   }
 
   formatTime(seconds) {
