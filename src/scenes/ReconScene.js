@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
-import { createPlaceholderReconMap } from '../world/createPlaceholderReconMap.js';
-import { entityAtPoint } from '../world/reconEntities.js';
+import { createAuthoredReconMap, entityAtPoint } from '../world/authoredReconMap.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 
 export default class ReconScene extends Phaser.Scene {
@@ -11,7 +10,6 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   create(data = {}) {
-    const cfg = GAME_CONFIG.recon;
     this.mission = data.mission ?? createLocateMission();
     this.falseIdentifications = 0;
     this.remainingSeconds = this.mission.timeLimitSeconds;
@@ -21,13 +19,16 @@ export default class ReconScene extends Phaser.Scene {
     this.candidate = null;
 
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
-    this.cameras.main.setBounds(0, 0, cfg.worldWidth, cfg.worldHeight);
-    this.cameras.main.setZoom(cfg.defaultZoom);
-    this.cameras.main.centerOn(cfg.worldWidth / 2, cfg.worldHeight / 2);
-
-    const world = createPlaceholderReconMap(this, cfg.worldWidth, cfg.worldHeight);
+    const world = createAuthoredReconMap(this);
     this.worldLayer = world.root;
+    this.map = world.map;
     this.entities = world.entities;
+    this.spawnZones = world.spawnZones;
+    this.mapMetadata = world.metadata;
+
+    this.cameras.main.setBounds(0, 0, this.map.width, this.map.height);
+    this.resetCamera(false);
+
     this.createHud();
     this.createGridOverlay();
     this.createSelectionOverlay();
@@ -51,7 +52,7 @@ export default class ReconScene extends Phaser.Scene {
     this.objectiveText = this.add.text(16, 39, `OBJECTIVE: ${this.mission.objective}`, {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '12px', color: GAME_CONFIG.palette.lightGray,
     });
-    this.coordText = this.add.text(16, 58, 'GRID: ---- / ----', {
+    this.coordText = this.add.text(16, 58, `MAP: ${this.map.id.toUpperCase()} // GRID: ---- / ----`, {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: GAME_CONFIG.palette.gray,
     });
     this.timerText = this.add.text(0, 15, this.formatTime(this.remainingSeconds), {
@@ -83,22 +84,32 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createGridOverlay() {
+    const gridSize = this.mapMetadata.gridSize ?? 300;
     this.grid = this.add.graphics().setDepth(900).setAlpha(0.18);
     this.grid.lineStyle(2, 0xf6f6ee, 1);
-    for (let x = 0; x <= GAME_CONFIG.recon.worldWidth; x += 300) this.grid.lineBetween(x, 0, x, GAME_CONFIG.recon.worldHeight);
-    for (let y = 0; y <= GAME_CONFIG.recon.worldHeight; y += 300) this.grid.lineBetween(0, y, GAME_CONFIG.recon.worldWidth, y);
+    for (let x = 0; x <= this.map.width; x += gridSize) this.grid.lineBetween(x, 0, x, this.map.height);
+    for (let y = 0; y <= this.map.height; y += gridSize) this.grid.lineBetween(0, y, this.map.width, y);
   }
 
   createSelectionOverlay() {
     this.selectionGraphics = this.add.graphics().setDepth(950);
     this.debugGraphics = this.add.graphics().setDepth(951);
-    this.debugMode = new URLSearchParams(window.location.search).get('debugTargets') === '1';
-    if (this.debugMode) this.drawDebugBounds();
+    const query = new URLSearchParams(window.location.search);
+    this.debugTargets = query.get('debugTargets') === '1';
+    this.debugMap = query.get('debugMap') === '1';
+    if (this.debugTargets || this.debugMap) this.drawDebugBounds();
   }
 
   drawDebugBounds() {
-    this.debugGraphics.clear().lineStyle(2, 0xf6f6ee, 0.7);
-    this.entities.forEach((entity) => this.debugGraphics.strokeRect(entity.x, entity.y, entity.width, entity.height));
+    this.debugGraphics.clear();
+    if (this.debugMap) {
+      this.debugGraphics.lineStyle(3, 0xbdbdbd, 0.55);
+      this.spawnZones.forEach((zone) => this.debugGraphics.strokeRect(zone.x, zone.y, zone.width, zone.height));
+    }
+    if (this.debugTargets) {
+      this.debugGraphics.lineStyle(2, 0xf6f6ee, 0.9);
+      this.entities.forEach((entity) => this.debugGraphics.strokeRect(entity.x, entity.y, entity.width, entity.height));
+    }
   }
 
   bindInput() {
@@ -138,7 +149,7 @@ export default class ReconScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', () => {
-      const pointers = this.input.manager.pointers.filter((p) => p.isDown);
+      const pointers = this.input.manager.pointers.filter((pointer) => pointer.isDown);
       if (pointers.length !== 2 || this.paused || this.marking) {
         this.pinchDistance = null;
         return;
@@ -261,16 +272,20 @@ export default class ReconScene extends Phaser.Scene {
 
   updateCoordinates(pointer) {
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const x = Phaser.Math.Clamp(Math.round(world.x), 0, GAME_CONFIG.recon.worldWidth);
-    const y = Phaser.Math.Clamp(Math.round(world.y), 0, GAME_CONFIG.recon.worldHeight);
-    this.coordText.setText(`GRID: ${String(x).padStart(4, '0')} / ${String(y).padStart(4, '0')}`);
+    const x = Phaser.Math.Clamp(Math.round(world.x), 0, this.map.width);
+    const y = Phaser.Math.Clamp(Math.round(world.y), 0, this.map.height);
+    this.coordText.setText(`MAP: ${this.map.id.toUpperCase()} // GRID: ${String(x).padStart(4, '0')} / ${String(y).padStart(4, '0')}`);
+  }
+
+  resetCamera(showMessage = true) {
+    const view = this.mapMetadata.recommendedView ?? { x: this.map.width / 2, y: this.map.height / 2, zoom: GAME_CONFIG.recon.defaultZoom };
+    this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom));
+    this.cameras.main.centerOn(view.x ?? this.map.width / 2, view.y ?? this.map.height / 2);
+    if (showMessage) this.flashStatus('VIEW RECENTERED');
   }
 
   resetView() {
-    const camera = this.cameras.main;
-    camera.setZoom(GAME_CONFIG.recon.defaultZoom);
-    camera.centerOn(GAME_CONFIG.recon.worldWidth / 2, GAME_CONFIG.recon.worldHeight / 2);
-    this.flashStatus('VIEW RECENTERED');
+    this.resetCamera(true);
   }
 
   togglePause() {
@@ -315,7 +330,7 @@ export default class ReconScene extends Phaser.Scene {
     this.statusText.setPosition(width / 2, height - (compact ? 128 : 88));
 
     this.objectiveText.setVisible(width >= 620);
-    this.coordText.setVisible(width >= 420);
+    this.coordText.setVisible(width >= 520);
   }
 
   cleanup() {
