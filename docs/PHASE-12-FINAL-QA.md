@@ -29,7 +29,7 @@ The validator checks:
 - all required spawn-zone tags
 - exactly 80 unique registered sprite frames
 - every authored map sprite resolves through the sprite manifest
-- authored sprite coordinates stay within map bounds
+- authored sprite coordinates are numeric; intentional edge clipping is reported as a warning
 - authored entity IDs remain unique
 - the authored mission target references a real entity
 - Boot, Main Menu, Mission Briefing, Enhanced Recon, and Results remain registered in the application entry point
