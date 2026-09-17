@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
-import { createAuthoredReconMap, applyReconOperations, entityAtPoint } from '../world/authoredReconMap.js';
+import { createAuthoredReconMap, applyReconOperations, entityNearPoint } from '../world/authoredReconMap.js';
+import { drawCandidateReticle } from '../ui/reconInteraction.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 import { validateCountAnswer, calculateCountScore } from '../game/countMission.js';
 import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
@@ -235,27 +236,57 @@ export default class ReconScene extends Phaser.Scene {
     this.pinchDistance = null;
     this.dragCamera = null;
 
+    // A press that lands on a HUD control belongs to that control, not to the
+    // map: Phaser emits the game-object events before the scene-level ones.
+    this.input.on('gameobjectdown', () => { this.controlPressed = true; });
+    this.input.on('gameobjectup', () => { this.controlReleased = true; });
+
     this.input.on('pointerdown', (pointer) => {
-      if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
-      if (!this.isCountMode && this.marking) { this.placeCandidate(pointer); return; }
+      const onControl = this.controlPressed;
+      this.controlPressed = false;
+      if (onControl || this.paused || this.missionEnded || this.isHudPoint(pointer)) {
+        this.tapPointer = null;
+        return;
+      }
+      if (this.tapPointer) {
+        // Second finger down: this gesture is a pinch, so it is not a tap.
+        this.tapPointer = null;
+        this.dragging = false;
+        return;
+      }
       const context = this.getPointerContext(pointer);
       this.dragging = true;
       this.dragCamera = context.camera;
       this.lastPointer = { x: pointer.x, y: pointer.y };
+      this.tapPointer = { id: pointer.id, x: pointer.x, y: pointer.y, travel: 0 };
     });
     this.input.on('pointermove', (pointer) => {
       if (!this.paused) this.updateCoordinates(pointer);
-      if (!this.dragging || !pointer.isDown || this.paused || this.marking) return;
+      if (this.tapPointer && pointer.id === this.tapPointer.id) {
+        this.tapPointer.travel = Math.max(
+          this.tapPointer.travel,
+          Phaser.Math.Distance.Between(this.tapPointer.x, this.tapPointer.y, pointer.x, pointer.y),
+        );
+      }
+      if (!this.dragging || !pointer.isDown || this.paused) return;
       const camera = this.dragCamera ?? this.cameras.main;
       camera.scrollX -= (pointer.x - this.lastPointer.x) / camera.zoom;
       camera.scrollY -= (pointer.y - this.lastPointer.y) / camera.zoom;
       if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
       this.lastPointer = { x: pointer.x, y: pointer.y };
+      if (this.candidate) this.drawCandidateMarker();
     });
-    this.input.on('pointerup', () => {
+    this.input.on('pointerup', (pointer) => {
+      const onControl = this.controlReleased;
+      this.controlReleased = false;
+      const tap = this.tapPointer
+        && pointer.id === this.tapPointer.id
+        && this.tapPointer.travel <= GAME_CONFIG.recon.dragThreshold;
+      this.tapPointer = null;
       this.dragging = false;
       this.dragCamera = null;
       this.pinchDistance = null;
+      if (tap && !onControl) this.handleMapTap(pointer);
     });
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
@@ -276,6 +307,24 @@ export default class ReconScene extends Phaser.Scene {
       if (!this.isCountMode && this.candidate) this.cancelCandidate(); else this.togglePause();
     });
     this.input.keyboard?.on('keydown', (event) => this.handleKeyboard(event));
+  }
+
+  /** A tap on the imagery only marks while marking is armed. */
+  handleMapTap(pointer) {
+    if (this.paused || this.missionEnded || this.isCountMode) return;
+    if (!this.marking || this.isHudPoint(pointer)) return;
+    this.placeCandidate(pointer);
+  }
+
+  /**
+   * Invisible selection tolerance, in world units.
+   *
+   * Authored bounds still decide any mark that lands on an object; this only
+   * rescues a near miss, and touch gets a little more room than a mouse.
+   */
+  selectionTolerance(pointer, camera) {
+    const screenPixels = pointer?.wasTouch ? 16 : 7;
+    return screenPixels / Math.max(0.05, camera?.zoom ?? 1);
   }
 
   handleKeyboard(event) {
@@ -303,11 +352,32 @@ export default class ReconScene extends Phaser.Scene {
     return { camera: this.cameras.main, passId, entities: this.passEntities[passId] };
   }
 
+  /**
+   * Convert a screen point into HUD space.
+   *
+   * HUD objects use scrollFactor 0, but the camera still applies its zoom
+   * around the viewport centre, so the HUD is drawn away from its own
+   * coordinates whenever the analyst is not at 1x. Guarding taps in screen
+   * space therefore blocked clear imagery above the HUD while letting taps
+   * through the band the HUD actually covers.
+   */
+  toHudSpace(pointer) {
+    const camera = this.cameras.main;
+    const zoom = camera.zoom || 1;
+    const centreX = camera.width / 2;
+    const centreY = camera.height / 2;
+    return {
+      x: centreX + (pointer.x - camera.x - centreX) / zoom,
+      y: centreY + (pointer.y - camera.y - centreY) / zoom,
+    };
+  }
+
   isHudPoint(pointer) {
-    if (pointer.y < GAME_CONFIG.recon.hudHeight) return true;
+    const { y } = this.toHudSpace(pointer);
+    if (y < GAME_CONFIG.recon.hudHeight) return true;
     const compact = this.scale.gameSize.width < 680;
     const bottomGuard = this.isCountMode ? 72 : (this.isChangeMode ? (compact ? 126 : 72) : (compact ? 64 : 0));
-    return bottomGuard > 0 && pointer.y > this.scale.gameSize.height - bottomGuard;
+    return bottomGuard > 0 && y > this.scale.gameSize.height - bottomGuard;
   }
 
   adjustAnswer(delta) { this.setAnswer(this.answerValue + delta); }
@@ -333,6 +403,7 @@ export default class ReconScene extends Phaser.Scene {
     if (this.isCountMode || this.paused || this.missionEnded) return;
     this.marking = true;
     this.candidate = null;
+    this.markerTone = 'pending';
     this.selectionGraphics.clear();
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
@@ -344,12 +415,11 @@ export default class ReconScene extends Phaser.Scene {
   placeCandidate(pointer) {
     const context = this.getPointerContext(pointer);
     const world = context.camera.getWorldPoint(pointer.x, pointer.y);
-    const entity = entityAtPoint(world.x, world.y, context.entities);
+    const entity = entityNearPoint(world.x, world.y, context.entities,
+      this.selectionTolerance(pointer, context.camera));
     this.candidate = { x: world.x, y: world.y, entity, passId: context.passId };
-    this.selectionGraphics.clear();
-    this.selectionGraphics.lineStyle(4, 0xf6f6ee, 1).strokeCircle(world.x, world.y, 26 / context.camera.zoom);
-    this.selectionGraphics.lineBetween(world.x - 34, world.y, world.x + 34, world.y);
-    this.selectionGraphics.lineBetween(world.x, world.y - 34, world.x, world.y + 34);
+    this.markerTone = 'pending';
+    this.drawCandidateMarker();
     this.confirmButton.setVisible(true);
     this.cancelButton.setVisible(true);
     this.markButton.setLabel('MARK PENDING');
@@ -357,9 +427,27 @@ export default class ReconScene extends Phaser.Scene {
     this.flashStatus(entity ? `IDENTIFICATION READY${passLabel} // CONFIRM OR CANCEL` : `NO CLEAR OBJECT${passLabel} // CONFIRM OR CANCEL`);
   }
 
+  /** Camera the current mark belongs to, resolved late so it is never stale. */
+  candidateCamera() {
+    if (this.candidate?.passId === 'B' && this.splitView && this.compareCamera) return this.compareCamera;
+    return this.cameras.main;
+  }
+
+  /** Redrawn on every pan and zoom so the mark keeps a constant screen size. */
+  drawCandidateMarker() {
+    if (!this.selectionGraphics) return;
+    if (!this.candidate) {
+      this.selectionGraphics.clear();
+      return;
+    }
+    drawCandidateReticle(this.selectionGraphics, this.candidate.x, this.candidate.y,
+      this.candidateCamera().zoom, this.markerTone ?? 'pending');
+  }
+
   cancelCandidate() {
     this.marking = false;
     this.candidate = null;
+    this.markerTone = 'pending';
     this.selectionGraphics.clear();
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
@@ -369,7 +457,11 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   confirmCandidate() {
-    if (!this.candidate || this.missionEnded) return;
+    // Single-shot: a second press while a result resolves must not re-score,
+    // re-trigger audio, or fire the mission-end transition twice.
+    if (!this.candidate || this.missionEnded || this.resolvingIdentification) return;
+    this.resolvingIdentification = true;
+    const mark = { x: this.candidate.x, y: this.candidate.y, passId: this.candidate.passId };
     const result = this.isChangeMode
       ? validateChangeIdentification(this.mission, this.candidate.entity, this.candidate.passId)
       : validateIdentification(this.mission, this.candidate.entity);
@@ -380,13 +472,20 @@ export default class ReconScene extends Phaser.Scene {
     this.markButton.setSelected(false);
     if (result.correct) {
       this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'CONFIRMED');
+      this.onIdentificationResolved(result, mark);
       this.time.delayedCall(350, () => this.finishMission(true));
       return;
     }
     this.falseIdentifications += 1;
     this.flashStatus(`${this.isChangeMode ? 'CHANGE UNVERIFIED' : 'UNVERIFIED'} // FALSE ID ${this.falseIdentifications}`);
-    this.selectionGraphics.clear();
     this.candidate = null;
+    this.onIdentificationResolved(result, mark);
+    this.resolvingIdentification = false;
+  }
+
+  /** Overridden by the enhanced scene to flash the result at the mark. */
+  onIdentificationResolved(result) {
+    if (!result.correct) this.selectionGraphics.clear();
   }
 
   togglePass() {
@@ -549,6 +648,7 @@ export default class ReconScene extends Phaser.Scene {
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
+    if (this.candidate) this.drawCandidateMarker();
   }
 
   updateCoordinates(pointer) {

@@ -191,6 +191,36 @@ export function entityAtPoint(x, y, entities) {
   return (entities ?? []).find((entity) => !entity.hidden && x >= entity.x && x <= entity.x + entity.width && y >= entity.y && y <= entity.y + entity.height) ?? null;
 }
 
+function distanceToBounds(x, y, entity) {
+  const dx = Math.max(entity.x - x, 0, x - (entity.x + entity.width));
+  const dy = Math.max(entity.y - y, 0, y - (entity.y + entity.height));
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Authored bounds first, then an invisible tolerance ring.
+ *
+ * A mark inside an entity's real footprint always resolves to that entity, so
+ * metadata bounds stay authoritative. Only when a mark misses everything does
+ * the nearest entity within `tolerance` win, which makes touch comfortable
+ * without enlarging any sprite or favouring targets over decoys.
+ */
+export function entityNearPoint(x, y, entities, tolerance = 0) {
+  const exact = entityAtPoint(x, y, entities);
+  if (exact || tolerance <= 0) return exact;
+
+  let best = null;
+  let bestDistance = Infinity;
+  for (const entity of entities ?? []) {
+    if (entity.hidden) continue;
+    const distance = distanceToBounds(x, y, entity);
+    if (distance > tolerance || distance >= bestDistance) continue;
+    best = entity;
+    bestDistance = distance;
+  }
+  return best;
+}
+
 export function getSpawnZonesByTag(spawnZones, tag) {
   return (spawnZones ?? []).filter((zone) => zone.tag === tag);
 }
