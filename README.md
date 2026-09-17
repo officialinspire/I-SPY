@@ -4,7 +4,7 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 
 ## Current development status
 
-**Phases 0–5 implemented.**
+**Phases 0–6 implemented.**
 
 - Phaser 3 + Vite browser-game foundation
 - Responsive desktop/mobile scene flow
@@ -12,10 +12,44 @@ Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 - Pan, zoom, reset, coordinate grid, pause and reconnaissance HUD
 - Selectable reconnaissance entities with target marking, confirmation and false-identification handling
 - LOCATE mission mode with briefing, countdown, scoring and results
+- COUNT mission mode with designated analysis region, decoy-aware category counting, numeric controls, retries, countdown, scoring and results
 - 80-frame four-tone production sprite library with named Phaser frames
 - Data-driven authored map format with runtime validation
 - First production sector: `WOODLAND CORRIDOR 7`
 - Tagged spawn zones for roads, forest concealment, compound vehicles, fields, structures, radar sites, civilian areas and clue placement
+
+## Mission modes
+
+### LOCATE
+
+Find and mark the requested target.
+
+Scoring:
+
+- Correct identification: +1000
+- False identification: -250 each
+- Remaining-time bonus: +5 per second
+- Perfect mission bonus: +500 when completed with zero false identifications
+
+### COUNT
+
+Inspect the highlighted reconnaissance region and submit the number of objects matching the requested category. The first mission, **Operation Tally Sheet**, asks the player to count military vehicles inside **Grid Delta-3** while civilian and unrelated objects act as visual decoys.
+
+Controls:
+
+- On-screen `-` / `+` buttons adjust the count
+- `SUBMIT COUNT` validates the answer
+- Keyboard digits enter a count directly
+- Backspace edits the entered count
+- Arrow Up / Arrow Down adjust the count
+- Enter submits
+
+Scoring:
+
+- Correct answer: +1000
+- Incorrect submission: -300 each
+- Remaining-time bonus: +5 per second
+- Perfect mission bonus: +500 when the first submission is correct
 
 ## Authored map system
 
@@ -28,14 +62,7 @@ Debug helpers:
 - `?debugTargets=1` — show selectable entity hit boxes
 - `?debugMap=1` — show spawn-zone bounds
 
-See `docs/PHASE-5-MAP.md` for the map contract and Phase 6 handoff.
-
-## Locate scoring
-
-- Correct identification: +1000
-- False identification: -250 each
-- Remaining-time bonus: +5 per second
-- Perfect mission bonus: +500 when completed with zero false identifications
+See `docs/PHASE-5-MAP.md` for the authored-map contract and `docs/PHASE-6-COUNT.md` for COUNT-mode behavior.
 
 ## Sprite system
 
