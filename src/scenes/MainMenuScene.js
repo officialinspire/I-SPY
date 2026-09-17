@@ -4,12 +4,66 @@ import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
+import { SPRITE_SHEETS } from '../assets/spriteManifest.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
 import { cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
 import { feedback } from '../audio/feedback.js';
+
+const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
+
+const FIELD_GUIDE = [
+  'PAN AND ZOOM THE IMAGERY WITH DRAG, WHEEL OR PINCH.',
+  '',
+  'RANDOM   SEEDED, REPLAYABLE TASKING IN ANY MODE.',
+  'LOCATE   MARK THE REQUESTED TARGET, THEN CONFIRM.',
+  'COUNT    INSPECT THE MARKED GRID AND SUBMIT A TOTAL.',
+  'CHANGE   COMPARE PASS A / PASS B AND MARK THE CHANGE.',
+  '',
+  'ESC PAUSES RECON. TAB WALKS CONSOLE CONTROLS.',
+];
+
+/**
+ * Density tiers, richest first. Layout picks the first one whose composed
+ * height fits the viewport, so short landscape screens degrade by dropping
+ * ornament rather than by overlapping.
+ */
+const TIERS = [
+  {
+    id: 'full',
+    titleFont: 62, subtitleFont: 14, statusFont: 10, sectionFont: 10, readoutFont: 10,
+    primaryHeight: 84, primaryFont: 21, cardHeight: 78, cardFont: 16, descriptionFont: 10,
+    systemHeight: 44, systemFont: 13, iconSize: 26,
+    sectionGap: 20, labelGap: 16, headerGap: 22,
+    showSubtitle: true, showStatus: true, showDescriptions: true, showReadout: true, showIcons: true,
+  },
+  {
+    id: 'mid',
+    titleFont: 46, subtitleFont: 12, statusFont: 9, sectionFont: 9, readoutFont: 9,
+    primaryHeight: 72, primaryFont: 18, cardHeight: 68, cardFont: 14, descriptionFont: 9,
+    systemHeight: 40, systemFont: 12, iconSize: 22,
+    sectionGap: 15, labelGap: 13, headerGap: 16,
+    showSubtitle: true, showStatus: true, showDescriptions: true, showReadout: true, showIcons: true,
+  },
+  {
+    id: 'tight',
+    titleFont: 30, subtitleFont: 9, statusFont: 8, sectionFont: 8, readoutFont: 8,
+    primaryHeight: 54, primaryFont: 15, cardHeight: 50, cardFont: 12, descriptionFont: 8,
+    systemHeight: 36, systemFont: 11, iconSize: 18,
+    sectionGap: 10, labelGap: 9, headerGap: 11,
+    showSubtitle: true, showStatus: true, showDescriptions: true, showReadout: false, showIcons: true,
+  },
+  {
+    id: 'minimal',
+    titleFont: 26, subtitleFont: 9, statusFont: 8, sectionFont: 8, readoutFont: 8,
+    primaryHeight: 46, primaryFont: 14, cardHeight: 40, cardFont: 12, descriptionFont: 8,
+    systemHeight: 32, systemFont: 10, iconSize: 16,
+    sectionGap: 8, labelGap: 8, headerGap: 8,
+    showSubtitle: false, showStatus: true, showDescriptions: false, showReadout: false, showIcons: false,
+  },
+];
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() { super('MainMenu'); }
@@ -18,15 +72,39 @@ export default class MainMenuScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
     this.reducedMotion = prefersReducedMotion();
     this.settingsOpen = false;
+    this.noticeOpen = false;
     this.chrome = createTerminalChrome(this, {
       station: 'INTELLIGENCE DIRECTORATE // IMAGE ANALYSIS STATION 04',
       classification: GAME_CONFIG.presentation.classification,
     });
-    this.panelGraphics = this.add.graphics().setDepth(0);
 
+    this.consoleGraphics = this.add.graphics().setDepth(0);
+    this.createHeader();
+    this.createTasking();
+    this.createSystemRow();
+    this.createNoticePanel();
+    this.createSettingsPanel();
+
+    this.focusGroup = createFocusGroup(this, [...this.buttons, ...this.settingsButtons], {
+      onFocus: (button) => this.setReadout(this.readoutFor(button)),
+    });
+
+    this.scale.on('resize', this.layout, this);
+    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    this.layout(this.scale.gameSize);
+  }
+
+  /** UI sprite frame, or undefined when the sheet is unavailable. */
+  uiIcon(name) {
+    const key = SPRITE_SHEETS.ui.key;
+    if (!this.textures.exists(key) || !this.textures.get(key).has(name)) return undefined;
+    return { texture: key, frame: name };
+  }
+
+  createHeader() {
     this.title = this.add.text(0, 0, GAME_CONFIG.title, {
       fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '72px',
+      fontSize: '62px',
       fontStyle: 'bold',
       color: GAME_CONFIG.palette.white,
       letterSpacing: 8,
@@ -38,54 +116,181 @@ export default class MainMenuScene extends Phaser.Scene {
       align: 'center',
       letterSpacing: 2,
     }).setOrigin(0.5);
-    this.consoleLabel = this.add.text(0, 0, 'ORBITAL IMAGERY ANALYSIS CONSOLE', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '11px',
-      color: GAME_CONFIG.palette.gray,
-      letterSpacing: 1,
-    }).setOrigin(0.5);
-    this.status = this.add.text(0, 0, 'SYSTEM READY // SATELLITE LINK: STANDBY // CLEARANCE: TRAINING', {
+
+    const statusStyle = (color) => ({
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: UI_TOKENS.text.positive,
-    }).setOrigin(0.5);
-
-    this.primaryButtons = [
-      createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission(), { variant: 'primary' }),
-      createButton(this, 0, 0, 'LOCATE MISSION', () => this.scene.start('MissionBriefing', { mission: createLocateMission() }), { variant: 'tactical' }),
-      createButton(this, 0, 0, 'COUNT MISSION', () => this.scene.start('MissionBriefing', { mission: createCountMission() }), { variant: 'tactical' }),
-      createButton(this, 0, 0, 'CHANGE MISSION', () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() }), { variant: 'tactical' }),
-    ];
-    this.secondaryButtons = [
-      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nRANDOM: SEEDED REPLAYABLE MISSION\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT'), { width: 220, height: 42, fontSize: 14, variant: 'secondary' }),
-      createButton(this, 0, 0, 'SETTINGS', () => this.openSettings(), { width: 220, height: 42, fontSize: 14, variant: 'secondary' }),
-    ];
-    this.buttons = [...this.primaryButtons, ...this.secondaryButtons];
-
-    this.notice = this.add.text(0, 0, '', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '13px',
-      color: GAME_CONFIG.palette.offWhite,
-      align: 'left',
-      lineSpacing: 5,
-      backgroundColor: GAME_CONFIG.palette.nearBlack,
-      padding: { x: 20, y: 16 },
-    }).setOrigin(0.5).setDepth(40).setVisible(false);
-
-    this.createSettingsPanel();
-    this.focusGroup = createFocusGroup(this, [...this.buttons, ...this.settingsButtons]);
+      color,
+      letterSpacing: 1,
+    });
+    this.linkIndicator = this.add.rectangle(0, 0, 6, 6, hexToNumber(UI_TOKENS.color.phosphor)).setOrigin(0.5);
+    this.statusLink = this.add.text(0, 0, '', statusStyle(UI_TOKENS.text.positive)).setOrigin(0, 0.5);
+    this.statusChannel = this.add.text(0, 0, '', statusStyle(UI_TOKENS.text.muted)).setOrigin(0.5);
+    this.statusStation = this.add.text(0, 0, '', statusStyle(UI_TOKENS.text.muted)).setOrigin(1, 0.5);
 
     if (!this.reducedMotion) {
-      this.linkIndicator = this.add.text(0, 0, '■', {
-        fontFamily: GAME_CONFIG.typography.family,
-        fontSize: '10px',
-        color: UI_TOKENS.text.positive,
-      }).setOrigin(0.5);
-      this.tweens.add({ targets: this.linkIndicator, alpha: 0.25, duration: 850, yoyo: true, repeat: -1 });
+      this.tweens.add({ targets: this.linkIndicator, alpha: 0.25, duration: 900, yoyo: true, repeat: -1 });
     }
 
-    this.scale.on('resize', this.layout, this);
-    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    const sectionStyle = {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '10px',
+      color: UI_TOKENS.text.faint,
+      letterSpacing: 2,
+    };
+    this.primarySectionLabel = this.add.text(0, 0, 'PRIMARY TASKING', sectionStyle).setOrigin(0, 0.5);
+    this.archiveSectionLabel = this.add.text(0, 0, 'MISSION ARCHIVE // TRAINING MODES', sectionStyle).setOrigin(0, 0.5);
+    this.systemSectionLabel = this.add.text(0, 0, 'SYSTEM', sectionStyle).setOrigin(0, 0.5);
+    this.sectionLabels = [this.primarySectionLabel, this.archiveSectionLabel, this.systemSectionLabel];
+
+    this.readout = this.add.text(0, 0, DEFAULT_READOUT, {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '10px',
+      color: UI_TOKENS.text.faint,
+      align: 'center',
+      letterSpacing: 1,
+    }).setOrigin(0.5);
+  }
+
+  createTasking() {
+    this.randomCard = createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission(), {
+      variant: 'primary',
+      icon: this.uiIcon('reticle_lock'),
+      description: 'GENERATE A SEEDED INTELLIGENCE TASK.',
+      width: 480,
+      height: 84,
+      fontSize: 21,
+      onHover: (hovered) => this.setReadout(hovered ? this.readoutFor(this.randomCard) : DEFAULT_READOUT),
+    });
+
+    const modes = [
+      {
+        label: 'LOCATE',
+        description: 'IDENTIFY A REQUESTED OBJECT.',
+        icon: 'reticle',
+        accentColor: UI_TOKENS.color.phosphorBright,
+        launch: () => this.scene.start('MissionBriefing', { mission: createLocateMission() }),
+      },
+      {
+        label: 'COUNT',
+        description: 'COUNT A REQUESTED CATEGORY INSIDE A GRID.',
+        icon: 'grid_dot',
+        accentColor: UI_TOKENS.color.steelBright,
+        launch: () => this.scene.start('MissionBriefing', { mission: createCountMission() }),
+      },
+      {
+        label: 'CHANGE',
+        description: 'COMPARE TWO RECONNAISSANCE PASSES.',
+        icon: 'scanline_v',
+        accentColor: UI_TOKENS.color.amber,
+        launch: () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() }),
+      },
+    ];
+
+    this.modeCards = modes.map((mode) => {
+      const card = createButton(this, 0, 0, mode.label, mode.launch, {
+        variant: 'tactical',
+        icon: this.uiIcon(mode.icon),
+        description: mode.description,
+        accentColor: mode.accentColor,
+        width: 260,
+        height: 78,
+        fontSize: 16,
+        onHover: (hovered) => this.setReadout(hovered ? this.readoutFor(card) : DEFAULT_READOUT),
+      });
+      return card;
+    });
+  }
+
+  createSystemRow() {
+    this.howToPlayButton = createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice(), {
+      variant: 'secondary',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? 'ANALYST FIELD GUIDE' : DEFAULT_READOUT),
+    });
+    this.settingsButton = createButton(this, 0, 0, 'SETTINGS', () => this.openSettings(), {
+      variant: 'secondary',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? 'SYSTEM CONFIGURATION' : DEFAULT_READOUT),
+    });
+    this.systemButtons = [this.howToPlayButton, this.settingsButton];
+    this.buttons = [this.randomCard, ...this.modeCards, ...this.systemButtons];
+  }
+
+  readoutFor(button) {
+    if (!button) return DEFAULT_READOUT;
+    if (button === this.howToPlayButton) return 'ANALYST FIELD GUIDE';
+    if (button === this.settingsButton) return 'SYSTEM CONFIGURATION';
+    const description = button.description?.text;
+    return description ? `${button.text.text} // ${description}` : button.text.text;
+  }
+
+  setReadout(message) {
+    if (this.settingsOpen || this.noticeOpen) return;
+    this.readout?.setText(message || DEFAULT_READOUT);
+  }
+
+  createNoticePanel() {
+    this.noticeBackdrop = this.add.rectangle(0, 0, 10, 10, hexToNumber(UI_TOKENS.color.black), 0.72)
+      .setDepth(68)
+      .setVisible(false);
+    this.noticeGraphics = this.add.graphics().setDepth(69).setVisible(false);
+    this.noticeTitle = this.add.text(0, 0, 'ANALYST FIELD GUIDE', {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '14px',
+      color: UI_TOKENS.text.attention,
+      letterSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(70).setVisible(false);
+    this.noticeBody = this.add.text(0, 0, FIELD_GUIDE.join('\n'), {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '12px',
+      color: UI_TOKENS.text.body,
+      align: 'left',
+      lineSpacing: 5,
+    }).setOrigin(0, 0).setDepth(70).setVisible(false);
+    this.noticeHint = this.add.text(0, 0, 'TAP OR PRESS ESC TO DISMISS', {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '9px',
+      color: UI_TOKENS.text.faint,
+    }).setOrigin(1, 0.5).setDepth(70).setVisible(false);
+
+    this.noticeBackdrop.on('pointerdown', () => this.hideNotice());
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.noticeOpen) this.hideNotice();
+      else if (this.settingsOpen) this.closeSettings();
+    });
+  }
+
+  showNotice() {
+    this.noticeOpen = true;
+    this.focusGroup?.clearFocus();
+    this.buttons.forEach((button) => button.setEnabled(false));
+    this.noticeBackdrop.setVisible(true).setInteractive({ useHandCursor: false });
+    this.noticeGraphics.setVisible(true);
+    this.noticeTitle.setVisible(true);
+    this.noticeBody.setVisible(true);
+    this.noticeHint.setVisible(true);
+    this.readout?.setText('ANALYST FIELD GUIDE // OPEN');
+    this.noticeTimer?.remove(false);
+    this.noticeTimer = this.time.delayedCall(9000, () => this.hideNotice());
+    this.layout(this.scale.gameSize);
+  }
+
+  hideNotice() {
+    if (!this.noticeOpen) return;
+    this.noticeOpen = false;
+    this.noticeTimer?.remove(false);
+    this.buttons.forEach((button) => button.setEnabled(true));
+    this.noticeBackdrop.disableInteractive().setVisible(false);
+    this.noticeGraphics.setVisible(false);
+    this.noticeTitle.setVisible(false);
+    this.noticeBody.setVisible(false);
+    this.noticeHint.setVisible(false);
+    this.readout?.setText(DEFAULT_READOUT);
     this.layout(this.scale.gameSize);
   }
 
@@ -144,7 +349,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
   openSettings() {
     this.settingsOpen = true;
-    this.notice.setVisible(false);
+    this.hideNotice();
     this.buttons.forEach((button) => button.setVisible(false));
     this.settingsGraphics.setVisible(true);
     this.settingsTitle.setVisible(true);
@@ -157,12 +362,14 @@ export default class MainMenuScene extends Phaser.Scene {
 
   closeSettings() {
     this.settingsOpen = false;
+    this.title.setVisible(true);
     this.buttons.forEach((button) => button.setVisible(true));
     this.settingsGraphics.setVisible(false);
     this.settingsTitle.setVisible(false);
     this.settingsHint.setVisible(false);
     this.settingsButtons.forEach((button) => button.setVisible(false));
     this.focusGroup?.refresh();
+    this.readout?.setText(DEFAULT_READOUT);
     this.layout(this.scale.gameSize);
   }
 
@@ -172,75 +379,311 @@ export default class MainMenuScene extends Phaser.Scene {
     this.scene.start('MissionBriefing', { mission });
   }
 
-  showNotice(message) {
-    this.notice.setText(message).setVisible(true);
-    this.time.delayedCall(3600, () => this.notice.setVisible(false));
+  /** Height of the whole composition at a tier, used to pick and centre it. */
+  composedHeight(tier, stackCards, framePad) {
+    const headerHeight = tier.titleFont * 1.05 + (tier.showSubtitle ? tier.subtitleFont + 12 : 0);
+    const bodyHeight = this.measureTier(tier, stackCards) + framePad * 2;
+    const readoutHeight = tier.showReadout ? tier.readoutFont + 18 : 0;
+    return { headerHeight, bodyHeight, readoutHeight, total: headerHeight + tier.headerGap + bodyHeight + readoutHeight };
+  }
+
+  /** Height the console body needs at a given tier, used to pick that tier. */
+  measureTier(tier, stackCards) {
+    const archiveHeight = stackCards
+      ? tier.cardHeight * 3 + tier.sectionGap * 0.4 * 2
+      : tier.cardHeight;
+    const sectionBlock = (bodyHeight) => tier.sectionFont + tier.labelGap + bodyHeight;
+    return tier.statusFont + tier.labelGap + 6
+      + sectionBlock(tier.primaryHeight) + tier.sectionGap
+      + sectionBlock(archiveHeight) + tier.sectionGap
+      + sectionBlock(tier.systemHeight);
   }
 
   layout(gameSize) {
     const { width, height } = gameSize;
-    const compact = width < 560;
-    const short = height < 560;
-    const desktopGrid = width >= 760;
     this.chrome.layout(gameSize);
 
-    const titleY = short ? 70 : Math.max(88, height * 0.135);
-    this.title.setFontSize(compact ? (short ? 38 : 46) : (short ? 52 : 66)).setPosition(width / 2, titleY);
-    this.subtitle.setFontSize(compact ? 11 : 14).setPosition(width / 2, this.title.y + (short ? 38 : 49)).setWordWrapWidth(Math.min(620, width - 40));
-    this.consoleLabel.setPosition(width / 2, this.subtitle.y + (short ? 24 : 30)).setVisible(height >= 390);
+    const outerMargin = width < 520 ? 18 : 34;
+    const contentWidth = Math.min(940, width - outerMargin * 2);
+    const contentLeft = width / 2 - contentWidth / 2;
+    const contentRight = contentLeft + contentWidth;
+    // Narrow consoles stack; so do tall portrait screens, where a single
+    // column of full-width cards reads better than a squeezed three-up row.
+    const portrait = height / Math.max(1, width) > 1.25;
+    const stackCards = contentWidth < 660 || (portrait && contentWidth < 820);
+    const framePadX = width < 520 ? 12 : 18;
+    const innerLeft = contentLeft + framePadX;
+    const innerRight = contentRight - framePadX;
+    const innerWidth = innerRight - innerLeft;
 
-    const missionStartY = Math.max(this.consoleLabel.visible ? this.consoleLabel.y + (short ? 34 : 48) : this.subtitle.y + 36, short ? 150 : height * 0.32);
-    let panelTop;
-    let panelBottom;
+    const topSafe = width < 540 ? 34 : 42;
+    const bottomSafe = height < 420 ? 26 : 40;
 
-    if (desktopGrid) {
-      const columnGap = Math.min(320, Math.max(286, width * 0.30));
-      const leftX = width / 2 - columnGap / 2;
-      const rightX = width / 2 + columnGap / 2;
-      const rowGap = short ? 47 : 56;
-      this.primaryButtons[0].setPosition(leftX, missionStartY);
-      this.primaryButtons[1].setPosition(rightX, missionStartY);
-      this.primaryButtons[2].setPosition(leftX, missionStartY + rowGap);
-      this.primaryButtons[3].setPosition(rightX, missionStartY + rowGap);
-      this.secondaryButtons[0].setPosition(width / 2 - 120, missionStartY + rowGap * 2);
-      this.secondaryButtons[1].setPosition(width / 2 + 120, missionStartY + rowGap * 2);
-      panelTop = missionStartY - 34;
-      panelBottom = missionStartY + rowGap * 2 + 32;
+    // Pick the richest tier that fits, then centre the composition in the
+    // space that is left so tall screens do not hang everything off the top.
+    const available = height - topSafe - bottomSafe;
+    const tier = TIERS.find((candidate) => this.composedHeight(candidate, stackCards, framePadX).total <= available)
+      ?? TIERS[TIERS.length - 1];
+    const composed = this.composedHeight(tier, stackCards, framePadX);
+    const startY = topSafe + Math.max(0, (available - composed.total) * 0.42);
+
+    this.title.setFontSize(tier.titleFont).setPosition(width / 2, startY + tier.titleFont * 0.55);
+    this.subtitle
+      .setFontSize(tier.subtitleFont)
+      .setPosition(width / 2, this.title.y + tier.titleFont * 0.6 + tier.subtitleFont)
+      .setWordWrapWidth(Math.min(620, width - 40))
+      .setVisible(tier.showSubtitle && !this.settingsOpen);
+
+    const headerBottom = tier.showSubtitle ? this.subtitle.y + tier.subtitleFont : this.title.y + tier.titleFont * 0.6;
+    this.headerBottom = headerBottom;
+    const frameTop = headerBottom + tier.headerGap;
+
+    // --- console body ---
+    let cursor = frameTop + framePadX;
+    const statusY = cursor + tier.statusFont / 2;
+    this.layoutStatus(tier, innerLeft, innerRight, statusY, contentWidth);
+    cursor = statusY + tier.statusFont / 2 + tier.labelGap;
+    const statusDividerY = Math.round(cursor - tier.labelGap / 2);
+
+    const placeSection = (label, bodyHeight) => {
+      const labelY = cursor + tier.sectionFont / 2;
+      label.setFontSize(tier.sectionFont).setPosition(innerLeft, labelY);
+      cursor = labelY + tier.sectionFont / 2 + tier.labelGap;
+      const bodyTop = cursor;
+      cursor += bodyHeight + tier.sectionGap;
+      return { labelY, bodyTop };
+    };
+
+    const primary = placeSection(this.primarySectionLabel, tier.primaryHeight);
+    const primaryWidth = stackCards ? innerWidth : Math.min(innerWidth, Math.max(420, innerWidth * 0.62));
+    this.randomCard
+      .resize({
+        width: primaryWidth,
+        height: tier.primaryHeight,
+        fontSize: tier.primaryFont,
+        descriptionFontSize: tier.descriptionFont,
+        iconSize: tier.iconSize + 4,
+        padding: stackCards ? 14 : 18,
+        showDescription: tier.showDescriptions,
+        showIcon: tier.showIcons,
+      })
+      .setPosition(innerLeft + primaryWidth / 2, primary.bodyTop + tier.primaryHeight / 2);
+
+    const archiveHeight = stackCards
+      ? tier.cardHeight * 3 + tier.sectionGap * 0.4 * 2
+      : tier.cardHeight;
+    const archive = placeSection(this.archiveSectionLabel, archiveHeight);
+    const columnGap = width < 520 ? 10 : 14;
+    if (stackCards) {
+      const rowGap = tier.sectionGap * 0.4;
+      this.modeCards.forEach((card, index) => {
+        card
+          .resize({
+            width: innerWidth,
+            height: tier.cardHeight,
+            fontSize: tier.cardFont,
+            descriptionFontSize: tier.descriptionFont,
+            iconSize: tier.iconSize,
+            padding: 14,
+            showDescription: tier.showDescriptions,
+            showIcon: tier.showIcons,
+          })
+          .setPosition(innerLeft + innerWidth / 2, archive.bodyTop + tier.cardHeight / 2 + index * (tier.cardHeight + rowGap));
+      });
     } else {
-      const spacing = short ? 39 : 47;
-      this.buttons.forEach((button, index) => button.setPosition(width / 2, missionStartY + index * spacing));
-      panelTop = missionStartY - 31;
-      panelBottom = missionStartY + (this.buttons.length - 1) * spacing + 31;
+      const cardWidth = (innerWidth - columnGap * 2) / 3;
+      this.modeCards.forEach((card, index) => {
+        card
+          .resize({
+            width: cardWidth,
+            height: tier.cardHeight,
+            fontSize: tier.cardFont,
+            descriptionFontSize: Math.max(8, tier.descriptionFont - 1),
+            iconSize: tier.iconSize,
+            padding: 14,
+            showDescription: tier.showDescriptions,
+            showIcon: tier.showIcons,
+          })
+          .setPosition(innerLeft + cardWidth / 2 + index * (cardWidth + columnGap), archive.bodyTop + tier.cardHeight / 2);
+      });
     }
+    const system = placeSection(this.systemSectionLabel, tier.systemHeight);
+    const systemWidth = Math.min(260, (innerWidth - columnGap) / 2);
+    this.howToPlayButton
+      .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+      .setPosition(innerLeft + systemWidth / 2, system.bodyTop + tier.systemHeight / 2);
+    this.settingsButton
+      .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+      .setPosition(innerLeft + systemWidth + columnGap + systemWidth / 2, system.bodyTop + tier.systemHeight / 2);
 
-    const panelWidth = Math.min(desktopGrid ? 680 : (compact ? width - 34 : 430), width - 28);
-    this.panelGraphics.clear();
-    if (!this.settingsOpen) {
-      this.panelGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), UI_TOKENS.surface.panelAlpha).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
-      this.panelGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.panelBorder), UI_TOKENS.surface.panelBorderAlpha).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
-      this.panelGraphics.lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), UI_TOKENS.surface.panelAccentAlpha);
-      this.panelGraphics.lineBetween(width / 2 - panelWidth / 2, panelTop, width / 2 - panelWidth / 2 + 22, panelTop);
-      this.panelGraphics.lineBetween(width / 2 + panelWidth / 2 - 22, panelBottom, width / 2 + panelWidth / 2, panelBottom);
+    const frameBottom = cursor - tier.sectionGap + framePadX;
+    this.readout
+      .setFontSize(tier.readoutFont)
+      .setPosition(width / 2, frameBottom + tier.readoutFont + 6)
+      .setWordWrapWidth(contentWidth)
+      .setVisible(tier.showReadout && !this.settingsOpen);
+    this.sectionLabels.forEach((label) => label.setVisible(!this.settingsOpen));
+
+    this.drawConsoleFrame({
+      left: contentLeft,
+      right: contentRight,
+      top: frameTop,
+      bottom: frameBottom,
+      innerLeft,
+      innerRight,
+      statusDividerY,
+      primaryLabelY: primary.labelY,
+      archiveLabelY: archive.labelY,
+      systemLabelY: system.labelY,
+      primaryTop: primary.bodyTop,
+      primaryHeight: tier.primaryHeight,
+      primaryWidth,
+      tier,
+    });
+
+    this.layoutSettings(gameSize);
+    this.layoutNotice(gameSize);
+  }
+
+  layoutStatus(tier, innerLeft, innerRight, y, contentWidth) {
+    const short = contentWidth < 620;
+    const visible = tier.showStatus && !this.settingsOpen;
+    this.statusLink.setFontSize(tier.statusFont)
+      .setText(short ? 'LINK: AVAILABLE' : 'SATELLITE LINK: AVAILABLE')
+      .setPosition(innerLeft + 12, y)
+      .setVisible(visible);
+    this.linkIndicator.setPosition(innerLeft + 4, y).setVisible(visible);
+    this.statusChannel.setFontSize(tier.statusFont)
+      .setText(short ? 'CHANNEL: READY' : 'IMAGE CHANNEL: READY')
+      .setPosition((innerLeft + innerRight) / 2, y)
+      .setVisible(visible && contentWidth >= 430);
+    this.statusStation.setFontSize(tier.statusFont)
+      .setText(short ? 'STATION: 04' : 'ANALYST STATION: 04')
+      .setPosition(innerRight, y)
+      .setVisible(visible);
+  }
+
+  drawConsoleFrame(box) {
+    const graphics = this.consoleGraphics;
+    graphics.clear();
+    if (this.settingsOpen) return;
+
+    const { left, right, top, bottom, innerLeft, innerRight, tier } = box;
+    const width = right - left;
+    const height = bottom - top;
+    const surface = UI_TOKENS.surface;
+
+    graphics.fillStyle(hexToNumber(surface.panel), surface.panelAlpha).fillRect(left, top, width, height);
+    graphics.lineStyle(1, hexToNumber(surface.panelBorder), surface.panelBorderAlpha).strokeRect(left, top, width, height);
+
+    // Corner ticks read as equipment framing rather than a plain box.
+    const tick = Math.min(26, Math.max(14, width * 0.03));
+    graphics.lineStyle(2, hexToNumber(surface.panelAccent), surface.panelAccentAlpha);
+    graphics.lineBetween(left, top + tick, left, top);
+    graphics.lineBetween(left, top, left + tick, top);
+    graphics.lineBetween(right - tick, bottom, right, bottom);
+    graphics.lineBetween(right, bottom - tick, right, bottom);
+
+    graphics.lineStyle(1, hexToNumber(surface.divider), surface.dividerAlpha)
+      .lineBetween(innerLeft, box.statusDividerY, innerRight, box.statusDividerY);
+
+    // Hairline rules trailing each section label.
+    const rule = (label, y) => {
+      const start = innerLeft + label.width + 12;
+      if (start >= innerRight - 8) return;
+      graphics.lineStyle(1, hexToNumber(surface.divider), 0.22).lineBetween(start, y, innerRight, y);
+    };
+    rule(this.primarySectionLabel, box.primaryLabelY);
+    rule(this.archiveSectionLabel, box.archiveLabelY);
+    rule(this.systemSectionLabel, box.systemLabelY);
+
+    // Priority band haloes the emphasised tasking card; a thin trace carries
+    // the line out to the frame edge instead of leaving dead space.
+    const bandTop = box.primaryTop - 6;
+    const bandHeight = tier.primaryHeight + 12;
+    const bandRight = innerLeft + box.primaryWidth + 8;
+    graphics.fillStyle(hexToNumber(UI_TOKENS.color.amberDeep), 0.34)
+      .fillRect(innerLeft - 8, bandTop, bandRight - innerLeft + 8, bandHeight);
+    graphics.lineStyle(2, hexToNumber(UI_TOKENS.color.amber), 0.45)
+      .lineBetween(innerLeft - 8, bandTop, innerLeft - 8, bandTop + bandHeight);
+    if (innerRight - bandRight > 40) {
+      const traceY = Math.round(box.primaryTop + tier.primaryHeight / 2);
+      graphics.lineStyle(1, hexToNumber(UI_TOKENS.color.amberDim), 0.55)
+        .lineBetween(bandRight + 10, traceY, innerRight - 10, traceY);
+      graphics.lineStyle(1, hexToNumber(UI_TOKENS.color.amber), 0.6)
+        .lineBetween(innerRight - 10, traceY - 5, innerRight - 10, traceY + 5);
     }
+  }
 
+  layoutNotice(gameSize) {
+    const { width, height } = gameSize;
+    this.noticeBackdrop.setSize(width, height).setPosition(width / 2, height / 2);
+    if (this.noticeBackdrop.input) this.noticeBackdrop.input.hitArea?.setTo(0, 0, width, height);
+    this.noticeGraphics.clear();
+    if (!this.noticeOpen) return;
+
+    const compact = width < 620;
+    const panelWidth = Math.min(620, width - (compact ? 24 : 72));
+    const bodyFont = compact ? 10 : 12;
+    this.noticeBody.setFontSize(bodyFont).setWordWrapWidth(panelWidth - 44);
+    const panelHeight = Math.min(height - 48, this.noticeBody.height + (compact ? 82 : 96));
+    const left = width / 2 - panelWidth / 2;
+    const top = height / 2 - panelHeight / 2;
+
+    this.noticeGraphics
+      .fillStyle(hexToNumber(UI_TOKENS.color.panel), 0.99)
+      .fillRect(left, top, panelWidth, panelHeight);
+    this.noticeGraphics
+      .lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), 0.7)
+      .strokeRect(left, top, panelWidth, panelHeight);
+    this.noticeGraphics
+      .lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.34)
+      .lineBetween(left + 20, top + 44, left + panelWidth - 20, top + 44);
+
+    this.noticeTitle.setFontSize(compact ? 12 : 14).setPosition(left + 20, top + 23);
+    this.noticeHint.setFontSize(compact ? 8 : 9).setPosition(left + panelWidth - 20, top + 23).setVisible(width >= 460);
+    this.noticeBody.setPosition(left + 20, top + 60);
+  }
+
+  layoutSettings(gameSize) {
+    const { width, height } = gameSize;
+    const short = height < 560;
     const settingsPanelWidth = Math.min(520, width - 28);
     const settingsPanelHeight = Math.min(450, Math.max(300, height - 42));
-    const settingsTop = Math.max(21, height / 2 - settingsPanelHeight / 2);
-    this.settingsGraphics.clear();
-    if (this.settingsOpen) {
-      this.settingsGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), 0.985).fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsGraphics.lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), 0.72).strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.4).lineBetween(width / 2 - settingsPanelWidth / 2 + 18, settingsTop + 66, width / 2 + settingsPanelWidth / 2 - 18, settingsTop + 66);
-      this.settingsTitle.setPosition(width / 2, settingsTop + 29).setFontSize(short ? 16 : 20);
-      this.settingsHint.setPosition(width / 2, settingsTop + 50).setVisible(height >= 350);
-      const settingsStartY = settingsTop + (short ? 84 : 98);
-      const availableSpan = Math.max(178, settingsPanelHeight - (short ? 116 : 132));
-      const settingsSpacing = Math.min(52, Math.max(35, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
-      this.settingsButtons.forEach((button, index) => button.setPosition(width / 2, settingsStartY + index * settingsSpacing));
-    }
 
-    this.status.setPosition(width / 2, height - 30).setVisible(height >= 430 && !this.settingsOpen);
-    this.linkIndicator?.setPosition(Math.max(34, width / 2 - 255), height - 30).setVisible(width >= 660 && height >= 430 && !this.settingsOpen);
-    this.notice.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(620, width - 36));
+    // Sit the panel under the header when it fits; otherwise centre it and
+    // stand the header down so nothing is clipped behind the panel.
+    const headerBottom = this.headerBottom ?? 0;
+    const fitsBelowHeader = headerBottom + 14 + settingsPanelHeight <= height - 20;
+    const settingsTop = fitsBelowHeader
+      ? Math.max(21, headerBottom + 14)
+      : Math.max(21, height / 2 - settingsPanelHeight / 2);
+
+    this.settingsGraphics.clear();
+    if (!this.settingsOpen) return;
+
+    this.title.setVisible(fitsBelowHeader);
+
+    this.settingsGraphics
+      .fillStyle(hexToNumber(UI_TOKENS.color.panel), 0.985)
+      .fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
+    this.settingsGraphics
+      .lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), 0.72)
+      .strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
+    this.settingsGraphics
+      .lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.4)
+      .lineBetween(width / 2 - settingsPanelWidth / 2 + 18, settingsTop + 66, width / 2 + settingsPanelWidth / 2 - 18, settingsTop + 66);
+
+    this.settingsTitle.setPosition(width / 2, settingsTop + 29).setFontSize(short ? 16 : 20);
+    this.settingsHint.setPosition(width / 2, settingsTop + 50).setVisible(height >= 350);
+
+    const settingsStartY = settingsTop + (short ? 84 : 98);
+    const availableSpan = Math.max(178, settingsPanelHeight - (short ? 116 : 132));
+    const settingsSpacing = Math.min(52, Math.max(35, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
+    const buttonWidth = Math.min(300, settingsPanelWidth - 44);
+    this.settingsButtons.forEach((button, index) => {
+      button.resize({ width: buttonWidth });
+      button.setPosition(width / 2, settingsStartY + index * settingsSpacing);
+    });
   }
 }

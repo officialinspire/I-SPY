@@ -31,15 +31,34 @@ function hoverTick() {
  * Pointer, keyboard and touch all drive the same state machine, and every
  * release path (up, upoutside, out, cancel, game-out, visibility change)
  * clears the pressed state so a button can never stick.
+ *
+ * Two layouts:
+ * - `plain` (default) centers a single label.
+ * - `card` (implied by `icon` or `description`) lays out an optional sprite
+ *   icon, a left-aligned title and a one-line description, for consoles that
+ *   need to say what an action does as well as name it.
  */
 export function createButton(scene, x, y, label, onPress, options = {}) {
-  const width = options.width ?? 270;
-  const height = options.height ?? 48;
-  const fontSize = options.fontSize ?? 20;
   const { metrics, motion } = UI_TOKENS;
 
   let variantName = options.variant ?? DEFAULT_BUTTON_VARIANT;
   let variant = resolveVariant(variantName);
+  let accentColor = options.accentColor ?? variant.accent;
+
+  const isCard = Boolean(options.icon || options.description);
+  const showAccent = options.accent !== false;
+
+  // Mutable so a responsive scene can re-tier the same button on resize.
+  const size = {
+    width: options.width ?? 270,
+    height: options.height ?? 48,
+    fontSize: options.fontSize ?? 20,
+    descriptionFontSize: options.descriptionFontSize ?? 11,
+    iconSize: options.iconSize ?? 26,
+    padding: options.padding ?? 16,
+    showDescription: options.showDescription !== false,
+    showIcon: options.showIcon !== false,
+  };
 
   const status = {
     hovered: false,
@@ -55,39 +74,131 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   let armedPointerId = null;
   const origin = { x, y };
   const transform = { scale: 1, lift: 0 };
+  // Icons come off a 2x-rasterized sheet, so their display size is a scale
+  // factor the press/hover scale multiplies rather than replaces.
+  let iconBaseScale = 1;
   let motionTween = null;
 
   const focusRing = scene.add
-    .rectangle(x, y, width + metrics.focusRingOffset * 2, height + metrics.focusRingOffset * 2)
+    .rectangle(x, y, size.width + metrics.focusRingOffset * 2, size.height + metrics.focusRingOffset * 2)
     .setStrokeStyle(metrics.focusRingWidth, hexToNumber(variant.focus), metrics.focusRingAlpha)
     .setVisible(false);
 
-  const background = scene.add.rectangle(x, y, width, height, 0x000000, 1);
+  const background = scene.add.rectangle(x, y, size.width, size.height, 0x000000, 1);
 
   const accent = scene.add
-    .rectangle(x, y, metrics.accentWidth, Math.max(10, Math.round(height * metrics.accentHeightRatio)), hexToNumber(variant.accent))
-    .setVisible(options.accent !== false);
+    .rectangle(x, y, metrics.accentWidth, 10, hexToNumber(accentColor))
+    .setVisible(showAccent);
+
+  const icon = options.icon
+    ? scene.add.image(x, y, options.icon.texture, options.icon.frame).setOrigin(0.5)
+    : null;
 
   const text = scene.add
     .text(x, y, label, {
       fontFamily: GAME_CONFIG.typography.family,
-      fontSize: `${fontSize}px`,
+      fontSize: `${size.fontSize}px`,
       color: UI_TOKENS.text.body,
-      align: 'center',
+      align: isCard ? 'left' : 'center',
       letterSpacing: metrics.labelSpacing,
     })
-    .setOrigin(0.5);
+    .setOrigin(isCard ? 0 : 0.5, 0.5);
 
-  const padX = touchPadding(width);
-  const padY = touchPadding(height);
-  const hitArea = new Phaser.Geom.Rectangle(-padX, -padY, width + padX * 2, height + padY * 2);
+  const description = options.description
+    ? scene.add
+      .text(x, y, options.description, {
+        fontFamily: GAME_CONFIG.typography.family,
+        fontSize: `${size.descriptionFontSize}px`,
+        color: UI_TOKENS.text.muted,
+        align: 'left',
+      })
+      .setOrigin(0, 0.5)
+    : null;
+
+  const hitArea = new Phaser.Geom.Rectangle(0, 0, size.width, size.height);
   background.setInteractive({
     hitArea,
     hitAreaCallback: Phaser.Geom.Rectangle.Contains,
     useHandCursor: true,
   });
 
-  const objects = [focusRing, background, accent, text];
+  const objects = [focusRing, background, accent, icon, text, description].filter(Boolean);
+
+  /** Offsets from the button centre, recomputed whenever the metrics change. */
+  const offsets = new Map();
+
+  const measure = () => {
+    const half = size.width / 2;
+    offsets.set(accent, { dx: -(half - metrics.accentInset), dy: 0 });
+
+    if (!isCard) {
+      offsets.set(text, { dx: 0, dy: 0, lifts: true });
+      if (icon) offsets.set(icon, { dx: 0, dy: 0 });
+      return;
+    }
+
+    const contentLeft = -half + size.padding;
+    const withIcon = Boolean(icon) && size.showIcon;
+    const textLeft = withIcon ? contentLeft + size.iconSize + Math.round(size.iconSize * 0.45) : contentLeft;
+    if (icon) offsets.set(icon, { dx: contentLeft + size.iconSize / 2, dy: 0 });
+
+    if (description && size.showDescription) {
+      // Centre the title + description block on their measured heights so a
+      // description that wraps to two lines still sits correctly in the card.
+      const gap = 2;
+      const blockHeight = text.height + gap + description.height;
+      const blockTop = -blockHeight / 2;
+      offsets.set(text, { dx: textLeft, dy: blockTop + text.height / 2, lifts: true });
+      offsets.set(description, { dx: textLeft, dy: blockTop + text.height + gap + description.height / 2, lifts: true });
+    } else {
+      offsets.set(text, { dx: textLeft, dy: 0, lifts: true });
+    }
+  };
+
+  const applyGeometry = () => {
+    const scale = transform.scale;
+    focusRing.setScale(scale);
+    background.setScale(scale);
+    accent.setScale(1, scale);
+    text.setScale(scale);
+    icon?.setScale(iconBaseScale * scale);
+    description?.setScale(scale);
+    objects.forEach((object) => {
+      if (object === background || object === focusRing) {
+        object.setPosition(origin.x, origin.y);
+        return;
+      }
+      const offset = offsets.get(object);
+      if (!offset) return;
+      const lift = offset.lifts ? transform.lift : 0;
+      object.setPosition(origin.x + offset.dx * scale, origin.y + offset.dy * scale - lift);
+    });
+  };
+
+  const applyMetrics = () => {
+    background.setSize(size.width, size.height);
+    focusRing.setSize(size.width + metrics.focusRingOffset * 2, size.height + metrics.focusRingOffset * 2);
+    accent.setSize(metrics.accentWidth, Math.max(10, Math.round(size.height * metrics.accentHeightRatio)));
+    text.setFontSize(size.fontSize);
+    if (description) {
+      const iconSpan = icon && size.showIcon ? size.iconSize + Math.round(size.iconSize * 0.45) : 0;
+      description.setFontSize(size.descriptionFontSize);
+      description.setWordWrapWidth(Math.max(48, size.width - size.padding * 2 - iconSpan));
+      description.setVisible(status.visible && size.showDescription);
+    }
+    if (icon) {
+      const frameSize = icon.frame?.realWidth || icon.frame?.width || icon.width || size.iconSize;
+      iconBaseScale = size.iconSize / frameSize;
+      icon.setVisible(status.visible && size.showIcon);
+    }
+
+    const padX = touchPadding(size.width);
+    const padY = touchPadding(size.height);
+    hitArea.setTo(-padX, -padY, size.width + padX * 2, size.height + padY * 2);
+
+    measure();
+    applyGeometry();
+  };
 
   const resolveStateName = () => {
     if (!status.enabled) return 'disabled';
@@ -95,16 +206,6 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     if (status.hovered) return 'hover';
     if (status.selected) return 'selected';
     return 'idle';
-  };
-
-  const applyGeometry = () => {
-    const scale = transform.scale;
-    focusRing.setScale(scale);
-    background.setScale(scale);
-    text.setScale(scale);
-    text.setPosition(origin.x, origin.y - transform.lift);
-    accent.setScale(1, scale);
-    accent.setPosition(origin.x - (width / 2 - metrics.accentInset) * scale, origin.y);
   };
 
   const animateTo = (targetScale, targetLift, duration) => {
@@ -134,7 +235,13 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     background.setFillStyle(hexToNumber(tokens.fill), tokens.fillAlpha);
     background.setStrokeStyle(tokens.borderWidth, hexToNumber(tokens.border), 1);
     text.setColor(tokens.label);
-    accent.setFillStyle(hexToNumber(variant.accent)).setAlpha(tokens.accentAlpha);
+    description?.setColor(tokens.label).setAlpha(stateName === 'disabled' ? 0.5 : 0.68);
+    accent.setFillStyle(hexToNumber(accentColor)).setAlpha(tokens.accentAlpha);
+    if (icon) {
+      icon.setTint(hexToNumber(accentColor));
+      if (stateName === 'disabled') icon.setAlpha(0.3);
+      else icon.setAlpha(stateName === 'idle' ? 0.8 : 1);
+    }
     focusRing
       .setStrokeStyle(metrics.focusRingWidth, hexToNumber(variant.focus), metrics.focusRingAlpha)
       .setVisible(status.focused && status.enabled && status.visible);
@@ -189,12 +296,14 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     status.hovered = true;
     applyVisual();
     hoverTick();
+    options.onHover?.(true);
   });
   background.on('pointerout', () => {
     armedPointerId = null;
     status.hovered = false;
     status.pressed = false;
     applyVisual();
+    options.onHover?.(false);
   });
   background.on('pointerdown', (pointer) => {
     unlockAudio();
@@ -226,31 +335,41 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   applyWeight();
   setInputEnabled(status.enabled);
+  applyMetrics();
   applyVisual(false);
-  applyGeometry();
 
   const controller = {
     background,
     text,
     accent,
     focusRing,
-    width,
-    height,
+    icon,
+    description,
+    get width() { return size.width; },
+    get height() { return size.height; },
     get variant() { return variantName; },
     getObjects() { return objects.slice(); },
     setPosition(nx, ny) {
       origin.x = nx;
       origin.y = ny;
-      focusRing.setPosition(nx, ny);
-      background.setPosition(nx, ny);
       applyGeometry();
+      return controller;
+    },
+    /** Re-tier the button for a new breakpoint; omitted values are kept. */
+    resize(next = {}) {
+      Object.entries(next).forEach(([key, value]) => {
+        if (value !== undefined && key in size) size[key] = value;
+      });
+      applyMetrics();
       return controller;
     },
     setDepth(depth) {
       focusRing.setDepth(depth);
       background.setDepth(depth);
       accent.setDepth(depth + 1);
+      icon?.setDepth(depth + 1);
       text.setDepth(depth + 2);
+      description?.setDepth(depth + 2);
       return controller;
     },
     setScrollFactor(value) {
@@ -266,8 +385,10 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       if (!visible) status.focused = false;
       focusRing.setVisible(visible && status.focused && status.enabled);
       background.setVisible(visible);
-      accent.setVisible(visible && options.accent !== false);
+      accent.setVisible(visible && showAccent);
       text.setVisible(visible);
+      icon?.setVisible(visible && size.showIcon);
+      description?.setVisible(visible && size.showDescription);
       setInputEnabled(visible && status.enabled);
       applyVisual(false);
       return controller;
@@ -295,12 +416,17 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       if (nextVariant === variantName) return controller;
       variantName = nextVariant;
       variant = resolveVariant(nextVariant);
+      if (!options.accentColor) accentColor = variant.accent;
       applyWeight();
       applyVisual(false);
       return controller;
     },
     setLabel(nextLabel) {
       text.setText(nextLabel);
+      return controller;
+    },
+    setDescription(nextDescription) {
+      description?.setText(nextDescription);
       return controller;
     },
     isEnabled() { return status.enabled; },

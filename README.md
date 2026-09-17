@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A/13B polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
 
 I SPY currently includes:
 
@@ -20,6 +20,7 @@ I SPY currently includes:
 - Device safe-area handling for notches and home-indicator regions
 - Four-tone Cold War / old-handheld visual language for reconnaissance imagery
 - Centralized UI design tokens with semantic button variants and restrained equipment color
+- Reconnaissance operations-console main menu with mode cards, icons and status readouts
 - Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
 - Pan, zoom, reset, coordinate grid, pause, timer, and reconnaissance HUD
 - LOCATE missions with target marking, false-identification handling, scoring, and results
@@ -35,7 +36,7 @@ I SPY currently includes:
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, and `docs/PHASE-13A-INTERACTION.md` for the interaction design system.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, and `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign.
 
 ## Interaction design system
 
@@ -44,6 +45,12 @@ Phase 13A introduces `src/ui/designTokens.js` as the single source for interacti
 The base stays terminal black and charcoal; restrained Cold War equipment color is spent deliberately — muted phosphor green for positive/active state, desaturated amber for the action to take, muted red for discard or failure, off-white for neutral readout. Reconnaissance imagery itself remains monochrome.
 
 Keyboard users get a visible focus ring with Tab/arrow navigation and Enter/Space activation on the menu, briefing, and debrief screens; Recon keeps its existing mission hotkeys. Touch never depends on hover, small controls get expanded hit areas, press state recovers on every release path, and reduced-motion users get the same state changes with no movement.
+
+## Main menu
+
+Phase 13B rebuilds the Main Menu as an operations console: a title block, a status bar reading SATELLITE LINK / IMAGE CHANNEL / ANALYST STATION, then PRIMARY TASKING, MISSION ARCHIVE // TRAINING MODES and SYSTEM sections inside a framed console.
+
+RANDOM MISSION is the emphasized primary tasking; LOCATE, COUNT and CHANGE are equal-weight mission cards, each with a one-line description, an existing UI sprite icon and its own restrained accent (phosphor, steel, amber). A readout beneath the console echoes whichever control is hovered or keyboard-focused. Layout picks the richest of four density tiers that fits the viewport and stacks cards on narrow or tall-portrait screens, so short landscape screens drop ornament rather than overlap. Settings still opens inside the same scene.
 
 ## Graphics quality
 
@@ -212,3 +219,4 @@ npm run build
 - Phase 12C — Responsive layout and UI polish ✅
 - Phase 12D — Final visual QA and deployment gate ✅
 - Phase 13A — Interaction design system and shared button overhaul ✅
+- Phase 13B — Main menu operations-console redesign ✅

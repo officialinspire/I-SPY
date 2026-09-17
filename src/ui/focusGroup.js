@@ -12,15 +12,17 @@ const ACTIVATE_KEYS = new Set(['Enter', ' ', 'Spacebar']);
  * Escape drops focus. Pointer input clears the focus treatment so the ring
  * only ever shows for keyboard users.
  */
-export function createFocusGroup(scene, buttons = []) {
+export function createFocusGroup(scene, buttons = [], options = {}) {
   let members = [...buttons];
   let focusedIndex = -1;
 
   const focusable = () => members.filter((button) => button?.isFocusable?.());
 
   const clearFocus = () => {
+    const hadFocus = focusedIndex !== -1;
     members.forEach((button) => button?.setFocused?.(false));
     focusedIndex = -1;
+    if (hadFocus) options.onFocus?.(null);
   };
 
   const focusAt = (index, silent = false) => {
@@ -30,6 +32,7 @@ export function createFocusGroup(scene, buttons = []) {
     const target = candidates[wrapped];
     members.forEach((button) => button?.setFocused?.(button === target));
     focusedIndex = members.indexOf(target);
+    options.onFocus?.(target);
     if (!silent) feedback('focus');
   };
 
