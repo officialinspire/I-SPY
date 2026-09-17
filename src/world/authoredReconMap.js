@@ -12,6 +12,16 @@ export const REQUIRED_MAP_LAYERS = Object.freeze([
   'spawn-zones',
   'metadata',
 ]);
+export const REQUIRED_SPAWN_TAGS = Object.freeze([
+  'road_vehicle',
+  'forest_concealment',
+  'compound_vehicle',
+  'open_field',
+  'structure',
+  'radar_site',
+  'civilian',
+  'clue_zone',
+]);
 
 export function getMapLayer(map, id) {
   return map?.layers?.find((layer) => layer.id === id) ?? null;
@@ -54,12 +64,17 @@ export function validateReconMap(map) {
   }
 
   const spawnLayer = getMapLayer(map, 'spawn-zones');
+  const spawnTags = new Set();
   for (const zone of spawnLayer?.zones ?? []) {
     if (!zone.id || !zone.tag) errors.push('Every spawn zone requires id and tag.');
+    if (zone.tag) spawnTags.add(zone.tag);
     if (![zone.x, zone.y, zone.width, zone.height].every(Number.isFinite) || zone.width <= 0 || zone.height <= 0) errors.push(`Spawn zone '${zone.id ?? 'unknown'}' has invalid bounds.`);
     if (!Array.isArray(zone.accepts) || zone.accepts.length === 0) warnings.push(`Spawn zone '${zone.id ?? 'unknown'}' has no accepted object types.`);
     if (zone.x < 0 || zone.y < 0 || zone.x + zone.width > map.width || zone.y + zone.height > map.height) errors.push(`Spawn zone '${zone.id ?? 'unknown'}' exceeds map bounds.`);
   }
+  REQUIRED_SPAWN_TAGS.forEach((tag) => {
+    if (!spawnTags.has(tag)) errors.push(`Required spawn-zone tag missing: ${tag}.`);
+  });
 
   const metadata = getMapLayer(map, 'metadata')?.data ?? {};
   if (metadata.missionTargetId && !entityIds.has(metadata.missionTargetId)) errors.push(`Metadata missionTargetId '${metadata.missionTargetId}' does not match an entity.`);
