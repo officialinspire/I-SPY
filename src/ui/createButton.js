@@ -26,13 +26,19 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   background.on('pointerover', () => setHover(true));
   background.on('pointerout', () => setHover(false));
-  background.on('pointerdown', () => {
-    background.setScale(0.98);
-  });
+  background.on('pointerdown', () => background.setScale(0.98));
   background.on('pointerup', () => {
     background.setScale(1);
     onPress?.();
   });
 
-  return { background, text, setPosition(nx, ny) { background.setPosition(nx, ny); text.setPosition(nx, ny); } };
+  return {
+    background,
+    text,
+    width,
+    height,
+    setPosition(nx, ny) { background.setPosition(nx, ny); text.setPosition(nx, ny); },
+    setVisible(visible) { background.setVisible(visible); text.setVisible(visible); if (visible) background.setInteractive({ useHandCursor: true }); else background.disableInteractive(); },
+    setLabel(nextLabel) { text.setText(nextLabel); },
+  };
 }

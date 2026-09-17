@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
+import { createLocateMission } from '../game/locateMission.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() {
     super('MissionBriefing');
   }
 
-  create() {
+  create(data = {}) {
+    this.mission = data.mission ?? createLocateMission();
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
 
     this.header = this.add.text(0, 0, 'INTELLIGENCE DIRECTORATE', {
@@ -17,7 +19,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.briefing = this.add.text(0, 0,
-      'OPERATION NIGHT GLASS\n\nSATELLITE PASS: 03:42 ZULU\nSECTOR: WOODLAND CORRIDOR 7\n\nOBJECTIVE:\nCONDUCT VISUAL RECONNAISSANCE OF THE SECTOR.\n\nTRAINING PHASE — TARGET VALIDATION OFFLINE.',
+      `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${this.mission.sector}\nMODE: ${this.mission.mode}\n\nOBJECTIVE:\n${this.mission.objective}\n\nTIME WINDOW: ${this.mission.timeLimitSeconds} SECONDS`,
       {
         fontFamily: GAME_CONFIG.typography.family,
         fontSize: '18px',
@@ -27,7 +29,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
-    this.begin = createButton(this, 0, 0, 'BEGIN RECON', () => this.scene.start('Recon'));
+    this.begin = createButton(this, 0, 0, 'BEGIN RECON', () => this.scene.start('Recon', { mission: this.mission }));
     this.back = createButton(this, 0, 0, 'RETURN', () => this.scene.start('MainMenu'), { width: 180, fontSize: 16 });
 
     this.scale.on('resize', this.layout, this);

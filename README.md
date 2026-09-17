@@ -1,42 +1,31 @@
-# I SPY 🕵️‍♂️
+# I SPY
 
-**I SPY** is a browser-based Cold War-inspired satellite reconnaissance and imagery-analysis puzzle game by **INSPIRE**.
+Cold War-inspired monochrome satellite reconnaissance puzzle game by INSPIRE.
 
-The player studies fictional monochrome overhead reconnaissance imagery, pans and zooms across terrain, and eventually identifies targets, structures, patterns, clues, and changes between satellite passes.
+## Current development status
 
-## Visual direction
+**Phases 0–3 implemented.**
 
-- Cold War intelligence terminal aesthetic
-- Black, white, and grayscale only
-- Pixel-art / old handheld monochrome game presentation
-- Top-down reconnaissance imagery
-- Subtle scanline/grain treatment rather than glossy modern UI
+- Phaser 3 + Vite browser-game foundation
+- Responsive desktop/mobile scene flow
+- Monochrome Cold War / handheld-inspired presentation
+- Pan, zoom, reset, coordinate grid, pause and reconnaissance HUD
+- Fictional woodland/rural reconnaissance training map
+- Selectable reconnaissance entities with metadata and optional debug bounds
+- MARK TARGET workflow with temporary marker, confirm and cancel
+- LOCATE mission mode with mission briefing, countdown, false-identification tracking and results
+- Centralized scoring values and reusable mission-validation helpers
 
-## Current implementation
+## Locate scoring
 
-### Phase 0 — Foundation
+- Correct identification: +1000
+- False identification: -250 each
+- Remaining-time bonus: +5 per second
+- Perfect mission bonus: +500 when completed with zero false identifications
 
-- Phaser 3 + Vite
-- Modern JavaScript modules
-- Responsive canvas for mobile and desktop
-- Boot, Main Menu, Mission Briefing, Recon, and Results scenes
-- Centralized runtime configuration
-- Placeholder-only art pipeline ready for later sprite-sheet integration
-- Monochrome UI and navigation shell
+## Debug target bounds
 
-### Phase 1 — Recon map engine
-
-- Large 2400×1800 fictional woodland/rural reconnaissance map
-- Mouse/touch drag panning
-- Wheel zoom and two-pointer pinch zoom
-- Min/max zoom limits
-- Camera world bounds
-- Reset-view control
-- Recon HUD with mission, objective, coordinates, timer placeholder, mark-target placeholder, and pause
-- Optional-style coordinate grid visualization
-- Procedural placeholder terrain containing forest, clearings, fields, roads, dirt tracks, river, bridge, farm structures, fenced installation, and utilities
-
-Target validation, scoring, and actual mission logic are intentionally deferred to later phases.
+Append `?debugTargets=1` to the local game URL to reveal entity selection bounds for development testing. Debug bounds are disabled by default.
 
 ## Development
 
@@ -49,46 +38,15 @@ Production build:
 
 ```bash
 npm run build
-npm run preview
 ```
 
-## Controls
+## Project structure
 
-### Desktop
+- `src/scenes/` — Phaser scene flow
+- `src/game/` — reusable mission validation and scoring logic
+- `src/world/` — reconnaissance map and entity metadata
+- `src/ui/` — shared UI helpers
+- `assets/` — future maps, sprites, and UI art
+- `public/` — static public assets
 
-- Drag: pan reconnaissance image
-- Mouse wheel: zoom
-- `Esc`: pause/resume
-- RESET VIEW: recenter map
-
-### Touch
-
-- One finger: pan
-- Two fingers: pinch zoom
-- RESET VIEW: recenter map
-
-## Planned development sequence
-
-1. ✅ Project foundation
-2. ✅ Recon map engine
-3. Target identification system
-4. LOCATE mission mode
-5. Sprite-sheet integration preparation
-6. Authored woodland tilemap
-7. COUNT mode
-8. CHANGE DETECTION mode
-9. Mission generator
-10. Cold War presentation pass
-11. Audio / haptics / feedback
-12. Release-candidate audit
-
-## Asset directories
-
-- `assets/sprites/` — future monochrome sprite sheet / atlas
-- `assets/maps/` — authored reconnaissance maps
-- `assets/ui/` — interface assets
-- `public/` — static public files
-
-## Design principle
-
-I SPY should reward observation and contextual reasoning. Targets should not glow or visually advertise themselves; they should blend naturally into the same monochrome visual language as the rest of the reconnaissance imagery.
+The current graphics are intentionally generated placeholders. A later phase will replace them with the authored black-and-white reconnaissance sprite sheet and tilemap system.

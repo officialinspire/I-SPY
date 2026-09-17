@@ -2,25 +2,40 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createPlaceholderReconMap } from '../world/createPlaceholderReconMap.js';
+import { entityAtPoint } from '../world/reconEntities.js';
+import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 
 export default class ReconScene extends Phaser.Scene {
   constructor() {
     super('Recon');
   }
 
-  create() {
+  create(data = {}) {
     const cfg = GAME_CONFIG.recon;
+    this.mission = data.mission ?? createLocateMission();
+    this.falseIdentifications = 0;
+    this.remainingSeconds = this.mission.timeLimitSeconds;
+    this.missionStartedAt = this.time.now;
+    this.missionEnded = false;
+    this.marking = false;
+    this.candidate = null;
+
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
     this.cameras.main.setBounds(0, 0, cfg.worldWidth, cfg.worldHeight);
-    this.cameras.main.setZoom(0.75);
+    this.cameras.main.setZoom(cfg.defaultZoom);
     this.cameras.main.centerOn(cfg.worldWidth / 2, cfg.worldHeight / 2);
 
-    this.worldLayer = createPlaceholderReconMap(this, cfg.worldWidth, cfg.worldHeight);
+    const world = createPlaceholderReconMap(this, cfg.worldWidth, cfg.worldHeight);
+    this.worldLayer = world.root;
+    this.entities = world.entities;
     this.createHud();
     this.createGridOverlay();
+    this.createSelectionOverlay();
     this.bindInput();
+    this.startMissionTimer();
 
     this.scale.on('resize', this.onResize, this);
+    this.events.once('shutdown', () => this.cleanup());
     this.onResize(this.scale.gameSize);
   }
 
@@ -30,36 +45,33 @@ export default class ReconScene extends Phaser.Scene {
     this.hudBackground = this.add.rectangle(0, 0, 10, hudHeight, 0x0b0b0b, 0.96).setOrigin(0);
     this.hudBorder = this.add.rectangle(0, hudHeight - 2, 10, 2, 0xe8e8df).setOrigin(0);
 
-    this.missionText = this.add.text(16, 12, 'OP NIGHT GLASS // TRAINING PASS', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '14px',
-      color: GAME_CONFIG.palette.offWhite,
+    this.missionText = this.add.text(16, 12, `${this.mission.operation} // ${this.mission.mode}`, {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '14px', color: GAME_CONFIG.palette.offWhite,
     });
-    this.objectiveText = this.add.text(16, 39, 'OBJECTIVE: VISUAL RECONNAISSANCE', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '12px',
-      color: GAME_CONFIG.palette.lightGray,
+    this.objectiveText = this.add.text(16, 39, `OBJECTIVE: ${this.mission.objective}`, {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '12px', color: GAME_CONFIG.palette.lightGray,
     });
     this.coordText = this.add.text(16, 58, 'GRID: ---- / ----', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '11px',
-      color: GAME_CONFIG.palette.gray,
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: GAME_CONFIG.palette.gray,
     });
-    this.timerText = this.add.text(0, 15, 'T--:--', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '16px',
-      color: GAME_CONFIG.palette.offWhite,
+    this.timerText = this.add.text(0, 15, this.formatTime(this.remainingSeconds), {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '16px', color: GAME_CONFIG.palette.offWhite,
     }).setOrigin(1, 0);
 
     this.hud.add([this.hudBackground, this.hudBorder, this.missionText, this.objectiveText, this.coordText, this.timerText]);
 
-    this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.flashStatus('TARGET MARKING AVAILABLE IN PHASE 2'), { width: 170, height: 36, fontSize: 13 });
+    this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.armMarking(), { width: 170, height: 36, fontSize: 13 });
     this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13 });
     this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12 });
-    [this.markButton, this.pauseButton, this.resetButton].forEach((button) => {
+    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12 });
+    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12 });
+
+    [this.markButton, this.pauseButton, this.resetButton, this.confirmButton, this.cancelButton].forEach((button) => {
       button.background.setScrollFactor(0).setDepth(1002);
       button.text.setScrollFactor(0).setDepth(1003);
     });
+    this.confirmButton.setVisible(false);
+    this.cancelButton.setVisible(false);
 
     this.statusText = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,
@@ -77,20 +89,36 @@ export default class ReconScene extends Phaser.Scene {
     for (let y = 0; y <= GAME_CONFIG.recon.worldHeight; y += 300) this.grid.lineBetween(0, y, GAME_CONFIG.recon.worldWidth, y);
   }
 
+  createSelectionOverlay() {
+    this.selectionGraphics = this.add.graphics().setDepth(950);
+    this.debugGraphics = this.add.graphics().setDepth(951);
+    this.debugMode = new URLSearchParams(window.location.search).get('debugTargets') === '1';
+    if (this.debugMode) this.drawDebugBounds();
+  }
+
+  drawDebugBounds() {
+    this.debugGraphics.clear().lineStyle(2, 0xf6f6ee, 0.7);
+    this.entities.forEach((entity) => this.debugGraphics.strokeRect(entity.x, entity.y, entity.width, entity.height));
+  }
+
   bindInput() {
     this.dragging = false;
     this.paused = false;
     this.pinchDistance = null;
 
     this.input.on('pointerdown', (pointer) => {
-      if (this.paused || pointer.y < GAME_CONFIG.recon.hudHeight) return;
+      if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
+      if (this.marking) {
+        this.placeCandidate(pointer);
+        return;
+      }
       this.dragging = true;
       this.lastPointer = { x: pointer.x, y: pointer.y };
     });
 
     this.input.on('pointermove', (pointer) => {
       if (!this.paused) this.updateCoordinates(pointer);
-      if (!this.dragging || !pointer.isDown || this.paused) return;
+      if (!this.dragging || !pointer.isDown || this.paused || this.marking) return;
       const camera = this.cameras.main;
       const dx = pointer.x - this.lastPointer.x;
       const dy = pointer.y - this.lastPointer.y;
@@ -105,29 +133,120 @@ export default class ReconScene extends Phaser.Scene {
     });
 
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
-      if (this.paused || pointer.y < GAME_CONFIG.recon.hudHeight) return;
+      if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
       this.zoomAt(pointer, deltaY > 0 ? -GAME_CONFIG.recon.zoomStep : GAME_CONFIG.recon.zoomStep);
     });
 
     this.input.on('pointermove', () => {
       const pointers = this.input.manager.pointers.filter((p) => p.isDown);
-      if (pointers.length !== 2 || this.paused) {
+      if (pointers.length !== 2 || this.paused || this.marking) {
         this.pinchDistance = null;
         return;
       }
       const distance = Phaser.Math.Distance.Between(pointers[0].x, pointers[0].y, pointers[1].x, pointers[1].y);
       if (this.pinchDistance !== null) {
         const delta = (distance - this.pinchDistance) * 0.0035;
-        const midpoint = {
-          x: (pointers[0].x + pointers[1].x) / 2,
-          y: (pointers[0].y + pointers[1].y) / 2,
-        };
+        const midpoint = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
         this.zoomAt(midpoint, delta);
       }
       this.pinchDistance = distance;
     });
 
-    this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.candidate) this.cancelCandidate(); else this.togglePause();
+    });
+  }
+
+  isHudPoint(pointer) {
+    if (pointer.y < GAME_CONFIG.recon.hudHeight) return true;
+    return this.scale.gameSize.width < 680 && pointer.y > this.scale.gameSize.height - 64;
+  }
+
+  armMarking() {
+    if (this.paused || this.missionEnded) return;
+    this.marking = true;
+    this.candidate = null;
+    this.selectionGraphics.clear();
+    this.confirmButton.setVisible(false);
+    this.cancelButton.setVisible(false);
+    this.markButton.setLabel('SELECT OBJECT');
+    this.flashStatus('MARKING ACTIVE // TAP AN OBJECT');
+  }
+
+  placeCandidate(pointer) {
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const entity = entityAtPoint(world.x, world.y, this.entities);
+    this.candidate = { x: world.x, y: world.y, entity };
+    this.selectionGraphics.clear();
+    this.selectionGraphics.lineStyle(4, 0xf6f6ee, 1).strokeCircle(world.x, world.y, 26 / this.cameras.main.zoom);
+    this.selectionGraphics.lineBetween(world.x - 34, world.y, world.x + 34, world.y);
+    this.selectionGraphics.lineBetween(world.x, world.y - 34, world.x, world.y + 34);
+    this.confirmButton.setVisible(true);
+    this.cancelButton.setVisible(true);
+    this.markButton.setLabel('MARK PENDING');
+    this.flashStatus(entity ? 'IDENTIFICATION READY // CONFIRM OR CANCEL' : 'NO CLEAR OBJECT // CONFIRM OR CANCEL');
+  }
+
+  cancelCandidate() {
+    this.marking = false;
+    this.candidate = null;
+    this.selectionGraphics.clear();
+    this.confirmButton.setVisible(false);
+    this.cancelButton.setVisible(false);
+    this.markButton.setLabel('MARK TARGET');
+    this.flashStatus('MARK CANCELLED');
+  }
+
+  confirmCandidate() {
+    if (!this.candidate || this.missionEnded) return;
+    const result = validateIdentification(this.mission, this.candidate.entity);
+    this.confirmButton.setVisible(false);
+    this.cancelButton.setVisible(false);
+    this.marking = false;
+    this.markButton.setLabel('MARK TARGET');
+
+    if (result.correct) {
+      this.flashStatus('CONFIRMED');
+      this.selectionGraphics.lineStyle(5, 0xf6f6ee, 1);
+      this.time.delayedCall(350, () => this.finishMission(true));
+      return;
+    }
+
+    this.falseIdentifications += 1;
+    this.flashStatus(`UNVERIFIED // FALSE ID ${this.falseIdentifications}`);
+    this.selectionGraphics.clear();
+    this.candidate = null;
+  }
+
+  startMissionTimer() {
+    this.timerEvent = this.time.addEvent({
+      delay: 250,
+      loop: true,
+      callback: () => {
+        if (this.paused || this.missionEnded) return;
+        const elapsed = (this.time.now - this.missionStartedAt - (this.totalPausedMs ?? 0)) / 1000;
+        this.remainingSeconds = Math.max(0, this.mission.timeLimitSeconds - elapsed);
+        this.timerText.setText(this.formatTime(this.remainingSeconds));
+        if (this.remainingSeconds <= 0) this.finishMission(false);
+      },
+    });
+  }
+
+  finishMission(success) {
+    if (this.missionEnded) return;
+    this.missionEnded = true;
+    this.timerEvent?.remove(false);
+    const remainingSeconds = Math.max(0, Math.floor(this.remainingSeconds));
+    const elapsedSeconds = Math.max(0, Math.ceil(this.mission.timeLimitSeconds - remainingSeconds));
+    const score = calculateLocateScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds });
+    this.scene.start('Results', {
+      success,
+      mission: this.mission,
+      targetLabel: this.mission.targetLabel,
+      elapsedSeconds,
+      falseIdentifications: this.falseIdentifications,
+      score,
+    });
   }
 
   zoomAt(screenPoint, delta) {
@@ -149,15 +268,29 @@ export default class ReconScene extends Phaser.Scene {
 
   resetView() {
     const camera = this.cameras.main;
-    camera.setZoom(0.75);
+    camera.setZoom(GAME_CONFIG.recon.defaultZoom);
     camera.centerOn(GAME_CONFIG.recon.worldWidth / 2, GAME_CONFIG.recon.worldHeight / 2);
     this.flashStatus('VIEW RECENTERED');
   }
 
   togglePause() {
+    if (this.missionEnded) return;
     this.paused = !this.paused;
     this.dragging = false;
+    if (this.paused) this.pauseStartedAt = this.time.now;
+    else if (this.pauseStartedAt) {
+      this.totalPausedMs = (this.totalPausedMs ?? 0) + (this.time.now - this.pauseStartedAt);
+      this.pauseStartedAt = null;
+    }
+    this.pauseButton.setLabel(this.paused ? 'RESUME' : 'PAUSE');
     this.flashStatus(this.paused ? 'RECON PAUSED // ESC TO RESUME' : 'RECON RESUMED');
+  }
+
+  formatTime(seconds) {
+    const whole = Math.max(0, Math.ceil(seconds));
+    const minutes = Math.floor(whole / 60);
+    const remainder = whole % 60;
+    return `T-${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
   }
 
   flashStatus(message) {
@@ -174,12 +307,20 @@ export default class ReconScene extends Phaser.Scene {
     this.timerText.setPosition(width - 16, 13);
 
     const compact = width < 680;
-    this.markButton.setPosition(compact ? 92 : width - 288, compact ? height - 34 : 48);
-    this.resetButton.setPosition(compact ? width / 2 : width - 137, compact ? height - 34 : 48);
-    this.pauseButton.setPosition(compact ? width - 58 : width - 54, compact ? height - 34 : 48);
-    this.statusText.setPosition(width / 2, height - (compact ? 82 : 30));
+    this.markButton.setPosition(compact ? 88 : width - 340, compact ? height - 34 : 48);
+    this.resetButton.setPosition(compact ? width / 2 : width - 181, compact ? height - 34 : 48);
+    this.pauseButton.setPosition(compact ? width - 56 : width - 58, compact ? height - 34 : 48);
+    this.confirmButton.setPosition(width / 2 - 60, height - (compact ? 86 : 40));
+    this.cancelButton.setPosition(width / 2 + 60, height - (compact ? 86 : 40));
+    this.statusText.setPosition(width / 2, height - (compact ? 128 : 88));
 
-    this.objectiveText.setVisible(width >= 520);
+    this.objectiveText.setVisible(width >= 620);
     this.coordText.setVisible(width >= 420);
+  }
+
+  cleanup() {
+    this.timerEvent?.remove(false);
+    this.scale.off('resize', this.onResize, this);
+    this.input.removeAllListeners();
   }
 }
