@@ -1,7 +1,7 @@
 export const GAME_CONFIG = Object.freeze({
   title: 'I SPY',
   subtitle: 'SATELLITE RECONNAISSANCE DIVISION',
-  version: '0.1.0',
+  version: '0.3.0',
   palette: {
     black: '#0b0b0b',
     nearBlack: '#171717',
@@ -22,5 +22,15 @@ export const GAME_CONFIG = Object.freeze({
     zoomStep: 0.12,
     dragThreshold: 4,
     hudHeight: 78,
+    defaultZoom: 0.75,
+  },
+  locate: {
+    timeLimitSeconds: 90,
+    scoring: {
+      correctIdentification: 1000,
+      falseIdentificationPenalty: 250,
+      timeBonusPerSecond: 5,
+      perfectBonus: 500,
+    },
   },
 });
