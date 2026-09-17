@@ -1,17 +1,16 @@
 import { GAME_CONFIG } from '../runtime-config.js';
-import { RECON_ENTITIES } from '../world/reconEntities.js';
 
 export function createLocateMission() {
-  const target = RECON_ENTITIES.find((entity) => entity.id === 'radar-01');
   return {
     id: 'OP-NIGHT-WATCH-001',
     operation: 'OPERATION NIGHT WATCH',
     satellitePass: '03:42 ZULU',
     sector: 'WOODLAND CORRIDOR 7',
+    mapId: GAME_CONFIG.recon.defaultMapId,
     mode: 'LOCATE',
     objective: 'LOCATE THE RADAR INSTALLATION.',
-    targetId: target.id,
-    targetLabel: target.label,
+    targetId: 'radar-01',
+    targetLabel: 'RADAR INSTALLATION',
     timeLimitSeconds: GAME_CONFIG.locate.timeLimitSeconds,
   };
 }
