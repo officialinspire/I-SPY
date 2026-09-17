@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C polish work implemented.** Runtime/package version: **`1.2.0-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
 
 I SPY currently includes:
 
@@ -17,6 +17,7 @@ I SPY currently includes:
 - HiDPI rendering up to 2x device resolution
 - 2x supersampled SVG sprite rasterization while preserving logical map sizes
 - Responsive intelligence-console layout with compact/short-screen handling
+- Device safe-area handling for notches and home-indicator regions
 - Four-tone Cold War / old-handheld visual language
 - Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
 - Pan, zoom, reset, coordinate grid, pause, timer, and reconnaissance HUD
@@ -30,9 +31,10 @@ I SPY currently includes:
 - Runtime-generated terminal SFX and optional haptics
 - Persistent master/SFX/haptics/scanline/image-grain settings
 - Reduced-motion support
+- Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, and `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, and `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate.
 
 ## Graphics quality
 
@@ -44,7 +46,19 @@ The visual style remains intentionally monochrome and retro; the higher-density 
 
 Phase 12C improves composition and responsiveness across Boot, Main Menu, Settings, Mission Briefing, Recon, and Results. Wide menus use a two-column mission console; compact screens retain stacked controls with tighter safe spacing; briefing and debrief screens use left-aligned intelligence-document grids; and Recon groups mission controls into dedicated control rails.
 
-CHANGE split view now has a stronger center divider plus explicit PASS A / PASS B labels while preserving the existing synchronized camera behavior. Gameplay coordinates, validation, scoring, map data, and generator logic are unchanged.
+CHANGE split view has a stronger center divider plus explicit PASS A / PASS B labels while preserving the existing synchronized camera behavior. Phase 12D adds device safe-area handling, hardens button press-state cleanup, and stacks the debrief score beneath the title on narrow displays to prevent overlap.
+
+Gameplay coordinates, validation, scoring, authored map data, and generator logic are unchanged by the Phase 12 presentation work.
+
+## Release validation
+
+Run the static release validator with:
+
+```bash
+npm run validate
+```
+
+It checks version alignment, viewport/safe-area configuration, authored-map structure, required spawn tags, the 80-frame sprite manifest, map sprite resolution/bounds, unique entity IDs, authored mission-target integrity, and core scene registration. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Audio, feedback, and settings
 
@@ -145,12 +159,14 @@ The presentation layer uses classified-console framing, a short satellite acquis
 
 ```bash
 npm install
+npm run validate
 npm run dev
 ```
 
 Production build:
 
 ```bash
+npm run validate
 npm run build
 ```
 
@@ -165,6 +181,7 @@ npm run build
 - `src/ui/` — shared UI and presentation helpers
 - `assets/maps/` — authored reconnaissance map data
 - `assets/sprites/` — production art sheets
+- `scripts/` — dependency-free release validation
 - `docs/` — art, map, generator, presentation, feedback, graphics, layout, and release-audit specifications
 
 ## Roadmap status
@@ -184,3 +201,4 @@ npm run build
 - Phase 12A — HiDPI rendering sharpness ✅
 - Phase 12B — Sprite raster-quality pass ✅
 - Phase 12C — Responsive layout and UI polish ✅
+- Phase 12D — Final visual QA and deployment gate ✅
