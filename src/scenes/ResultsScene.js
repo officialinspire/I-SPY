@@ -17,9 +17,14 @@ export default class ResultsScene extends Phaser.Scene {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '32px', color: GAME_CONFIG.palette.offWhite,
     }).setOrigin(0.5);
 
-    const bodyText = mission.mode === 'COUNT'
-      ? `REGION: ${mission.region?.label ?? 'UNKNOWN'}\nCATEGORY: ${mission.targetCategoryLabel ?? 'UNKNOWN'}\nSUBMITTED COUNT: ${data.submittedAnswer ?? 0}\nCORRECT COUNT: ${data.correctAnswer ?? mission.expectedCount ?? 0}\nTIME: ${data.elapsedSeconds ?? 0}s\nINCORRECT SUBMISSIONS: ${data.incorrectSubmissions ?? 0}\n\nBASE SCORE: ${score.baseScore ?? 0}\nANSWER PENALTY: -${score.answerPenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`
-      : `TARGET: ${data.targetLabel ?? 'UNKNOWN'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+    let bodyText;
+    if (mission.mode === 'COUNT') {
+      bodyText = `REGION: ${mission.region?.label ?? 'UNKNOWN'}\nCATEGORY: ${mission.targetCategoryLabel ?? 'UNKNOWN'}\nSUBMITTED COUNT: ${data.submittedAnswer ?? 0}\nCORRECT COUNT: ${data.correctAnswer ?? mission.expectedCount ?? 0}\nTIME: ${data.elapsedSeconds ?? 0}s\nINCORRECT SUBMISSIONS: ${data.incorrectSubmissions ?? 0}\n\nBASE SCORE: ${score.baseScore ?? 0}\nANSWER PENALTY: -${score.answerPenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+    } else if (mission.mode === 'CHANGE') {
+      bodyText = `CHANGE TYPE: ${(mission.changeType ?? 'UNKNOWN').replaceAll('_', ' ').toUpperCase()}\nCHANGED OBJECT: ${mission.targetLabel ?? 'UNKNOWN'}\nMARKED PASS: ${data.markedPass ?? 'N/A'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}\n\nINTELLIGENCE ASSESSMENT:\n${mission.changeSummary ?? 'CHANGE CONFIRMED.'}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+    } else {
+      bodyText = `TARGET: ${data.targetLabel ?? 'UNKNOWN'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}\n\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\n-------------------------\nTOTAL SCORE: ${score.totalScore ?? 0}`;
+    }
 
     this.body = this.add.text(0, 0, bodyText, {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '15px', color: GAME_CONFIG.palette.lightGray,
@@ -33,9 +38,9 @@ export default class ResultsScene extends Phaser.Scene {
   }
 
   layout(gameSize) {
-    this.title.setPosition(gameSize.width / 2, gameSize.height * 0.14);
-    this.body.setPosition(gameSize.width / 2, gameSize.height * 0.47).setWordWrapWidth(Math.min(650, gameSize.width - 40));
-    this.retry.setPosition(gameSize.width / 2, gameSize.height - 112);
-    this.menu.setPosition(gameSize.width / 2, gameSize.height - 52);
+    this.title.setPosition(gameSize.width / 2, gameSize.height * 0.12);
+    this.body.setFontSize(gameSize.width < 540 ? 12 : 15).setPosition(gameSize.width / 2, gameSize.height * 0.46).setWordWrapWidth(Math.min(680, gameSize.width - 40));
+    this.retry.setPosition(gameSize.width / 2, gameSize.height - 108);
+    this.menu.setPosition(gameSize.width / 2, gameSize.height - 50);
   }
 }
