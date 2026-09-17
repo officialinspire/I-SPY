@@ -1,6 +1,7 @@
 import ReconScene from './ReconScene.js';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { feedback } from '../audio/feedback.js';
+import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { getSettings } from '../settings/userSettings.js';
 
 export default class EnhancedReconScene extends ReconScene {
@@ -15,24 +16,24 @@ export default class EnhancedReconScene extends ReconScene {
     this.railLabel = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '9px',
-      color: GAME_CONFIG.palette.gray,
+      color: UI_TOKENS.color.phosphor,
       letterSpacing: 1,
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1001);
-    this.splitDivider = this.add.rectangle(0, 0, 3, 10, 0xf6f6ee, 0.58)
+    this.splitDivider = this.add.rectangle(0, 0, 3, 10, hexToNumber(UI_TOKENS.color.amber), 0.62)
       .setScrollFactor(0)
       .setDepth(1002)
       .setVisible(false);
     this.splitLeftLabel = this.add.text(0, 0, 'PASS A // EARLIER IMAGE', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: GAME_CONFIG.palette.offWhite,
+      color: UI_TOKENS.text.body,
       backgroundColor: GAME_CONFIG.palette.nearBlack,
       padding: { x: 8, y: 4 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1004).setVisible(false);
     this.splitRightLabel = this.add.text(0, 0, 'PASS B // LATER IMAGE', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: GAME_CONFIG.palette.offWhite,
+      color: UI_TOKENS.text.attention,
       backgroundColor: GAME_CONFIG.palette.nearBlack,
       padding: { x: 8, y: 4 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1004).setVisible(false);
@@ -111,12 +112,12 @@ export default class EnhancedReconScene extends ReconScene {
     }
 
     this.layoutChrome.clear();
-    this.layoutChrome.lineStyle(1, 0xbdbdbd, 0.22).lineBetween(0, hudHeight, width, hudHeight);
+    this.layoutChrome.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), UI_TOKENS.surface.dividerAlpha).lineBetween(0, hudHeight, width, hudHeight);
 
     if (railHeight > 0) {
       const railTop = height - railHeight;
-      this.layoutChrome.fillStyle(0x0b0b0b, 0.94).fillRect(0, railTop, railWidth, railHeight);
-      this.layoutChrome.lineStyle(1, 0xbdbdbd, 0.34).lineBetween(0, railTop, railWidth, railTop);
+      this.layoutChrome.fillStyle(hexToNumber(UI_TOKENS.color.steelDeep), 0.94).fillRect(0, railTop, railWidth, railHeight);
+      this.layoutChrome.lineStyle(1, hexToNumber(UI_TOKENS.color.phosphorDim), 0.62).lineBetween(0, railTop, railWidth, railTop);
       this.railLabel.setText(railLabel).setPosition(12, railTop + 12).setVisible(width >= 420);
     } else {
       this.railLabel.setVisible(false);

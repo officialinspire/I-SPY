@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion } from '../ui/presentation.js';
+import { createFocusGroup } from '../ui/focusGroup.js';
+import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
@@ -45,18 +47,18 @@ export default class MainMenuScene extends Phaser.Scene {
     this.status = this.add.text(0, 0, 'SYSTEM READY // SATELLITE LINK: STANDBY // CLEARANCE: TRAINING', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: GAME_CONFIG.palette.gray,
+      color: UI_TOKENS.text.positive,
     }).setOrigin(0.5);
 
     this.primaryButtons = [
-      createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission()),
-      createButton(this, 0, 0, 'LOCATE MISSION', () => this.scene.start('MissionBriefing', { mission: createLocateMission() })),
-      createButton(this, 0, 0, 'COUNT MISSION', () => this.scene.start('MissionBriefing', { mission: createCountMission() })),
-      createButton(this, 0, 0, 'CHANGE MISSION', () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() })),
+      createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission(), { variant: 'primary' }),
+      createButton(this, 0, 0, 'LOCATE MISSION', () => this.scene.start('MissionBriefing', { mission: createLocateMission() }), { variant: 'tactical' }),
+      createButton(this, 0, 0, 'COUNT MISSION', () => this.scene.start('MissionBriefing', { mission: createCountMission() }), { variant: 'tactical' }),
+      createButton(this, 0, 0, 'CHANGE MISSION', () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() }), { variant: 'tactical' }),
     ];
     this.secondaryButtons = [
-      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nRANDOM: SEEDED REPLAYABLE MISSION\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT'), { width: 220, height: 42, fontSize: 14 }),
-      createButton(this, 0, 0, 'SETTINGS', () => this.openSettings(), { width: 220, height: 42, fontSize: 14 }),
+      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nRANDOM: SEEDED REPLAYABLE MISSION\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT'), { width: 220, height: 42, fontSize: 14, variant: 'secondary' }),
+      createButton(this, 0, 0, 'SETTINGS', () => this.openSettings(), { width: 220, height: 42, fontSize: 14, variant: 'secondary' }),
     ];
     this.buttons = [...this.primaryButtons, ...this.secondaryButtons];
 
@@ -71,12 +73,13 @@ export default class MainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(40).setVisible(false);
 
     this.createSettingsPanel();
+    this.focusGroup = createFocusGroup(this, [...this.buttons, ...this.settingsButtons]);
 
     if (!this.reducedMotion) {
       this.linkIndicator = this.add.text(0, 0, '■', {
         fontFamily: GAME_CONFIG.typography.family,
         fontSize: '10px',
-        color: GAME_CONFIG.palette.lightGray,
+        color: UI_TOKENS.text.positive,
       }).setOrigin(0.5);
       this.tweens.add({ targets: this.linkIndicator, alpha: 0.25, duration: 850, yoyo: true, repeat: -1 });
     }
@@ -104,16 +107,15 @@ export default class MainMenuScene extends Phaser.Scene {
       cycleMasterVolume();
       this.refreshSettingsLabels();
       feedback('confirm', 10);
-    }, { width: 300, height: 40, fontSize: 13 });
-    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13 });
-    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13 });
-    this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13 });
-    this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13 });
-    this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13 });
+    }, { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13, variant: 'primary' });
     this.settingsButtons = [this.masterSettingButton, this.sfxSettingButton, this.hapticsSettingButton, this.scanlineSettingButton, this.grainSettingButton, this.closeSettingsButton];
     this.settingsButtons.forEach((button) => {
-      button.background.setDepth(62);
-      button.text.setDepth(63);
+      button.setDepth(62);
       button.setVisible(false);
     });
     this.refreshSettingsLabels();
@@ -129,10 +131,15 @@ export default class MainMenuScene extends Phaser.Scene {
   refreshSettingsLabels() {
     const settings = getSettings();
     this.masterSettingButton?.setLabel(`MASTER LEVEL // ${Math.round(settings.masterVolume * 100)}%`);
+    this.masterSettingButton?.setSelected(settings.masterVolume > 0);
     this.sfxSettingButton?.setLabel(`SOUND EFFECTS // ${settings.sfxEnabled ? 'ON' : 'OFF'}`);
+    this.sfxSettingButton?.setSelected(settings.sfxEnabled);
     this.hapticsSettingButton?.setLabel(`HAPTICS // ${settings.hapticsEnabled ? 'ON' : 'OFF'}`);
+    this.hapticsSettingButton?.setSelected(settings.hapticsEnabled);
     this.scanlineSettingButton?.setLabel(`CRT SCANLINES // ${settings.scanlinesEnabled ? 'ON' : 'OFF'}`);
+    this.scanlineSettingButton?.setSelected(settings.scanlinesEnabled);
     this.grainSettingButton?.setLabel(`IMAGE GRAIN // ${settings.imageGrainEnabled ? 'ON' : 'OFF'}`);
+    this.grainSettingButton?.setSelected(settings.imageGrainEnabled);
   }
 
   openSettings() {
@@ -144,6 +151,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.settingsHint.setVisible(true);
     this.settingsButtons.forEach((button) => button.setVisible(true));
     this.refreshSettingsLabels();
+    this.focusGroup?.refresh();
     this.layout(this.scale.gameSize);
   }
 
@@ -154,6 +162,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.settingsTitle.setVisible(false);
     this.settingsHint.setVisible(false);
     this.settingsButtons.forEach((button) => button.setVisible(false));
+    this.focusGroup?.refresh();
     this.layout(this.scale.gameSize);
   }
 
@@ -207,9 +216,9 @@ export default class MainMenuScene extends Phaser.Scene {
     const panelWidth = Math.min(desktopGrid ? 680 : (compact ? width - 34 : 430), width - 28);
     this.panelGraphics.clear();
     if (!this.settingsOpen) {
-      this.panelGraphics.fillStyle(0x171717, 0.46).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
-      this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.34).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
-      this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.62);
+      this.panelGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), UI_TOKENS.surface.panelAlpha).fillRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
+      this.panelGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.panelBorder), UI_TOKENS.surface.panelBorderAlpha).strokeRect(width / 2 - panelWidth / 2, panelTop, panelWidth, Math.max(120, panelBottom - panelTop));
+      this.panelGraphics.lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), UI_TOKENS.surface.panelAccentAlpha);
       this.panelGraphics.lineBetween(width / 2 - panelWidth / 2, panelTop, width / 2 - panelWidth / 2 + 22, panelTop);
       this.panelGraphics.lineBetween(width / 2 + panelWidth / 2 - 22, panelBottom, width / 2 + panelWidth / 2, panelBottom);
     }
@@ -219,9 +228,9 @@ export default class MainMenuScene extends Phaser.Scene {
     const settingsTop = Math.max(21, height / 2 - settingsPanelHeight / 2);
     this.settingsGraphics.clear();
     if (this.settingsOpen) {
-      this.settingsGraphics.fillStyle(0x171717, 0.985).fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsGraphics.lineStyle(2, 0xf6f6ee, 0.78).strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
-      this.settingsGraphics.lineStyle(1, 0xbdbdbd, 0.4).lineBetween(width / 2 - settingsPanelWidth / 2 + 18, settingsTop + 66, width / 2 + settingsPanelWidth / 2 - 18, settingsTop + 66);
+      this.settingsGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), 0.985).fillRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
+      this.settingsGraphics.lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), 0.72).strokeRect(width / 2 - settingsPanelWidth / 2, settingsTop, settingsPanelWidth, settingsPanelHeight);
+      this.settingsGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.4).lineBetween(width / 2 - settingsPanelWidth / 2 + 18, settingsTop + 66, width / 2 + settingsPanelWidth / 2 - 18, settingsTop + 66);
       this.settingsTitle.setPosition(width / 2, settingsTop + 29).setFontSize(short ? 16 : 20);
       this.settingsHint.setPosition(width / 2, settingsTop + 50).setVisible(height >= 350);
       const settingsStartY = settingsTop + (short ? 84 : 98);

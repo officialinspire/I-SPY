@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
 
 I SPY currently includes:
 
@@ -18,7 +18,8 @@ I SPY currently includes:
 - 2x supersampled SVG sprite rasterization while preserving logical map sizes
 - Responsive intelligence-console layout with compact/short-screen handling
 - Device safe-area handling for notches and home-indicator regions
-- Four-tone Cold War / old-handheld visual language
+- Four-tone Cold War / old-handheld visual language for reconnaissance imagery
+- Centralized UI design tokens with semantic button variants and restrained equipment color
 - Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
 - Pan, zoom, reset, coordinate grid, pause, timer, and reconnaissance HUD
 - LOCATE missions with target marking, false-identification handling, scoring, and results
@@ -34,7 +35,15 @@ I SPY currently includes:
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, and `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, and `docs/PHASE-13A-INTERACTION.md` for the interaction design system.
+
+## Interaction design system
+
+Phase 13A introduces `src/ui/designTokens.js` as the single source for interactive styling: palette, panel surfaces, semantic text roles, motion timings, and the ~44px minimum touch target. Shared buttons now carry semantic variants — `primary`, `secondary`, `tactical`, `warning`, `danger`, `success`, `disabled` — with distinct idle, hover, focus, pressed, selected, and disabled treatments, so primary actions are obvious and equipment controls read differently from navigation.
+
+The base stays terminal black and charcoal; restrained Cold War equipment color is spent deliberately — muted phosphor green for positive/active state, desaturated amber for the action to take, muted red for discard or failure, off-white for neutral readout. Reconnaissance imagery itself remains monochrome.
+
+Keyboard users get a visible focus ring with Tab/arrow navigation and Enter/Space activation on the menu, briefing, and debrief screens; Recon keeps its existing mission hotkeys. Touch never depends on hover, small controls get expanded hit areas, press state recovers on every release path, and reduced-motion users get the same state changes with no movement.
 
 ## Graphics quality
 
@@ -182,7 +191,7 @@ npm run build
 - `assets/maps/` — authored reconnaissance map data
 - `assets/sprites/` — production art sheets
 - `scripts/` — dependency-free release validation
-- `docs/` — art, map, generator, presentation, feedback, graphics, layout, and release-audit specifications
+- `docs/` — art, map, generator, presentation, feedback, graphics, layout, interaction, and release-audit specifications
 
 ## Roadmap status
 
@@ -202,3 +211,4 @@ npm run build
 - Phase 12B — Sprite raster-quality pass ✅
 - Phase 12C — Responsive layout and UI polish ✅
 - Phase 12D — Final visual QA and deployment gate ✅
+- Phase 13A — Interaction design system and shared button overhaul ✅

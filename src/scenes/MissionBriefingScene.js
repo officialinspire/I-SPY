@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion, typeText } from '../ui/presentation.js';
+import { createFocusGroup } from '../ui/focusGroup.js';
+import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
 import { feedback } from '../audio/feedback.js';
@@ -56,21 +58,22 @@ export default class MissionBriefingScene extends Phaser.Scene {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '14px',
       fontStyle: 'bold',
-      color: GAME_CONFIG.palette.lightGray,
+      color: UI_TOKENS.text.negative,
       padding: { x: 8, y: 4 },
     }).setOrigin(0.5).setAngle(-4).setAlpha(0.68);
 
     this.acquisition = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '15px',
-      color: GAME_CONFIG.palette.offWhite,
+      color: UI_TOKENS.text.attention,
       align: 'center',
       backgroundColor: GAME_CONFIG.palette.nearBlack,
       padding: { x: 18, y: 14 },
     }).setOrigin(0.5).setDepth(50).setVisible(false);
 
-    this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon());
-    this.back = createButton(this, 0, 0, 'RETURN', () => this.scene.start('MainMenu'), { width: 180, fontSize: 16 });
+    this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon(), { variant: 'primary' });
+    this.back = createButton(this, 0, 0, 'RETURN', () => this.scene.start('MainMenu'), { width: 180, fontSize: 16, variant: 'secondary' });
+    this.focusGroup = createFocusGroup(this, [this.begin, this.back]);
 
     typeText(this, this.briefing, this.fullBriefing, {
       charsPerSecond: GAME_CONFIG.presentation.typewriterCharsPerSecond,
@@ -85,6 +88,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
     if (this.transitioning) return;
     this.transitioning = true;
     feedback('acquire', [10, 18, 10]);
+    this.focusGroup?.clearFocus();
     this.begin.setVisible(false);
     this.back.setVisible(false);
     this.acquisition.setText('SATELLITE PASS SELECTED\nACQUIRING ORBITAL IMAGERY...').setVisible(true);
@@ -110,10 +114,10 @@ export default class MissionBriefingScene extends Phaser.Scene {
     const paddingX = compact ? 18 : 30;
 
     this.documentGraphics.clear();
-    this.documentGraphics.fillStyle(0x171717, 0.42).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
-    this.documentGraphics.lineStyle(1, 0xbdbdbd, 0.4).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
-    this.documentGraphics.lineStyle(2, 0xf6f6ee, 0.58).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
-    this.documentGraphics.lineStyle(1, 0xbdbdbd, 0.22).lineBetween(panelLeft + paddingX, panelBottom - 30, panelLeft + panelWidth - paddingX, panelBottom - 30);
+    this.documentGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), UI_TOKENS.surface.panelAlpha).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.documentGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.panelBorder), UI_TOKENS.surface.panelBorderAlpha).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
+    this.documentGraphics.lineStyle(2, hexToNumber(UI_TOKENS.surface.panelAccent), UI_TOKENS.surface.panelAccentAlpha).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
+    this.documentGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.22).lineBetween(panelLeft + paddingX, panelBottom - 30, panelLeft + panelWidth - paddingX, panelBottom - 30);
 
     this.header.setFontSize(compact ? 11 : 13).setPosition(panelLeft + paddingX, panelTop + 24);
     this.documentCode.setFontSize(compact ? 8 : 10).setPosition(panelLeft + panelWidth - paddingX, panelTop + 24).setVisible(width >= 470);
