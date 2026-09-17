@@ -1,7 +1,7 @@
 export const GAME_CONFIG=Object.freeze({
   title:'I SPY',
   subtitle:'SATELLITE RECONNAISSANCE DIVISION',
-  version:'0.7.0',
+  version:'0.8.0',
   palette:{black:'#0b0b0b',nearBlack:'#171717',charcoal:'#333333',gray:'#757575',lightGray:'#bdbdbd',offWhite:'#e8e8df',white:'#f6f6ee'},
   typography:{family:'"Courier New", Courier, monospace'},
   sprites:{frameSize:64,authoredPalette:['#0b0b0b','#333333','#bdbdbd','#f6f6ee']},
@@ -9,4 +9,13 @@ export const GAME_CONFIG=Object.freeze({
   locate:{timeLimitSeconds:90,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:5,perfectBonus:500}},
   count:{timeLimitSeconds:90,maxAnswer:99,scoring:{correctAnswer:1000,incorrectSubmissionPenalty:300,timeBonusPerSecond:5,perfectBonus:500}},
   change:{timeLimitSeconds:90,splitViewMinWidth:980,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:5,perfectBonus:500}},
+  generator:{
+    maxAttempts:12,
+    timeLimits:[75,90,105,120],
+    decoysMin:1,
+    decoysMax:3,
+    cluesMin:1,
+    cluesMax:3,
+    visual:{grainMin:0.06,grainMax:0.18,hazeMin:0,hazeMax:0.07,contrastMin:0.88,contrastMax:1},
+  },
 });
