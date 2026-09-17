@@ -78,28 +78,41 @@ export default class ResultsScene extends Phaser.Scene {
     const { width, height } = gameSize;
     this.chrome.layout(gameSize);
     const compact = width < 600;
+    const narrowHeader = width < 520;
     const short = height < 560;
     const sideMargin = compact ? 18 : 36;
     const panelWidth = Math.min(860, width - sideMargin * 2);
     const panelLeft = width / 2 - panelWidth / 2;
     const controlsHeight = compact ? 116 : 82;
     const panelTop = Math.max(54, short ? 52 : height * 0.07);
-    const panelBottom = Math.max(panelTop + 230, height - controlsHeight - 22);
+    const panelBottom = Math.max(panelTop + (narrowHeader ? 252 : 230), height - controlsHeight - 22);
     const panelHeight = panelBottom - panelTop;
     const paddingX = compact ? 18 : 30;
+    const headerDividerY = panelTop + (narrowHeader ? 146 : 124);
 
     this.panelGraphics.clear();
     this.panelGraphics.fillStyle(0x171717, 0.4).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
     this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.38).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
     this.panelGraphics.lineStyle(2, 0xf6f6ee, 0.58).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
-    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.24).lineBetween(panelLeft + paddingX, panelTop + 124, panelLeft + panelWidth - paddingX, panelTop + 124);
+    this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.24).lineBetween(panelLeft + paddingX, headerDividerY, panelLeft + panelWidth - paddingX, headerDividerY);
     this.panelGraphics.lineStyle(1, 0xbdbdbd, 0.22).lineBetween(panelLeft + paddingX, panelBottom - 32, panelLeft + panelWidth - paddingX, panelBottom - 32);
 
     this.kicker.setFontSize(compact ? 9 : 11).setPosition(panelLeft + paddingX, panelTop + 24);
     this.title.setFontSize(compact ? 23 : (short ? 26 : 32)).setPosition(panelLeft + paddingX, panelTop + 82);
-    this.scoreText.setFontSize(compact ? 14 : 18).setPosition(panelLeft + panelWidth - paddingX, panelTop + 82);
 
-    const bodyTop = panelTop + (short ? 136 : 145);
+    if (narrowHeader) {
+      this.scoreText
+        .setOrigin(0, 0.5)
+        .setFontSize(13)
+        .setPosition(panelLeft + paddingX, panelTop + 116);
+    } else {
+      this.scoreText
+        .setOrigin(1, 0.5)
+        .setFontSize(compact ? 14 : 18)
+        .setPosition(panelLeft + panelWidth - paddingX, panelTop + 82);
+    }
+
+    const bodyTop = panelTop + (narrowHeader ? 158 : (short ? 136 : 145));
     this.body
       .setFontSize(short ? (compact ? 9 : 10) : (compact ? 11 : 13))
       .setLineSpacing(short ? 2 : 5)
