@@ -4,6 +4,7 @@ import { createButton } from '../ui/createButton.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
+import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() { super('MainMenu'); }
@@ -24,10 +25,11 @@ export default class MainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.buttons = [
+      createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission()),
       createButton(this, 0, 0, 'LOCATE MISSION', () => this.scene.start('MissionBriefing', { mission: createLocateMission() })),
       createButton(this, 0, 0, 'COUNT MISSION', () => this.scene.start('MissionBriefing', { mission: createCountMission() })),
       createButton(this, 0, 0, 'CHANGE MISSION', () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() })),
-      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT')),
+      createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice('PAN / ZOOM THE IMAGE\nRANDOM: SEEDED REPLAYABLE MISSION\nLOCATE: MARK THE REQUESTED TARGET\nCOUNT: INSPECT THE MARKED REGION AND SUBMIT A TOTAL\nCHANGE: COMPARE PASS A / PASS B AND MARK THE CHANGED OBJECT')),
       createButton(this, 0, 0, 'SETTINGS', () => this.showNotice('SETTINGS MODULE\nCOMING IN A LATER PHASE')),
     ];
 
@@ -40,21 +42,27 @@ export default class MainMenuScene extends Phaser.Scene {
     this.layout(this.scale.gameSize);
   }
 
+  launchGeneratedMission() {
+    const options = getGeneratorOptions();
+    const mission = createGeneratedMission({ seed: options.seed, mode: options.mode });
+    this.scene.start('MissionBriefing', { mission });
+  }
+
   showNotice(message) {
     this.notice.setText(message).setVisible(true).setDepth(20);
-    this.time.delayedCall(3200, () => this.notice.setVisible(false));
+    this.time.delayedCall(3600, () => this.notice.setVisible(false));
   }
 
   layout(gameSize) {
     const { width, height } = gameSize;
     const compact = width < 520;
-    this.title.setFontSize(compact ? 52 : 72).setPosition(width / 2, Math.max(82, height * 0.15));
-    this.subtitle.setPosition(width / 2, this.title.y + 56).setWordWrapWidth(Math.min(520, width - 36));
-    const startY = Math.max(this.subtitle.y + 62, height * 0.34);
-    const spacing = compact ? 50 : 54;
+    this.title.setFontSize(compact ? 50 : 70).setPosition(width / 2, Math.max(72, height * 0.13));
+    this.subtitle.setPosition(width / 2, this.title.y + 52).setWordWrapWidth(Math.min(520, width - 36));
+    const startY = Math.max(this.subtitle.y + 54, height * 0.29);
+    const spacing = compact ? 46 : 50;
     this.buttons.forEach((button, index) => button.setPosition(width / 2, startY + index * spacing));
-    this.status.setPosition(width / 2, height - 22);
-    this.notice.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(620, width - 44));
+    this.status.setPosition(width / 2, height - 20);
+    this.notice.setPosition(width / 2, height / 2).setWordWrapWidth(Math.min(640, width - 44));
     this.scanLines.clear().lineStyle(1, 0xf6f6ee, 1);
     for (let y = 0; y < height; y += 6) this.scanLines.lineBetween(0, y, width, y);
   }
