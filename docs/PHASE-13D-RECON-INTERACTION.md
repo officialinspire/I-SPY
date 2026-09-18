@@ -41,10 +41,14 @@ constant on-screen size instead of ballooning as the analyst zooms in.
 ## HUD tap guard
 
 HUD objects use `scrollFactor(0)`, but the camera still applies its zoom around the viewport centre,
-so at the default 0.75 zoom the HUD is drawn roughly 22px lower and 160px right of its own
+so at the default 0.75 zoom the HUD was drawn roughly 22px lower and 160px right of its own
 coordinates. The guard tested raw screen coordinates, which blocked taps on clear imagery above the
-HUD while letting taps through the band the HUD actually covers. `toHudSpace()` now converts a
-pointer into HUD coordinates first, so the guard matches what is drawn.
+HUD while letting taps through the band the HUD actually covers. Phase 13D converted the pointer
+into HUD coordinates first so the guard matched what was drawn.
+
+> **Superseded by the Phase 13 release-candidate audit.** The HUD now renders through its own
+> camera fixed at 1x, so HUD coordinates and screen coordinates are the same thing again and the
+> guard tests the pointer directly. See `docs/PHASE-13-RELEASE-AUDIT.md`.
 
 Separately, a press that lands on a HUD control no longer reaches the map at all: Phaser emits
 game-object events before scene-level ones, so a `gameobjectdown` / `gameobjectup` flag tells the

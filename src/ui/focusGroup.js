@@ -85,6 +85,11 @@ export function createFocusGroup(scene, buttons = [], options = {}) {
   scene.input.keyboard?.on('keydown', onKeyDown);
   scene.input.on('pointerdown', onPointerDown);
 
+  const detach = () => {
+    scene.input.keyboard?.off('keydown', onKeyDown);
+    scene.input.off('pointerdown', onPointerDown);
+  };
+
   const group = {
     setMembers(nextButtons = []) {
       clearFocus();
@@ -98,11 +103,13 @@ export function createFocusGroup(scene, buttons = [], options = {}) {
     clearFocus,
     destroy() {
       clearFocus();
-      scene.input.keyboard?.off('keydown', onKeyDown);
-      scene.input.off('pointerdown', onPointerDown);
+      detach();
     },
   };
 
-  scene.events.once('shutdown', () => group.destroy());
+  // Shutdown only detaches. Clearing focus repaints every button and notifies
+  // the scene, and activating a button with Enter starts the next scene, so
+  // that repaint would land on text objects Phaser has already torn down.
+  scene.events.once('shutdown', detach);
   return group;
 }

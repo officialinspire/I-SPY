@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented, with a Phase 13 release-candidate audit.** Runtime/package version: **`1.2.2-demo`**.
 
 I SPY currently includes:
 
@@ -84,6 +84,17 @@ Marking now resolves on pointer release after a drag-threshold check, so draggin
 Phase 13E gives the workspace one information hierarchy — objective, timer, mode state, primary action, secondary utilities — and then makes each mode's tools its own. A mode chip under the objective carries state (`LOCATE · MARKING`), tinted amber while marking, phosphor while a mark is pending and rust while held, and each mode shows one counter rather than a paragraph.
 
 COUNT defines its area by dimming everything outside it with phosphor corner brackets, and separates a captioned ADJUST group (larger steppers, a bordered tally readout) from a captioned SUBMIT action; a refused total turns the readout muted red until the number changes, without interrupting inspection. CHANGE replaces the VIEW PASS toggle with a PASS A | PASS B segmented control whose live segment is lit, and switching passes plays a brief opaque wipe that never shows both passes at once. Split view labels each pane with its own pass and time and keeps the two cameras exactly synchronised.
+
+## Release-candidate audit
+
+The Phase 13 build was audited end to end before release: menu and panel layout at four viewports,
+the full mission flow, all three analysis modes, the seeded generator, artwork, input and
+accessibility, feedback, and responsive behaviour. Eight defects were reproduced and fixed, the
+largest being that the recon HUD inherited the camera's zoom — at maximum zoom the objective, the
+timer and every control left the screen — and that split view framed the two passes
+`360 * (1 - zoom)` pixels apart, which is a fairness bug in a comparison puzzle. The HUD now renders
+through its own camera fixed at 1x and both panes share identical viewports. No mission generation,
+validation, scoring or map data changed. See `docs/PHASE-13-RELEASE-AUDIT.md`.
 
 ## Release validation
 
@@ -245,3 +256,4 @@ npm run build
 - Phase 13D — Recon interaction and marking polish ✅
 - Phase 13E — Mode-specific gameplay UX ✅
 - Phase 13F — Microinteraction and feedback polish ✅
+- Phase 13 RC — Release-candidate audit and fixes ✅

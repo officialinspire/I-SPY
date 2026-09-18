@@ -60,11 +60,15 @@ view.
 - Split view labels each pane with its own pass and time, phosphor for A and amber for B, and the
   divider carries instrument ticks and centre arrows.
 - **Split view bug fixed:** the compare camera redraws screen-space objects inside its own viewport,
-  so both panes were labelled `PASS A`. The right-hand label is now owned by the compare camera and
-  positioned in its local space; the divider and left label are ignored by it. The timer and grid
-  readout also move into the left pane, which the compare camera does not cover.
+  so both panes were labelled `PASS A`. Phase 13E gave the right-hand label to the compare camera in
+  its local space and moved the timer and grid readout into the left pane.
 - Camera synchronisation is untouched: `syncChangeCameras` still drives both cameras from one
   source, verified by dragging in the left pane and confirming both panes stay framed identically.
+
+> **Revised by the Phase 13 release-candidate audit.** Both pane labels are now drawn by the HUD
+> camera, which spans the viewport, and the readout returned to the right edge of the single HUD
+> strip. The audit also found that equal scroll values did *not* frame the panes identically at any
+> zoom other than 1x, and fixed it. See `docs/PHASE-13-RELEASE-AUDIT.md`.
 
 ## Rails
 

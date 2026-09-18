@@ -656,7 +656,16 @@ export default class MainMenuScene extends Phaser.Scene {
     const { width, height } = gameSize;
     const short = height < 560;
     const settingsPanelWidth = Math.min(520, width - 28);
-    const settingsPanelHeight = Math.min(450, Math.max(300, height - 42));
+    const settingsPanelCap = Math.min(450, Math.max(300, height - 42));
+
+    // Size the panel to the rows it actually holds. Fixing the height left a
+    // deep empty box under RETURN TO CONSOLE on every window tall enough.
+    const rows = Math.max(1, this.settingsButtons.length);
+    const headerBlock = short ? 84 : 98;
+    const rowSpan = Math.max(178, settingsPanelCap - (short ? 116 : 132));
+    const rowSpacing = Math.min(52, Math.max(35, rowSpan / Math.max(1, rows - 1)));
+    const settingsPanelHeight = Math.min(settingsPanelCap,
+      Math.ceil(headerBlock + (rows - 1) * rowSpacing + 20 + (short ? 18 : 26)));
 
     // Sit the panel under the header when it fits; otherwise centre it and
     // stand the header down so nothing is clipped behind the panel.
@@ -684,13 +693,11 @@ export default class MainMenuScene extends Phaser.Scene {
     this.settingsTitle.setPosition(width / 2, settingsTop + 29).setFontSize(short ? 16 : 20);
     this.settingsHint.setPosition(width / 2, settingsTop + 50).setVisible(height >= 350);
 
-    const settingsStartY = settingsTop + (short ? 84 : 98);
-    const availableSpan = Math.max(178, settingsPanelHeight - (short ? 116 : 132));
-    const settingsSpacing = Math.min(52, Math.max(35, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
+    const settingsStartY = settingsTop + headerBlock;
     const buttonWidth = Math.min(300, settingsPanelWidth - 44);
     this.settingsButtons.forEach((button, index) => {
       button.resize({ width: buttonWidth });
-      button.setPosition(width / 2, settingsStartY + index * settingsSpacing);
+      button.setPosition(width / 2, settingsStartY + index * rowSpacing);
     });
   }
 }

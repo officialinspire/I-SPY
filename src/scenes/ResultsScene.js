@@ -86,12 +86,28 @@ export default class ResultsScene extends Phaser.Scene {
     const sideMargin = compact ? 18 : 36;
     const panelWidth = Math.min(860, width - sideMargin * 2);
     const panelLeft = width / 2 - panelWidth / 2;
-    const controlsHeight = compact ? 116 : 82;
-    const panelTop = Math.max(54, short ? 52 : height * 0.07);
-    const panelBottom = Math.max(panelTop + (narrowHeader ? 252 : 230), height - controlsHeight - 22);
-    const panelHeight = panelBottom - panelTop;
+    const controlsHeight = compact ? 148 : 82;
     const paddingX = compact ? 18 : 30;
+    const bodyOffset = narrowHeader ? 158 : (short ? 136 : 145);
+
+    // The debrief is measured before the panel is drawn, so the panel can be
+    // sized to the debrief instead of stretching to the bottom of the window
+    // and leaving a deep empty box under the last ledger line.
+    this.body
+      .setFontSize(short ? (compact ? 9 : 10) : (compact ? 11 : 13))
+      .setLineSpacing(short ? 2 : 5)
+      .setWordWrapWidth(panelWidth - paddingX * 2);
+
+    const showDisposition = height >= 430;
+    const areaTop = Math.max(54, short ? 46 : 62);
+    const areaBottom = Math.max(areaTop + 230, height - controlsHeight - 22);
+    const panelHeight = Phaser.Math.Clamp(bodyOffset + this.body.height + (showDisposition ? 58 : 26),
+      narrowHeader ? 252 : 230, areaBottom - areaTop);
+    const panelTop = Math.round(areaTop + (areaBottom - areaTop - panelHeight) / 2);
+    const panelBottom = panelTop + panelHeight;
     const headerDividerY = panelTop + (narrowHeader ? 146 : 124);
+    const bodyTop = panelTop + bodyOffset;
+    this.body.setPosition(panelLeft + paddingX, bodyTop);
 
     this.panelGraphics.clear();
     const statusAccent = hexToNumber(this.data?.success === true ? UI_TOKENS.color.phosphor : UI_TOKENS.color.rust);
@@ -116,21 +132,16 @@ export default class ResultsScene extends Phaser.Scene {
         .setPosition(panelLeft + panelWidth - paddingX, panelTop + 82);
     }
 
-    const bodyTop = panelTop + (narrowHeader ? 158 : (short ? 136 : 145));
-    this.body
-      .setFontSize(short ? (compact ? 9 : 10) : (compact ? 11 : 13))
-      .setLineSpacing(short ? 2 : 5)
-      .setPosition(panelLeft + paddingX, bodyTop)
-      .setWordWrapWidth(panelWidth - paddingX * 2);
-
     this.disposition
       .setFontSize(compact ? 8 : 10)
       .setPosition(panelLeft + paddingX, panelBottom - 17)
-      .setVisible(height >= 430);
+      .setVisible(showDisposition);
 
     if (compact) {
-      this.retry.setPosition(width / 2, height - 90);
-      this.menu.setPosition(width / 2, height - 42);
+      // Stacked controls need a gap between them and have to clear the
+      // terminal chrome caption along the bottom edge.
+      this.retry.setPosition(width / 2, height - 112);
+      this.menu.setPosition(width / 2, height - 58);
     } else {
       this.retry.setPosition(width / 2 - 135, height - 48);
       this.menu.setPosition(width / 2 + 135, height - 48);

@@ -37,6 +37,7 @@ export default class ReconScene extends Phaser.Scene {
     this.createMissionOverlay();
     this.createAtmosphereOverlay();
     this.createSelectionOverlay();
+    this.createUiCamera();
     this.bindInput();
     this.startMissionTimer();
 
@@ -450,23 +451,44 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   /**
-   * Convert a screen point into HUD space.
+   * Dedicated HUD camera, fixed at 1x.
    *
-   * HUD objects use scrollFactor 0, but the camera still applies its zoom
-   * around the viewport centre, so the HUD is drawn away from its own
-   * coordinates whenever the analyst is not at 1x. Guarding taps in screen
-   * space therefore blocked clear imagery above the HUD while letting taps
-   * through the band the HUD actually covers.
+   * Screen-space objects still inherit the main camera's zoom, so the console
+   * used to drift away from the viewport edges at any zoom other than 1x, and
+   * at maximum zoom it left the screen entirely, taking MARK, PAUSE and the
+   * timer with it. The HUD now renders through its own camera and the two
+   * cameras ignore each other's objects, so the console is anchored to the
+   * viewport no matter how the analyst navigates the imagery.
    */
-  toHudSpace(pointer) {
-    const camera = this.cameras.main;
-    const zoom = camera.zoom || 1;
-    const centreX = camera.width / 2;
-    const centreY = camera.height / 2;
-    return {
-      x: centreX + (pointer.x - camera.x - centreX) / zoom,
-      y: centreY + (pointer.y - camera.y - centreY) / zoom,
-    };
+  createUiCamera() {
+    const { width, height } = this.scale.gameSize;
+    this.uiCamera = this.cameras.add(0, 0, width, height, false, 'Hud');
+    this.uiCamera.setScroll(0, 0);
+    this.applyCameraLayers();
+  }
+
+  /** Everything in map coordinates: the HUD camera must never draw these. */
+  getWorldObjects() {
+    return [this.worldLayer, this.worldA?.root, this.worldB?.root, this.grid, this.missionOverlay,
+      this.regionLabel, this.selectionGraphics, this.debugGraphics].filter(Boolean);
+  }
+
+  /** Split the display list between the imagery cameras and the HUD camera. */
+  applyCameraLayers() {
+    if (!this.uiCamera) return;
+    const ui = this.getUiObjects();
+    this.cameras.main.ignore(ui);
+    this.compareCamera?.ignore(ui);
+    this.uiCamera.ignore(this.getWorldObjects());
+  }
+
+  /** Cameras render in list order, so the HUD camera has to stay last. */
+  raiseUiCamera() {
+    const list = this.cameras.cameras;
+    const index = list.indexOf(this.uiCamera);
+    if (index === -1 || index === list.length - 1) return;
+    list.splice(index, 1);
+    list.push(this.uiCamera);
   }
 
   /**
@@ -482,7 +504,7 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   isHudPoint(pointer) {
-    const { y } = this.toHudSpace(pointer);
+    const y = pointer.y;
     if (y < GAME_CONFIG.recon.hudHeight) return true;
     const bottomGuard = this.railHeight();
     return bottomGuard > 0 && y > this.scale.gameSize.height - bottomGuard;
@@ -666,6 +688,11 @@ export default class ReconScene extends Phaser.Scene {
     this.atmosphereGraphics?.setVisible(false);
     const { width, height } = this.scale.gameSize;
     const half = Math.floor(width / 2);
+    // Both panes need identical viewports. Zoom is applied around each
+    // camera's own centre, so a full-width main camera beside a half-width
+    // compare camera drifts apart by 360 * (1 - zoom) pixels — the two passes
+    // no longer show the same ground, which is the whole point of split view.
+    this.cameras.main.setViewport(0, 0, half, height);
     this.compareCamera = this.cameras.add(half, 0, width - half, height, false, 'PassB');
     this.compareCamera.setBounds(0, 0, this.map.width, this.map.height);
     this.compareCamera.setBackgroundColor(GAME_CONFIG.palette.black);
@@ -676,6 +703,8 @@ export default class ReconScene extends Phaser.Scene {
     this.cameras.main.ignore(this.worldB.root);
     this.compareCamera.ignore(this.worldA.root);
     this.compareCamera.ignore(this.getUiObjects());
+    this.uiCamera?.ignore([this.worldA.root, this.worldB.root]);
+    this.raiseUiCamera();
     this.passAButton.setVisible(false);
     this.passBButton.setVisible(false);
     this.passCaption.setVisible(false);
@@ -695,6 +724,9 @@ export default class ReconScene extends Phaser.Scene {
       this.cameras.remove(this.compareCamera, true);
       this.compareCamera = null;
     }
+    const { width: fullWidth, height: fullHeight } = this.scale.gameSize;
+    this.cameras.main.setViewport(0, 0, fullWidth, fullHeight);
+    this.applyCameraLayers();
     this.worldA.root.setVisible(this.activePass === 'A');
     this.worldB.root.setVisible(this.activePass === 'B');
     this.atmosphereGraphics?.setVisible(true);
@@ -772,11 +804,25 @@ export default class ReconScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Zoom floor for the current viewport.
+   *
+   * The configured minimum lets a wide window zoom out past the edge of the
+   * imagery, which left black gutters beside the photograph. The floor keeps
+   * the imagery covering the viewport instead; it never restricts a window the
+   * map already covers.
+   */
+  minZoomForViewport(width = this.scale.gameSize.width, height = this.scale.gameSize.height) {
+    const cover = Math.max(width / this.map.width, height / this.map.height);
+    return Phaser.Math.Clamp(Math.max(GAME_CONFIG.recon.minZoom, cover),
+      GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom);
+  }
+
   zoomAt(screenPoint, delta) {
     const context = this.getPointerContext(screenPoint);
     const camera = context.camera;
     const before = camera.getWorldPoint(screenPoint.x, screenPoint.y);
-    camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom));
+    camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, this.minZoomForViewport(), GAME_CONFIG.recon.maxZoom));
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
@@ -800,7 +846,7 @@ export default class ReconScene extends Phaser.Scene {
     } else if (this.isChangeMode && this.mission.focus) {
       view = this.mission.focus;
     }
-    this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom));
+    this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, this.minZoomForViewport(), GAME_CONFIG.recon.maxZoom));
     this.cameras.main.centerOn(view.x ?? this.map.width / 2, view.y ?? this.map.height / 2);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (showMessage) this.flashStatus('VIEW RECENTERED');
@@ -852,9 +898,18 @@ export default class ReconScene extends Phaser.Scene {
 
   onResize(gameSize) {
     const { width, height } = gameSize;
+    this.uiCamera?.setSize(width, height);
+    const floor = this.minZoomForViewport(width, height);
+    if (this.cameras.main.zoom < floor) {
+      this.cameras.main.setZoom(floor);
+      if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
+      if (this.candidate) this.drawCandidateMarker();
+    }
     this.hudBackground.width = width;
     this.hudBorder.width = width;
-    const readoutRight = this.isChangeMode && this.splitView ? Math.floor(width / 2) - 16 : width - 16;
+    // One HUD strip spans the viewport, so the readout stays at its right
+    // edge in split view too rather than floating over the middle of the bar.
+    const readoutRight = width - 16;
     this.timerText.setPosition(readoutRight, 11);
     if (!this.splitView) this.redrawAtmosphere(width, height);
     const compact = width < 680;
@@ -865,7 +920,11 @@ export default class ReconScene extends Phaser.Scene {
     }
     if (this.isChangeMode && this.splitView && this.compareCamera) {
       const half = Math.floor(width / 2);
+      this.cameras.main.setViewport(0, 0, half, height);
       this.compareCamera.setViewport(half, 0, width - half, height);
+      this.syncChangeCameras(this.cameras.main);
+    } else if (!this.splitView) {
+      this.cameras.main.setViewport(0, 0, width, height);
     }
 
     if (this.isCountMode) {
@@ -908,8 +967,8 @@ export default class ReconScene extends Phaser.Scene {
       this.passAButton.setVisible(!split);
       this.passBButton.setVisible(!split);
 
-      this.resetButton.setPosition(split ? usableWidth - 170 : (compact ? width / 2 - 70 : width - 181), compact ? height - 26 : 48);
-      this.pauseButton.setPosition(split ? usableWidth - 55 : (compact ? width / 2 + 70 : width - 58), compact ? height - 26 : 48);
+      this.resetButton.setPosition(split || !compact ? width - 181 : width / 2 - 70, split || !compact ? 48 : height - 26);
+      this.pauseButton.setPosition(split || !compact ? width - 58 : width / 2 + 70, split || !compact ? 48 : height - 26);
       this.confirmButton.setPosition(split ? usableWidth / 2 - 60 : width / 2 - 60, height - (compact ? 132 : 82));
       this.cancelButton.setPosition(split ? usableWidth / 2 + 60 : width / 2 + 60, height - (compact ? 132 : 82));
       this.passStatusText.setPosition(split ? usableWidth / 2 : width / 2, GAME_CONFIG.recon.hudHeight + 20);

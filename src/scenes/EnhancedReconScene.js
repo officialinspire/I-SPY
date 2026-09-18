@@ -74,6 +74,7 @@ export default class EnhancedReconScene extends ReconScene {
       this.passWipe,
       this.splitDivider,
       this.splitLeftLabel,
+      this.splitRightLabel,
       this.pointerReticle?.graphics,
     ].filter(Boolean);
   }
@@ -336,17 +337,14 @@ export default class EnhancedReconScene extends ReconScene {
       this.layoutChrome.strokeTriangle(half + 9, mid, half + 2, mid - 6, half + 2, mid + 6);
 
       this.splitLeftLabel.setPosition(half * 0.5, hudHeight + 20).setVisible(true);
-      // The compare camera redraws screen-space objects inside its own
-      // viewport, so the right-hand label is owned by that camera alone and is
-      // positioned in its local space. Otherwise both panes label themselves A.
-      this.splitRightLabel.setPosition((width - half) * 0.5, hudHeight + 20).setVisible(true);
-      this.cameras.main.ignore(this.splitRightLabel);
+      // Both pane labels are drawn by the HUD camera, which spans the whole
+      // viewport, so each one sits over its own pane in screen coordinates.
+      this.splitRightLabel.setPosition(half + (width - half) * 0.5, hudHeight + 20).setVisible(true);
       this.passStatusText?.setPosition(half * 0.5, hudHeight + 48);
     } else {
       this.splitDivider.setVisible(false);
       this.splitLeftLabel.setVisible(false);
       this.splitRightLabel.setVisible(false);
-      this.splitRightLabel.cameraFilter = 0;
     }
   }
 
