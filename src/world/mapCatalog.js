@@ -28,6 +28,15 @@ export const MAP_CATALOG = Object.freeze([
     recommendedZoom: 0.75,
     source: 'assets/maps/frostline-relay.json',
   }),
+  Object.freeze({
+    id: 'riverworks-sector',
+    title: 'RIVERWORKS SECTOR',
+    environment: 'INDUSTRIAL RIVER',
+    description: 'A canalised river cut corner to corner, with a rail and warehouse district on the east bank, a fenced fuel depot downstream and a works village reached by a muddy access road on the west.',
+    difficulty: 3,
+    recommendedZoom: 0.75,
+    source: 'assets/maps/riverworks-sector.json',
+  }),
 ]);
 
 export function getCatalogEntry(id) {

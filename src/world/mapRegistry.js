@@ -3,6 +3,7 @@ import { MAP_CATALOG } from './mapCatalog.js';
 import { validateReconMap } from './reconMapSchema.js';
 import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json';
 import frostlineRelay from '../../assets/maps/frostline-relay.json';
+import riverworksSector from '../../assets/maps/riverworks-sector.json';
 
 /**
  * Registry of playable reconnaissance sectors.
@@ -17,6 +18,7 @@ import frostlineRelay from '../../assets/maps/frostline-relay.json';
 const MAP_DATA = Object.freeze({
   'woodland-corridor-7': woodlandCorridor7,
   'frostline-relay': frostlineRelay,
+  'riverworks-sector': riverworksSector,
 });
 
 function buildEntry(descriptor) {
