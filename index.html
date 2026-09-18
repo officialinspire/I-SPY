@@ -16,7 +16,7 @@
       failure reports itself instead of leaving a black screen. It is removed
       the moment Phaser puts its canvas on the page.
     -->
-    <div id="boot-notice" hidden style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#0b0b0b;color:#e8e8df;font-family:'Courier New',Courier,monospace;z-index:2147483645;">
+    <div id="boot-notice" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;padding:24px;background:#0b0b0b;color:#e8e8df;font-family:'Courier New',Courier,monospace;z-index:2147483645;">
       <div style="max-width:560px;border:1px solid #5d6672;padding:24px 22px;background:#14150f;">
         <p style="margin:0 0 4px;font-size:13px;letter-spacing:2px;color:#b6852c;">IMAGERY CHANNEL UNAVAILABLE</p>
         <p style="margin:0 0 16px;font-size:12px;letter-spacing:1px;color:#757575;">ANALYSIS CONSOLE FAILED TO INITIALISE</p>
@@ -39,12 +39,15 @@
           note(event.reason && event.reason.message ? event.reason.message : event.reason);
         });
 
+        // The panel is driven through style.display, never the `hidden`
+        // attribute: an inline display would override `[hidden]` in the UA
+        // stylesheet and leave the panel painted over a perfectly good game.
         var ticks = 0;
         var poll = window.setInterval(function () {
           var notice = document.getElementById('boot-notice');
           if (!notice) { window.clearInterval(poll); return; }
-          if (document.querySelector('#app canvas')) {
-            notice.hidden = true;
+          if (document.querySelector('canvas')) {
+            notice.style.display = 'none';
             window.clearInterval(poll);
             return;
           }
@@ -52,7 +55,7 @@
           if (ticks < 10) return;
           var slot = document.getElementById('boot-detail');
           if (slot && detail) slot.textContent = detail;
-          notice.hidden = false;
+          notice.style.display = 'flex';
         }, 500);
       })();
     </script>
