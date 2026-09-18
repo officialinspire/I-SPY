@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13E polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
 
 I SPY currently includes:
 
@@ -98,6 +98,8 @@ It checks version alignment, viewport/safe-area configuration, authored-map stru
 ## Audio, feedback, and settings
 
 Phase 10 adds a dependency-free Web Audio feedback system with restrained terminal/radio cues for UI taps, imagery acquisition, marking, confirmations, incorrect identifications, the final ten seconds, mission completion, and mission failure.
+
+Phase 13F rebuilt that system around named cues. Callers ask for `feedback('arm')` rather than describing a waveform, so every event — hover, press, mission card, acquisition, marking, selection, cancel, confirmation, false identification, pass switch, count adjustment, count submission, pause/resume, completion, failure — has exactly one voice and exactly one call site. Everything is still synthesised at runtime from short square blips, pitch slides and band-limited noise clicks: a military terminal, not an arcade cabinet. A per-event repeat guard makes it impossible for rapid navigation to stack a cue on itself, haptics stay sparing (a small pulse for selection, a pattern only for outcomes), and microanimations stay in the 80–160 ms band — a 90 ms press, a 140 ms panel fade, a 150 ms reticle settle — with nothing in the reconnaissance imagery animating in a way that could reveal an answer. See `docs/PHASE-13F-FEEDBACK.md`.
 
 Settings are stored locally on the device and include:
 
@@ -242,3 +244,4 @@ npm run build
 - Phase 13C — Reconnaissance graphics and environmental art ✅
 - Phase 13D — Recon interaction and marking polish ✅
 - Phase 13E — Mode-specific gameplay UX ✅
+- Phase 13F — Microinteraction and feedback polish ✅

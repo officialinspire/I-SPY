@@ -74,7 +74,7 @@ export default class ResultsScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
     this.layout(this.scale.gameSize);
 
-    this.time.delayedCall(120, () => feedback(success ? 'complete' : 'fail', success ? [12, 20, 24] : [24, 35, 24]));
+    this.time.delayedCall(120, () => feedback(success ? 'complete' : 'fail'));
   }
 
   layout(gameSize) {

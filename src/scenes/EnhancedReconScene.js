@@ -11,8 +11,6 @@ export default class EnhancedReconScene extends ReconScene {
     super();
     this.lastCountdownSecond = null;
     this.analysisMode = 'analysis';
-    this.lastStatusMessage = null;
-    this.lastStatusAt = 0;
   }
 
   createHud() {
@@ -108,22 +106,59 @@ export default class EnhancedReconScene extends ReconScene {
   }
 
   armMarking() {
+    const wasMarking = this.marking;
     super.armMarking();
+    if (this.marking && !wasMarking) feedback('arm');
     this.refreshAnalysisMode();
   }
 
   placeCandidate(pointer) {
     super.placeCandidate(pointer);
+    if (this.candidate) {
+      feedback('select');
+      this.settleMarker();
+    }
     this.refreshAnalysisMode();
   }
 
   cancelCandidate() {
+    const hadCandidate = Boolean(this.candidate) || this.marking;
     super.cancelCandidate();
+    if (hadCandidate) feedback('cancel');
     this.refreshAnalysisMode();
+  }
+
+  /**
+   * The reticle settles onto the mark rather than appearing at final size.
+   * It is drawn at the analyst's own mark, so it reveals nothing about the
+   * imagery underneath it.
+   */
+  settleMarker() {
+    this.markerSettleTween?.remove();
+    this.markerScale = 1;
+    if (prefersReducedMotion() || !this.candidate) {
+      this.drawCandidateMarker();
+      return;
+    }
+    const settle = { scale: 1.34 };
+    this.markerScale = settle.scale;
+    this.drawCandidateMarker();
+    this.markerSettleTween = this.tweens.add({
+      targets: settle,
+      scale: 1,
+      duration: 150,
+      ease: 'Sine.easeOut',
+      onUpdate: () => {
+        this.markerScale = settle.scale;
+        if (this.candidate) this.drawCandidateMarker();
+      },
+      onComplete: () => { this.markerScale = 1; },
+    });
   }
 
   togglePause() {
     super.togglePause();
+    feedback(this.paused ? 'hold' : 'resume');
     if (this.paused) {
       this.pointerReticle?.setActive(false);
       this.input.setDefaultCursor('default');
@@ -132,8 +167,17 @@ export default class EnhancedReconScene extends ReconScene {
     }
   }
 
-  /** Pass switch: mask the swap, never blend the two passes. */
+  setActivePass(passId, showMessage = true) {
+    const previous = this.activePass;
+    super.setActivePass(passId, showMessage);
+    // Re-selecting the live segment changes nothing, so it acknowledges as a
+    // plain press instead of a relay throw.
+    if (this.activePass === previous) feedback('press');
+  }
+
+  /** Pass switch: a relay clack, then mask the swap. */
   onPassSwitched() {
+    feedback('relay');
     if (!this.passWipe) return;
     const { width, height } = this.scale.gameSize;
     this.passWipe.setSize(width, height).setPosition(0, 0);
@@ -159,6 +203,7 @@ export default class EnhancedReconScene extends ReconScene {
    * a flash and still says exactly which total was refused.
    */
   onCountRejected() {
+    feedback('error');
     if (!this.tallyFrame) return;
     this.countRejected = true;
     // A near-black red fill would vanish against the rail, so the block itself
@@ -166,6 +211,10 @@ export default class EnhancedReconScene extends ReconScene {
     this.tallyFrame.setFillStyle(hexToNumber(UI_TOKENS.color.rust), 0.9)
       .setStrokeStyle(3, hexToNumber(UI_TOKENS.color.rustBright));
     this.answerText?.setColor(UI_TOKENS.text.primary);
+  }
+
+  onCountConfirmed() {
+    feedback('confirm');
   }
 
   clearCountRejection() {
@@ -180,7 +229,10 @@ export default class EnhancedReconScene extends ReconScene {
   setAnswer(value) {
     const previous = this.answerValue;
     super.setAnswer(value);
-    if (this.answerValue !== previous) this.clearCountRejection();
+    if (this.answerValue === previous) return;
+    // Every route to a new total — steppers, arrows, digits — ticks once.
+    feedback(this.answerValue > previous ? 'tickUp' : 'tickDown');
+    this.clearCountRejection();
   }
 
   /**
@@ -188,6 +240,7 @@ export default class EnhancedReconScene extends ReconScene {
    * wrong call never points at the objects around it.
    */
   onIdentificationResolved(result, mark) {
+    feedback(result.correct ? 'confirm' : 'error');
     this.setAnalysisMode('analysis');
     if (!mark || !this.selectionGraphics) {
       super.onIdentificationResolved(result, mark);
@@ -218,28 +271,10 @@ export default class EnhancedReconScene extends ReconScene {
         const second = Math.ceil(this.remainingSeconds);
         if (second > 0 && second <= 10 && second !== this.lastCountdownSecond) {
           this.lastCountdownSecond = second;
-          feedback('countdown', 6);
+          feedback('countdown');
         }
       },
     });
-  }
-
-  flashStatus(message) {
-    super.flashStatus(message);
-    const normalized = String(message ?? '').toUpperCase();
-    const now = this.time.now;
-    if (normalized === this.lastStatusMessage && now - this.lastStatusAt < 320) return;
-    this.lastStatusMessage = normalized;
-    this.lastStatusAt = now;
-    if (normalized.includes('UNVERIFIED') || normalized.includes('FALSE ID')) {
-      feedback('error', [18, 26, 18]);
-    } else if (normalized.includes('CONFIRMED')) {
-      feedback('confirm', [12, 18, 20]);
-    } else if (normalized.includes('MARKING ACTIVE')) {
-      feedback('mark', 10);
-    } else if (normalized.includes('PASS A ACQUIRED') || normalized.includes('PASS B ACQUIRED')) {
-      feedback('acquire', 8);
-    }
   }
 
   redrawAtmosphere(width, height) {
@@ -325,6 +360,7 @@ export default class EnhancedReconScene extends ReconScene {
     this.countdownFeedbackEvent?.remove(false);
     this.resultFlashEvent?.remove(false);
     this.passWipeTween?.remove();
+    this.markerSettleTween?.remove();
     this.pointerReticle?.destroy();
     this.input.setDefaultCursor('default');
     super.cleanup();

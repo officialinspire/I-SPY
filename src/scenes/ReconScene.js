@@ -108,7 +108,7 @@ export default class ReconScene extends Phaser.Scene {
       this.modeDetail, this.coordText, this.timerText]);
     this.refreshModeStrip();
 
-    this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13, variant: 'secondary' });
+    this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13, variant: 'secondary', pressSound: false });
     this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12, variant: 'secondary' });
     this.commonButtons = [this.pauseButton, this.resetButton];
 
@@ -178,9 +178,9 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createLocateControls() {
-    this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.armMarking(), { width: 170, height: 36, fontSize: 13, variant: 'tactical' });
-    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success' });
-    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger' });
+    this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.armMarking(), { width: 170, height: 36, fontSize: 13, variant: 'tactical', pressSound: false });
+    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success', pressSound: false });
+    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger', pressSound: false });
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.locateButtons = [this.markButton, this.confirmButton, this.cancelButton];
@@ -188,9 +188,9 @@ export default class ReconScene extends Phaser.Scene {
 
   createCountControls() {
     // Two visually separate jobs: adjust the tally, then submit it.
-    this.decrementButton = createButton(this, 0, 0, '\u2212', () => this.adjustAnswer(-1), { width: 54, height: 46, fontSize: 26, variant: 'tactical', accent: false });
-    this.incrementButton = createButton(this, 0, 0, '+', () => this.adjustAnswer(1), { width: 54, height: 46, fontSize: 26, variant: 'tactical', accent: false });
-    this.submitCountButton = createButton(this, 0, 0, 'SUBMIT COUNT', () => this.submitCount(), { width: 168, height: 46, fontSize: 13, variant: 'primary' });
+    this.decrementButton = createButton(this, 0, 0, '\u2212', () => this.adjustAnswer(-1), { width: 54, height: 46, fontSize: 26, variant: 'tactical', accent: false, pressSound: false });
+    this.incrementButton = createButton(this, 0, 0, '+', () => this.adjustAnswer(1), { width: 54, height: 46, fontSize: 26, variant: 'tactical', accent: false, pressSound: false });
+    this.submitCountButton = createButton(this, 0, 0, 'SUBMIT COUNT', () => this.submitCount(), { width: 168, height: 46, fontSize: 13, variant: 'primary', pressSound: false });
 
     this.tallyFrame = this.add.rectangle(0, 0, 92, 46, hexToNumber(UI_TOKENS.color.black), 0.92)
       .setStrokeStyle(2, hexToNumber(UI_TOKENS.color.phosphorDim))
@@ -210,13 +210,13 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createChangeControls() {
-    this.markButton = createButton(this, 0, 0, 'MARK CHANGE', () => this.armMarking(), { width: 150, height: 36, fontSize: 12, variant: 'tactical' });
-    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success' });
-    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger' });
+    this.markButton = createButton(this, 0, 0, 'MARK CHANGE', () => this.armMarking(), { width: 150, height: 36, fontSize: 12, variant: 'tactical', pressSound: false });
+    this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success', pressSound: false });
+    this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger', pressSound: false });
     // Segmented control: the active pass is a selected segment, not a label
     // the analyst has to read and invert.
-    this.passAButton = createButton(this, 0, 0, 'PASS A', () => this.setActivePass('A'), { width: 96, height: 40, fontSize: 12, variant: 'success' });
-    this.passBButton = createButton(this, 0, 0, 'PASS B', () => this.setActivePass('B'), { width: 96, height: 40, fontSize: 12, variant: 'tactical' });
+    this.passAButton = createButton(this, 0, 0, 'PASS A', () => this.setActivePass('A'), { width: 96, height: 40, fontSize: 12, variant: 'success', pressSound: false });
+    this.passBButton = createButton(this, 0, 0, 'PASS B', () => this.setActivePass('B'), { width: 96, height: 40, fontSize: 12, variant: 'tactical', pressSound: false });
     this.passAButton.setSelected(true);
     this.passCaption = this.add.text(0, 0, 'COMPARE', {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '9px', color: UI_TOKENS.text.faint, letterSpacing: 2,
@@ -499,6 +499,7 @@ export default class ReconScene extends Phaser.Scene {
     if (!this.isCountMode || this.paused || this.missionEnded) return;
     const result = validateCountAnswer(this.mission, this.answerValue);
     if (result.correct) {
+      this.onCountConfirmed();
       this.flashStatus('COUNT CONFIRMED');
       this.time.delayedCall(300, () => this.finishMission(true));
       return;
@@ -509,8 +510,10 @@ export default class ReconScene extends Phaser.Scene {
     this.flashStatus('COUNT UNVERIFIED');
   }
 
-  /** Overridden by the enhanced scene to acknowledge a rejected tally. */
+  /** Overridden by the enhanced scene to acknowledge a tally result. */
   onCountRejected() {}
+
+  onCountConfirmed() {}
 
   armMarking() {
     if (this.isCountMode || this.paused || this.missionEnded) return;
@@ -556,7 +559,7 @@ export default class ReconScene extends Phaser.Scene {
       return;
     }
     drawCandidateReticle(this.selectionGraphics, this.candidate.x, this.candidate.y,
-      this.candidateCamera().zoom, this.markerTone ?? 'pending');
+      this.candidateCamera().zoom, this.markerTone ?? 'pending', this.markerScale ?? 1);
   }
 
   cancelCandidate() {

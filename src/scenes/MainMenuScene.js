@@ -10,7 +10,7 @@ import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
 import { cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
-import { feedback } from '../audio/feedback.js';
+import { fadeIn } from '../ui/presentation.js';
 
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
 
@@ -155,6 +155,7 @@ export default class MainMenuScene extends Phaser.Scene {
   createTasking() {
     this.randomCard = createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission(), {
       variant: 'primary',
+      pressSound: 'card',
       icon: this.uiIcon('reticle_lock'),
       description: 'GENERATE A SEEDED INTELLIGENCE TASK.',
       width: 480,
@@ -190,6 +191,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.modeCards = modes.map((mode) => {
       const card = createButton(this, 0, 0, mode.label, mode.launch, {
         variant: 'tactical',
+        pressSound: 'card',
         icon: this.uiIcon(mode.icon),
         description: mode.description,
         accentColor: mode.accentColor,
@@ -274,6 +276,8 @@ export default class MainMenuScene extends Phaser.Scene {
     this.noticeTitle.setVisible(true);
     this.noticeBody.setVisible(true);
     this.noticeHint.setVisible(true);
+    fadeIn(this, [this.noticeBackdrop, this.noticeGraphics, this.noticeTitle,
+      this.noticeBody, this.noticeHint]);
     this.readout?.setText('ANALYST FIELD GUIDE // OPEN');
     this.noticeTimer?.remove(false);
     this.noticeTimer = this.time.delayedCall(9000, () => this.hideNotice());
@@ -308,15 +312,16 @@ export default class MainMenuScene extends Phaser.Scene {
       color: GAME_CONFIG.palette.gray,
     }).setOrigin(0.5).setDepth(61).setVisible(false);
 
+    // The button's own toggle cue is the acknowledgement; a second sound here
+    // would voice one press twice.
     this.masterSettingButton = createButton(this, 0, 0, '', () => {
       cycleMasterVolume();
       this.refreshSettingsLabels();
-      feedback('confirm', 10);
-    }, { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    }, { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13, variant: 'primary' });
     this.settingsButtons = [this.masterSettingButton, this.sfxSettingButton, this.hapticsSettingButton, this.scanlineSettingButton, this.grainSettingButton, this.closeSettingsButton];
     this.settingsButtons.forEach((button) => {
@@ -330,7 +335,6 @@ export default class MainMenuScene extends Phaser.Scene {
     const settings = getSettings();
     updateSettings({ [key]: !settings[key] });
     this.refreshSettingsLabels();
-    feedback('confirm', 10);
   }
 
   refreshSettingsLabels() {
@@ -358,6 +362,9 @@ export default class MainMenuScene extends Phaser.Scene {
     this.refreshSettingsLabels();
     this.focusGroup?.refresh();
     this.layout(this.scale.gameSize);
+    // Only the panel chrome fades: the buttons manage their own per-state
+    // alphas, so tweening them would flatten accent and icon tones.
+    fadeIn(this, [this.settingsGraphics, this.settingsTitle, this.settingsHint]);
   }
 
   closeSettings() {

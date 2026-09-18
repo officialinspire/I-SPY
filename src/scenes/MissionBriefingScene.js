@@ -6,7 +6,6 @@ import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
-import { feedback } from '../audio/feedback.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
@@ -71,7 +70,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
       padding: { x: 18, y: 14 },
     }).setOrigin(0.5).setDepth(50).setVisible(false);
 
-    this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon(), { variant: 'primary' });
+    this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon(), { variant: 'primary', pressSound: 'acquire' });
     this.back = createButton(this, 0, 0, 'RETURN', () => this.scene.start('MainMenu'), { width: 180, fontSize: 16, variant: 'secondary' });
     this.focusGroup = createFocusGroup(this, [this.begin, this.back]);
 
@@ -87,7 +86,6 @@ export default class MissionBriefingScene extends Phaser.Scene {
   beginRecon() {
     if (this.transitioning) return;
     this.transitioning = true;
-    feedback('acquire', [10, 18, 10]);
     this.focusGroup?.clearFocus();
     this.begin.setVisible(false);
     this.back.setVisible(false);
