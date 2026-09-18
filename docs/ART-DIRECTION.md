@@ -167,3 +167,18 @@ Later sheets should match its:
 - disciplined four-tone rendering
 
 Any later sprite-art change must continue to pass the project's release validator and production build.
+
+## Phase 14 completion audit
+
+Phase 14 is complete across all five production sheets. The final UI pass uses fictional reconnaissance-terminal symbology rather than modern app-icon language, and the full 80-frame library was audited for palette, deterministic 64×64 cells, clipping, visual consistency and puzzle fairness.
+
+The final source-art rules are:
+
+- world sprites use restrained top-down / shallow-isometric construction with upper-left light and lower-right deep shadow
+- terrain texture is deliberate and material-specific rather than random noise
+- targets and civilian decoys share comparable fidelity and contrast
+- intelligence clues remain quieter than primary structures and never glow or identify an answer
+- UI symbols may use heavier under-strokes for readability over imagery, but remain crisp, monochrome and four-tone
+- no sprite-art revision may change gameplay scale, hitboxes, map coordinates or frame identity merely to accommodate drawing changes
+
+See `docs/PHASE-14-SPRITE-ART.md` for the complete stage summary and final consistency audit.
