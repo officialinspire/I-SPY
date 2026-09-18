@@ -84,21 +84,29 @@ export default class ReconScene extends Phaser.Scene {
     this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(1000);
     this.hudBackground = this.add.rectangle(0, 0, 10, hudHeight, 0x0b0b0b, 0.96).setOrigin(0);
     this.hudBorder = this.add.rectangle(0, hudHeight - 2, 10, 2, hexToNumber(UI_TOKENS.color.phosphorDim)).setOrigin(0);
-    const seedText = this.debugMission && this.mission.seed ? ` // SEED ${this.mission.seed}` : '';
-    this.missionText = this.add.text(16, 12, `${this.mission.operation} // ${this.mission.mode}${seedText}`, {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '14px', color: GAME_CONFIG.palette.offWhite,
+    // HUD hierarchy: objective, timer, mode state, then the mode's own rail.
+    // The operation name and map id live in the briefing, not in the workspace.
+    this.objectiveText = this.add.text(16, 13, this.mission.objective, {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '15px', color: UI_TOKENS.text.body,
     });
-    this.objectiveText = this.add.text(16, 39, `OBJECTIVE: ${this.mission.objective}`, {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '12px', color: GAME_CONFIG.palette.lightGray,
+    this.modeChip = this.add.text(16, 41, '', {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: UI_TOKENS.text.body,
+      backgroundColor: GAME_CONFIG.palette.charcoal, padding: { x: 7, y: 4 }, letterSpacing: 1,
     });
-    this.coordText = this.add.text(16, 58, `MAP: ${this.map.id.toUpperCase()} // GRID: ---- / ----`, {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: GAME_CONFIG.palette.gray,
-    });
-    this.timerText = this.add.text(0, 15, this.formatTime(this.remainingSeconds), {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '16px', color: UI_TOKENS.text.body,
+    this.modeDetail = this.add.text(0, 45, '', {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: UI_TOKENS.text.muted,
+      letterSpacing: 1,
+    }).setOrigin(0, 0.5);
+    this.timerText = this.add.text(0, 11, this.formatTime(this.remainingSeconds), {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '19px', color: UI_TOKENS.text.body,
     }).setOrigin(1, 0);
+    this.coordText = this.add.text(0, 45, '---- / ----', {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '10px', color: UI_TOKENS.text.faint,
+    }).setOrigin(0, 0.5);
     this.timerColor = UI_TOKENS.text.body;
-    this.hud.add([this.hudBackground, this.hudBorder, this.missionText, this.objectiveText, this.coordText, this.timerText]);
+    this.hud.add([this.hudBackground, this.hudBorder, this.objectiveText, this.modeChip,
+      this.modeDetail, this.coordText, this.timerText]);
+    this.refreshModeStrip();
 
     this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13, variant: 'secondary' });
     this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12, variant: 'secondary' });
@@ -119,6 +127,56 @@ export default class ReconScene extends Phaser.Scene {
     if (this.isChangeMode) this.updatePassStatus();
   }
 
+  /** One word for what the console is doing right now. */
+  modeStateName() {
+    if (this.missionEnded) return 'COMPLETE';
+    if (this.paused) return 'HELD';
+    if (this.candidate) return 'PENDING';
+    if (this.marking) return 'MARKING';
+    return 'ANALYSIS';
+  }
+
+  /**
+   * Mode chip plus the one counter that mode actually needs. Everything else
+   * that used to live up here (operation name, map id, prefixes) is gone.
+   */
+  refreshModeStrip() {
+    if (!this.modeChip) return;
+    const state = this.modeStateName();
+    this.modeChip.setText(`${this.mission.mode} \u00b7 ${state}`);
+
+    const tones = {
+      MARKING: { background: UI_TOKENS.color.amber, color: UI_TOKENS.color.black },
+      PENDING: { background: UI_TOKENS.color.phosphor, color: UI_TOKENS.color.black },
+      HELD: { background: UI_TOKENS.color.rustDim, color: UI_TOKENS.text.body },
+      COMPLETE: { background: GAME_CONFIG.palette.charcoal, color: UI_TOKENS.text.muted },
+      ANALYSIS: { background: GAME_CONFIG.palette.charcoal, color: UI_TOKENS.text.body },
+    };
+    const tone = tones[state] ?? tones.ANALYSIS;
+    this.modeChip.setBackgroundColor(tone.background).setColor(tone.color);
+
+    let detail = '';
+    let detailTone = UI_TOKENS.text.muted;
+    if (this.isCountMode) {
+      if (this.incorrectSubmissions > 0) {
+        detail = `REJECTED ${this.incorrectSubmissions}`;
+        detailTone = UI_TOKENS.text.negative;
+      }
+    } else {
+      const falseIds = this.falseIdentifications;
+      detail = this.isChangeMode ? `PASS ${this.activePass}` : `FALSE ID ${falseIds}`;
+      if (this.isChangeMode && falseIds > 0) detail += ` \u00b7 FALSE ID ${falseIds}`;
+      if (falseIds > 0) detailTone = UI_TOKENS.text.negative;
+    }
+    this.modeDetail.setText(detail).setColor(detailTone);
+    const detailX = this.modeChip.x + this.modeChip.width + 10;
+    const rowY = this.modeDetail.y || 45;
+    this.modeDetail.setPosition(detailX, rowY);
+    // The grid readout tails the strip, clear of the utility buttons that sit
+    // in the HUD's right-hand corner.
+    this.coordText?.setPosition(detail ? detailX + this.modeDetail.width + 12 : detailX, rowY);
+  }
+
   createLocateControls() {
     this.markButton = createButton(this, 0, 0, 'MARK TARGET', () => this.armMarking(), { width: 170, height: 36, fontSize: 13, variant: 'tactical' });
     this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success' });
@@ -129,13 +187,25 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createCountControls() {
-    this.decrementButton = createButton(this, 0, 0, '−', () => this.adjustAnswer(-1), { width: 46, height: 38, fontSize: 22, variant: 'tactical', accent: false });
-    this.incrementButton = createButton(this, 0, 0, '+', () => this.adjustAnswer(1), { width: 46, height: 38, fontSize: 22, variant: 'tactical', accent: false });
-    this.submitCountButton = createButton(this, 0, 0, 'SUBMIT COUNT', () => this.submitCount(), { width: 150, height: 38, fontSize: 12, variant: 'primary' });
+    // Two visually separate jobs: adjust the tally, then submit it.
+    this.decrementButton = createButton(this, 0, 0, '\u2212', () => this.adjustAnswer(-1), { width: 54, height: 46, fontSize: 26, variant: 'tactical', accent: false });
+    this.incrementButton = createButton(this, 0, 0, '+', () => this.adjustAnswer(1), { width: 54, height: 46, fontSize: 26, variant: 'tactical', accent: false });
+    this.submitCountButton = createButton(this, 0, 0, 'SUBMIT COUNT', () => this.submitCount(), { width: 168, height: 46, fontSize: 13, variant: 'primary' });
+
+    this.tallyFrame = this.add.rectangle(0, 0, 92, 46, hexToNumber(UI_TOKENS.color.black), 0.92)
+      .setStrokeStyle(2, hexToNumber(UI_TOKENS.color.phosphorDim))
+      .setScrollFactor(0).setDepth(1002);
     this.answerText = this.add.text(0, 0, '00', {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '22px', color: UI_TOKENS.text.positiveBright,
-      backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 14, y: 6 },
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '30px', fontStyle: 'bold',
+      color: UI_TOKENS.text.positiveBright, letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
+
+    const caption = (text) => this.add.text(0, 0, text, {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '9px', color: UI_TOKENS.text.faint, letterSpacing: 2,
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1002);
+    this.adjustCaption = caption('ADJUST');
+    this.submitCaption = caption('SUBMIT');
+
     this.countButtons = [this.decrementButton, this.incrementButton, this.submitCountButton];
   }
 
@@ -143,15 +213,22 @@ export default class ReconScene extends Phaser.Scene {
     this.markButton = createButton(this, 0, 0, 'MARK CHANGE', () => this.armMarking(), { width: 150, height: 36, fontSize: 12, variant: 'tactical' });
     this.confirmButton = createButton(this, 0, 0, 'CONFIRM', () => this.confirmCandidate(), { width: 112, height: 34, fontSize: 12, variant: 'success' });
     this.cancelButton = createButton(this, 0, 0, 'CANCEL', () => this.cancelCandidate(), { width: 100, height: 34, fontSize: 12, variant: 'danger' });
-    this.passButton = createButton(this, 0, 0, 'VIEW PASS B', () => this.togglePass(), { width: 142, height: 36, fontSize: 11, variant: 'tactical' });
-    this.splitButton = createButton(this, 0, 0, 'SPLIT VIEW', () => this.toggleSplitView(), { width: 132, height: 36, fontSize: 11, variant: 'tactical' });
+    // Segmented control: the active pass is a selected segment, not a label
+    // the analyst has to read and invert.
+    this.passAButton = createButton(this, 0, 0, 'PASS A', () => this.setActivePass('A'), { width: 96, height: 40, fontSize: 12, variant: 'success' });
+    this.passBButton = createButton(this, 0, 0, 'PASS B', () => this.setActivePass('B'), { width: 96, height: 40, fontSize: 12, variant: 'tactical' });
+    this.passAButton.setSelected(true);
+    this.passCaption = this.add.text(0, 0, 'COMPARE', {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '9px', color: UI_TOKENS.text.faint, letterSpacing: 2,
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1002);
+    this.splitButton = createButton(this, 0, 0, 'SPLIT VIEW', () => this.toggleSplitView(), { width: 132, height: 40, fontSize: 11, variant: 'tactical' });
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.passStatusText = this.add.text(0, 0, '', {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '13px', color: GAME_CONFIG.palette.offWhite,
-      backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 10, y: 6 },
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '11px', color: UI_TOKENS.text.muted,
+      backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 10, y: 5 }, letterSpacing: 1,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1003);
-    this.changeButtons = [this.markButton, this.confirmButton, this.cancelButton, this.passButton, this.splitButton];
+    this.changeButtons = [this.markButton, this.confirmButton, this.cancelButton, this.passAButton, this.passBButton, this.splitButton];
   }
 
   createGridOverlay() {
@@ -165,12 +242,32 @@ export default class ReconScene extends Phaser.Scene {
   createMissionOverlay() {
     if (!this.isCountMode || !this.mission.region) return;
     const region = this.mission.region;
+    const right = region.x + region.width;
+    const bottom = region.y + region.height;
+
+    // The count area is defined by dimming everything outside it and bracketing
+    // its corners. Nothing inside is touched, so no individual object is hinted.
     this.missionOverlay = this.add.graphics().setDepth(920);
-    this.missionOverlay.fillStyle(0xf6f6ee, 0.045).fillRect(region.x, region.y, region.width, region.height);
-    this.missionOverlay.lineStyle(5, 0xf6f6ee, 0.86).strokeRect(region.x, region.y, region.width, region.height);
-    this.regionLabel = this.add.text(region.x + 12, region.y + 12, `${region.label} // COUNT AREA`, {
-      fontFamily: GAME_CONFIG.typography.family, fontSize: '18px', color: GAME_CONFIG.palette.offWhite,
-      backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 8, y: 5 },
+    this.missionOverlay.fillStyle(hexToNumber(UI_TOKENS.color.black), 0.42);
+    this.missionOverlay.fillRect(0, 0, this.map.width, region.y);
+    this.missionOverlay.fillRect(0, bottom, this.map.width, Math.max(0, this.map.height - bottom));
+    this.missionOverlay.fillRect(0, region.y, region.x, region.height);
+    this.missionOverlay.fillRect(right, region.y, Math.max(0, this.map.width - right), region.height);
+
+    this.missionOverlay.lineStyle(2, hexToNumber(UI_TOKENS.color.offWhite), 0.5);
+    this.missionOverlay.strokeRect(region.x, region.y, region.width, region.height);
+
+    const arm = Math.min(120, Math.min(region.width, region.height) * 0.18);
+    this.missionOverlay.lineStyle(6, hexToNumber(UI_TOKENS.color.phosphorBright), 0.9);
+    [[region.x, region.y, 1, 1], [right, region.y, -1, 1],
+      [region.x, bottom, 1, -1], [right, bottom, -1, -1]].forEach(([x, y, sx, sy]) => {
+      this.missionOverlay.lineBetween(x, y, x + arm * sx, y);
+      this.missionOverlay.lineBetween(x, y, x, y + arm * sy);
+    });
+
+    this.regionLabel = this.add.text(region.x + 14, region.y + 14, `${region.label} \u00b7 COUNT AREA`, {
+      fontFamily: GAME_CONFIG.typography.family, fontSize: '16px', color: UI_TOKENS.text.positiveBright,
+      backgroundColor: GAME_CONFIG.palette.black, padding: { x: 8, y: 5 }, letterSpacing: 1,
     }).setDepth(921);
   }
 
@@ -372,11 +469,22 @@ export default class ReconScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * Height of this mode's bottom control rail. One source of truth: the
+   * enhanced scene draws the rail at this height and taps are guarded by it,
+   * so the guarded band and the drawn band can never drift apart.
+   */
+  railHeight(width = this.scale.gameSize.width) {
+    const compact = width < 680;
+    if (this.isCountMode) return compact ? 124 : 78;
+    if (this.isChangeMode) return compact ? 128 : 78;
+    return compact ? 66 : 0;
+  }
+
   isHudPoint(pointer) {
     const { y } = this.toHudSpace(pointer);
     if (y < GAME_CONFIG.recon.hudHeight) return true;
-    const compact = this.scale.gameSize.width < 680;
-    const bottomGuard = this.isCountMode ? 72 : (this.isChangeMode ? (compact ? 126 : 72) : (compact ? 64 : 0));
+    const bottomGuard = this.railHeight();
     return bottomGuard > 0 && y > this.scale.gameSize.height - bottomGuard;
   }
 
@@ -396,8 +504,13 @@ export default class ReconScene extends Phaser.Scene {
       return;
     }
     this.incorrectSubmissions += 1;
-    this.flashStatus(`COUNT UNVERIFIED // ATTEMPT ${this.incorrectSubmissions + 1}`);
+    this.refreshModeStrip();
+    this.onCountRejected();
+    this.flashStatus('COUNT UNVERIFIED');
   }
+
+  /** Overridden by the enhanced scene to acknowledge a rejected tally. */
+  onCountRejected() {}
 
   armMarking() {
     if (this.isCountMode || this.paused || this.missionEnded) return;
@@ -409,6 +522,7 @@ export default class ReconScene extends Phaser.Scene {
     this.cancelButton.setVisible(false);
     this.markButton.setLabel(this.isChangeMode ? 'SELECT CHANGE' : 'SELECT OBJECT');
     this.markButton.setSelected(true);
+    this.refreshModeStrip();
     this.flashStatus(this.isChangeMode ? 'CHANGE MARKING ACTIVE // TAP THE CHANGED OBJECT' : 'MARKING ACTIVE // TAP AN OBJECT');
   }
 
@@ -423,6 +537,7 @@ export default class ReconScene extends Phaser.Scene {
     this.confirmButton.setVisible(true);
     this.cancelButton.setVisible(true);
     this.markButton.setLabel('MARK PENDING');
+    this.refreshModeStrip();
     const passLabel = this.isChangeMode ? ` // ${context.passId === 'B' ? 'PASS B' : 'PASS A'}` : '';
     this.flashStatus(entity ? `IDENTIFICATION READY${passLabel} // CONFIRM OR CANCEL` : `NO CLEAR OBJECT${passLabel} // CONFIRM OR CANCEL`);
   }
@@ -453,6 +568,7 @@ export default class ReconScene extends Phaser.Scene {
     this.cancelButton.setVisible(false);
     this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
     this.markButton.setSelected(false);
+    this.refreshModeStrip();
     this.flashStatus('MARK CANCELLED');
   }
 
@@ -479,6 +595,7 @@ export default class ReconScene extends Phaser.Scene {
     this.falseIdentifications += 1;
     this.flashStatus(`${this.isChangeMode ? 'CHANGE UNVERIFIED' : 'UNVERIFIED'} // FALSE ID ${this.falseIdentifications}`);
     this.candidate = null;
+    this.refreshModeStrip();
     this.onIdentificationResolved(result, mark);
     this.resolvingIdentification = false;
   }
@@ -500,22 +617,30 @@ export default class ReconScene extends Phaser.Scene {
       return;
     }
     if (this.candidate) this.cancelCandidate();
+    const changed = this.activePass !== passId;
     this.activePass = passId;
     this.worldA.root.setVisible(passId === 'A');
     this.worldB.root.setVisible(passId === 'B');
-    this.passButton.setLabel(passId === 'A' ? 'VIEW PASS B' : 'VIEW PASS A');
+    // The live pass is a lit segment; the other is plain equipment.
+    this.passAButton.setSelected(passId === 'A').setVariant(passId === 'A' ? 'success' : 'tactical');
+    this.passBButton.setSelected(passId === 'B').setVariant(passId === 'B' ? 'success' : 'tactical');
+    this.refreshModeStrip();
     this.updatePassStatus();
+    if (changed) this.onPassSwitched(passId);
     if (this.debugTargets) this.drawDebugBounds();
     if (showMessage) this.flashStatus(`${passId === 'A' ? 'PASS A' : 'PASS B'} ACQUIRED`);
   }
 
+  /** Overridden by the enhanced scene to mask the A/B swap. */
+  onPassSwitched() {}
+
   updatePassStatus() {
     if (!this.isChangeMode || !this.passStatusText) return;
     if (this.splitView) {
-      this.passStatusText.setText('SPLIT COMPARISON // LEFT: PASS A // RIGHT: PASS B');
+      this.passStatusText.setText('SPLIT \u00b7 LEFT PASS A \u00b7 RIGHT PASS B');
     } else {
       const pass = this.activePass === 'A' ? this.mission.passA : this.mission.passB;
-      this.passStatusText.setText(`${pass?.label ?? `PASS ${this.activePass}`} // ${pass?.time ?? 'TIME UNKNOWN'}`);
+      this.passStatusText.setText(`${pass?.label ?? `PASS ${this.activePass}`} \u00b7 ${pass?.time ?? 'TIME UNKNOWN'}`);
     }
   }
 
@@ -548,7 +673,9 @@ export default class ReconScene extends Phaser.Scene {
     this.cameras.main.ignore(this.worldB.root);
     this.compareCamera.ignore(this.worldA.root);
     this.compareCamera.ignore(this.getUiObjects());
-    this.passButton.setVisible(false);
+    this.passAButton.setVisible(false);
+    this.passBButton.setVisible(false);
+    this.passCaption.setVisible(false);
     this.splitButton.setLabel('EXIT SPLIT').setSelected(true);
     this.updatePassStatus();
     this.onResize(this.scale.gameSize);
@@ -568,7 +695,9 @@ export default class ReconScene extends Phaser.Scene {
     this.worldA.root.setVisible(this.activePass === 'A');
     this.worldB.root.setVisible(this.activePass === 'B');
     this.atmosphereGraphics?.setVisible(true);
-    this.passButton.setVisible(true);
+    this.passAButton.setVisible(true);
+    this.passBButton.setVisible(true);
+    this.passCaption.setVisible(true);
     this.splitButton.setLabel('SPLIT VIEW').setSelected(false);
     this.updatePassStatus();
     this.onResize(this.scale.gameSize);
@@ -576,7 +705,8 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   getUiObjects() {
-    const objects = [this.hud, this.statusText, this.answerText, this.passStatusText, this.atmosphereGraphics];
+    const objects = [this.hud, this.statusText, this.answerText, this.passStatusText, this.atmosphereGraphics,
+      this.tallyFrame, this.adjustCaption, this.submitCaption, this.passCaption];
     const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
     buttons.forEach((button) => objects.push(...button.getObjects()));
     return objects.filter(Boolean);
@@ -656,8 +786,7 @@ export default class ReconScene extends Phaser.Scene {
     const world = context.camera.getWorldPoint(pointer.x, pointer.y);
     const x = Phaser.Math.Clamp(Math.round(world.x), 0, this.map.width);
     const y = Phaser.Math.Clamp(Math.round(world.y), 0, this.map.height);
-    const passText = this.isChangeMode ? ` // ${context.passId ?? this.activePass}` : '';
-    this.coordText.setText(`MAP: ${this.map.id.toUpperCase()}${passText} // GRID: ${String(x).padStart(4, '0')} / ${String(y).padStart(4, '0')}`);
+    this.coordText.setText(`${String(x).padStart(4, '0')} / ${String(y).padStart(4, '0')}`);
   }
 
   resetCamera(showMessage = true) {
@@ -687,6 +816,7 @@ export default class ReconScene extends Phaser.Scene {
     }
     this.pauseButton.setLabel(this.paused ? 'RESUME' : 'PAUSE').setVariant(this.paused ? 'warning' : 'secondary');
     this.setMissionControlsEnabled(!this.paused);
+    this.refreshModeStrip();
     this.flashStatus(this.paused ? 'RECON PAUSED // ESC TO RESUME' : 'RECON RESUMED');
   }
 
@@ -721,7 +851,8 @@ export default class ReconScene extends Phaser.Scene {
     const { width, height } = gameSize;
     this.hudBackground.width = width;
     this.hudBorder.width = width;
-    this.timerText.setPosition(width - 16, 13);
+    const readoutRight = this.isChangeMode && this.splitView ? Math.floor(width / 2) - 16 : width - 16;
+    this.timerText.setPosition(readoutRight, 11);
     if (!this.splitView) this.redrawAtmosphere(width, height);
     const compact = width < 680;
 
@@ -735,41 +866,81 @@ export default class ReconScene extends Phaser.Scene {
     }
 
     if (this.isCountMode) {
-      const y = height - 34;
-      this.decrementButton.setPosition(compact ? 34 : width / 2 - 170, y);
-      this.answerText.setPosition(compact ? 86 : width / 2 - 112, y);
-      this.incrementButton.setPosition(compact ? 138 : width / 2 - 54, y);
-      this.submitCountButton.setPosition(compact ? width - 94 : width / 2 + 75, y);
-      this.resetButton.setPosition(compact ? width / 2 - 70 : width - 181, compact ? height - 86 : 48);
-      this.pauseButton.setPosition(compact ? width / 2 + 70 : width - 58, compact ? height - 86 : 48);
-      this.statusText.setPosition(width / 2, height - (compact ? 136 : 84));
+      // Tally module (adjust) sits apart from the submit action, each captioned.
+      const controlY = compact ? height - 76 : height - 34;
+      const captionY = controlY - 33;
+      const step = compact ? 66 : 78;
+      const stepperWidth = compact ? 48 : 54;
+      const tallyWidth = compact ? 76 : 92;
+      const submitWidth = compact ? 126 : 168;
+      const groupCentre = compact ? 22 + stepperWidth / 2 + step : width / 2 - 150;
+      const submitX = compact ? width - 18 - submitWidth / 2 : width / 2 + 130;
+
+      this.decrementButton.resize({ width: stepperWidth }).setPosition(groupCentre - step, controlY);
+      this.tallyFrame.setSize(tallyWidth, compact ? 44 : 46).setPosition(groupCentre, controlY);
+      this.answerText.setFontSize(compact ? 26 : 30).setPosition(groupCentre, controlY);
+      this.incrementButton.resize({ width: stepperWidth }).setPosition(groupCentre + step, controlY);
+      this.adjustCaption.setPosition(groupCentre, captionY).setVisible(height >= 420);
+
+      this.submitCountButton.resize({ width: submitWidth }).setPosition(submitX, controlY);
+      this.submitCaption.setPosition(submitX, captionY).setVisible(height >= 420);
+
+      this.resetButton.setPosition(compact ? width / 2 - 70 : width - 181, compact ? height - 26 : 48);
+      this.pauseButton.setPosition(compact ? width / 2 + 70 : width - 58, compact ? height - 26 : 48);
+      this.statusText.setPosition(width / 2, height - (compact ? 134 : 88));
     } else if (this.isChangeMode) {
       const split = this.splitView;
       const usableWidth = split ? Math.floor(width / 2) : width;
-      const y = height - 34;
-      this.markButton.setPosition(split ? usableWidth * 0.20 : (compact ? 78 : width / 2 - 150), y);
-      this.passButton.setPosition(compact ? width - 82 : width / 2, y);
-      this.splitButton.setPosition(split ? usableWidth * 0.78 : width / 2 + 150, y);
+      const controlY = compact ? height - 76 : height - 34;
+      this.markButton.resize({ width: compact ? 128 : 150 })
+        .setPosition(split ? usableWidth * 0.22 : (compact ? 18 + 64 : width / 2 - 210), controlY);
+
+      const segmentWidth = compact ? 84 : 96;
+      const segmentCentre = compact ? width - 22 - segmentWidth : width / 2 + 10;
+      this.passAButton.resize({ width: segmentWidth }).setPosition(segmentCentre - segmentWidth / 2 - 2, controlY);
+      this.passBButton.resize({ width: segmentWidth }).setPosition(segmentCentre + segmentWidth / 2 + 2, controlY);
+      this.passCaption.setPosition(segmentCentre, controlY - 32).setVisible(!split && height >= 420);
+      this.splitButton.setPosition(split ? usableWidth * 0.78 : width / 2 + 190, controlY);
       this.splitButton.setVisible(width >= GAME_CONFIG.change.splitViewMinWidth);
-      if (split) this.passButton.setVisible(false);
-      else this.passButton.setVisible(true);
-      this.resetButton.setPosition(split ? usableWidth - 170 : (compact ? width / 2 - 70 : width - 181), compact ? height - 84 : 48);
-      this.pauseButton.setPosition(split ? usableWidth - 55 : (compact ? width / 2 + 70 : width - 58), compact ? height - 84 : 48);
+      this.passAButton.setVisible(!split);
+      this.passBButton.setVisible(!split);
+
+      this.resetButton.setPosition(split ? usableWidth - 170 : (compact ? width / 2 - 70 : width - 181), compact ? height - 26 : 48);
+      this.pauseButton.setPosition(split ? usableWidth - 55 : (compact ? width / 2 + 70 : width - 58), compact ? height - 26 : 48);
       this.confirmButton.setPosition(split ? usableWidth / 2 - 60 : width / 2 - 60, height - (compact ? 132 : 82));
       this.cancelButton.setPosition(split ? usableWidth / 2 + 60 : width / 2 + 60, height - (compact ? 132 : 82));
-      this.passStatusText.setPosition(split ? usableWidth / 2 : width / 2, GAME_CONFIG.recon.hudHeight + 24);
+      this.passStatusText.setPosition(split ? usableWidth / 2 : width / 2, GAME_CONFIG.recon.hudHeight + 20);
       this.statusText.setPosition(split ? usableWidth / 2 : width / 2, height - (compact ? 178 : 126));
     } else {
-      this.markButton.setPosition(compact ? 88 : width - 340, compact ? height - 34 : 48);
-      this.resetButton.setPosition(compact ? width / 2 : width - 181, compact ? height - 34 : 48);
-      this.pauseButton.setPosition(compact ? width - 56 : width - 58, compact ? height - 34 : 48);
+      // Phone rail: the primary action leads, the two utilities share the tail
+      // of the row at their own smaller sizes.
+      this.markButton.resize({ width: compact ? 150 : 170 });
+      this.resetButton.resize({ width: compact ? 104 : 124 });
+      this.pauseButton.resize({ width: compact ? 84 : 96 });
+      this.markButton.setPosition(compact ? 93 : width - 340, compact ? height - 34 : 48);
+      this.resetButton.setPosition(compact ? width - 162 : width - 181, compact ? height - 34 : 48);
+      this.pauseButton.setPosition(compact ? width - 60 : width - 58, compact ? height - 34 : 48);
       this.confirmButton.setPosition(width / 2 - 60, height - (compact ? 86 : 40));
       this.cancelButton.setPosition(width / 2 + 60, height - (compact ? 86 : 40));
       this.statusText.setPosition(width / 2, height - (compact ? 128 : 88));
     }
 
-    this.objectiveText.setVisible(width >= 620);
-    this.coordText.setVisible(width >= 420);
+    const narrowHud = width < 680;
+    // The objective wraps clear of the timer, including in split view where
+    // the readouts move into the pane the analyst still controls.
+    this.objectiveText
+      .setFontSize(narrowHud ? 10 : 15)
+      .setWordWrapWidth(Math.max(150, readoutRight - 120))
+      .setVisible(width >= 320);
+    // The chip follows the objective block, so a long objective that wraps to
+    // three lines on a phone can never sit under it.
+    const chipY = Phaser.Math.Clamp(13 + this.objectiveText.height + 3, 34, 56);
+    this.modeChip.setPosition(16, chipY).setVisible(width >= 320);
+    this.modeDetail.setY(chipY + 9);
+    this.coordText.setY(chipY + 9);
+    this.modeDetail.setVisible(width >= 470);
+    this.coordText.setVisible(width >= 560);
+    this.refreshModeStrip();
   }
 
   cleanup() {

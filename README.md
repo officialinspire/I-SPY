@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A/13B/13C/13D polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13E polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
 
 I SPY currently includes:
 
@@ -37,7 +37,7 @@ I SPY currently includes:
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, and `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, and `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass.
 
 ## Interaction design system
 
@@ -78,6 +78,12 @@ One sun direction (upper left) gives structures depth without perspective, and i
 Phase 13D gives the recon workspace four distinct interaction states. Normal analysis shows a grab cursor and a phosphor HUD rule; marking active switches to a crosshair, an amber HUD rule, a `MARKING ACTIVE` banner and a reticle that tracks the pointer; a placed mark draws a neutral candidate reticle with distinct CONFIRM and CANCEL actions; and a resolved call turns that mark phosphor or rust in place.
 
 Marking now resolves on pointer release after a drag-threshold check, so dragging pans the imagery with marking still armed and only a tap marks. Presses that land on a HUD control never reach the map, the HUD tap guard is converted into HUD space so it matches where the HUD is actually drawn, and confirmation is single-shot. Touch gets a slightly larger invisible selection tolerance than a mouse while authored metadata bounds stay authoritative — no sprite is enlarged and no hitbox changes. Nothing reacts to what is under the pointer, and result feedback lands only on the analyst's own mark, so no interaction leaks answers.
+
+## Mode tools
+
+Phase 13E gives the workspace one information hierarchy — objective, timer, mode state, primary action, secondary utilities — and then makes each mode's tools its own. A mode chip under the objective carries state (`LOCATE · MARKING`), tinted amber while marking, phosphor while a mark is pending and rust while held, and each mode shows one counter rather than a paragraph.
+
+COUNT defines its area by dimming everything outside it with phosphor corner brackets, and separates a captioned ADJUST group (larger steppers, a bordered tally readout) from a captioned SUBMIT action; a refused total turns the readout muted red until the number changes, without interrupting inspection. CHANGE replaces the VIEW PASS toggle with a PASS A | PASS B segmented control whose live segment is lit, and switching passes plays a brief opaque wipe that never shows both passes at once. Split view labels each pane with its own pass and time and keeps the two cameras exactly synchronised.
 
 ## Release validation
 
@@ -235,3 +241,4 @@ npm run build
 - Phase 13B — Main menu operations-console redesign ✅
 - Phase 13C — Reconnaissance graphics and environmental art ✅
 - Phase 13D — Recon interaction and marking polish ✅
+- Phase 13E — Mode-specific gameplay UX ✅
