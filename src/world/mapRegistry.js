@@ -2,6 +2,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { MAP_CATALOG } from './mapCatalog.js';
 import { validateReconMap } from './reconMapSchema.js';
 import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json';
+import frostlineRelay from '../../assets/maps/frostline-relay.json';
 
 /**
  * Registry of playable reconnaissance sectors.
@@ -15,6 +16,7 @@ import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json';
 /** Catalog id -> bundled map JSON. The only place map data is imported. */
 const MAP_DATA = Object.freeze({
   'woodland-corridor-7': woodlandCorridor7,
+  'frostline-relay': frostlineRelay,
 });
 
 function buildEntry(descriptor) {

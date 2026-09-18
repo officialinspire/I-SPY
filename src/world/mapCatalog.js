@@ -19,6 +19,15 @@ export const MAP_CATALOG = Object.freeze([
     recommendedZoom: 0.75,
     source: 'assets/maps/woodland-corridor-7.json',
   }),
+  Object.freeze({
+    id: 'frostline-relay',
+    title: 'FROSTLINE RELAY',
+    environment: 'ALPINE SNOW',
+    description: 'A snow valley pinched between two rocky massifs, carrying a telegraph line and a climbing service road up to a relay station on the ridge.',
+    difficulty: 2,
+    recommendedZoom: 0.75,
+    source: 'assets/maps/frostline-relay.json',
+  }),
 ]);
 
 export function getCatalogEntry(id) {

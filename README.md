@@ -104,7 +104,9 @@ exists (id, title, environment, description, difficulty, recommended zoom, sourc
 registry entry or raw data, and `src/world/reconMapSchema.js` holds `validateReconMap()` free of any
 map data so the release validator can run the game's own rules over every registered map in Node.
 
-A mission carries a `mapId` and the recon scene builds *that* sector; an unknown id warns and falls
+Two sectors ship: **WOODLAND CORRIDOR 7** (rural woodland) and **FROSTLINE RELAY** (alpine snow, a
+valley between two rocky massifs with a relay station on the ridge). A mission carries a `mapId` and
+the recon scene builds *that* sector; an unknown id warns and falls
 back to the default rather than throwing. The generator's map is never drawn from the seeded RNG, so
 choosing a sector cannot shift the random stream and a seed keeps producing the same mission — 303
 seeded missions hash identically across the refactor. `?map=<id>` joins `?seed=` and `?mode=` as a
@@ -288,3 +290,4 @@ npm run build
 - Phase 13F — Microinteraction and feedback polish ✅
 - Phase 13 RC — Release-candidate audit and fixes ✅
 - Phase 15A — Multi-map architecture and map registry ✅
+- Phase 15B — FROSTLINE RELAY authored map ✅
