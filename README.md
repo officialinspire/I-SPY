@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A/13B polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A/13B/13C/13D polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
 
 I SPY currently includes:
 
@@ -19,6 +19,7 @@ I SPY currently includes:
 - Responsive intelligence-console layout with compact/short-screen handling
 - Device safe-area handling for notches and home-indicator regions
 - Four-tone Cold War / old-handheld visual language for reconnaissance imagery
+- Seamless terrain, top-down roof plans and silhouette-readable vehicles across the sprite library
 - Centralized UI design tokens with semantic button variants and restrained equipment color
 - Reconnaissance operations-console main menu with mode cards, icons and status readouts
 - Satellite-link acquisition boot sequence and classified intelligence-terminal presentation
@@ -36,7 +37,7 @@ I SPY currently includes:
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, and `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, and `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass.
 
 ## Interaction design system
 
@@ -65,6 +66,18 @@ Phase 12C improves composition and responsiveness across Boot, Main Menu, Settin
 CHANGE split view has a stronger center divider plus explicit PASS A / PASS B labels while preserving the existing synchronized camera behavior. Phase 12D adds device safe-area handling, hardens button press-state cleanup, and stacks the debrief score beneath the title on narrow displays to prevent overlap.
 
 Gameplay coordinates, validation, scoring, authored map data, and generator logic are unchanged by the Phase 12 presentation work.
+
+## Reconnaissance art
+
+Phase 13C re-authored the four gameplay sprite sheets. Terrain tiles are seamless and full-bleed instead of bordered squares, so the map no longer reads as a grid; roads, tracks, fences, rail and pipelines are authored east-west and rotated for north-south runs; buildings are top-down roof plans with a ridge, two roof planes and an eaves shadow; and every vehicle heads east with a silhouette distinct enough to identify without any highlighting.
+
+One sun direction (upper left) gives structures depth without perspective, and intermediate values are dithered from the four tones rather than faked with opacity. Clues stay quiet — disturbed soil, camouflage netting and smoke are dithered mid-tones — and civilian decoys are built from the same parts as the military vehicles, so nothing on the map identifies a target for the player. Frame names, frame sizes, map positions, hitboxes and entity metadata are unchanged.
+
+## Recon interaction
+
+Phase 13D gives the recon workspace four distinct interaction states. Normal analysis shows a grab cursor and a phosphor HUD rule; marking active switches to a crosshair, an amber HUD rule, a `MARKING ACTIVE` banner and a reticle that tracks the pointer; a placed mark draws a neutral candidate reticle with distinct CONFIRM and CANCEL actions; and a resolved call turns that mark phosphor or rust in place.
+
+Marking now resolves on pointer release after a drag-threshold check, so dragging pans the imagery with marking still armed and only a tap marks. Presses that land on a HUD control never reach the map, the HUD tap guard is converted into HUD space so it matches where the HUD is actually drawn, and confirmation is single-shot. Touch gets a slightly larger invisible selection tolerance than a mouse while authored metadata bounds stay authoritative — no sprite is enlarged and no hitbox changes. Nothing reacts to what is under the pointer, and result feedback lands only on the analyst's own mark, so no interaction leaks answers.
 
 ## Release validation
 
@@ -220,3 +233,5 @@ npm run build
 - Phase 12D — Final visual QA and deployment gate ✅
 - Phase 13A — Interaction design system and shared button overhaul ✅
 - Phase 13B — Main menu operations-console redesign ✅
+- Phase 13C — Reconnaissance graphics and environmental art ✅
+- Phase 13D — Recon interaction and marking polish ✅
