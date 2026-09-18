@@ -10,6 +10,52 @@
   </head>
   <body>
     <main id="app" aria-label="I SPY game"></main>
+
+    <!--
+      Boot notice. Hidden unless the game's program fails to start, so a load
+      failure reports itself instead of leaving a black screen. It is removed
+      the moment Phaser puts its canvas on the page.
+    -->
+    <div id="boot-notice" hidden style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#0b0b0b;color:#e8e8df;font-family:'Courier New',Courier,monospace;z-index:2147483645;">
+      <div style="max-width:560px;border:1px solid #5d6672;padding:24px 22px;background:#14150f;">
+        <p style="margin:0 0 4px;font-size:13px;letter-spacing:2px;color:#b6852c;">IMAGERY CHANNEL UNAVAILABLE</p>
+        <p style="margin:0 0 16px;font-size:12px;letter-spacing:1px;color:#757575;">ANALYSIS CONSOLE FAILED TO INITIALISE</p>
+        <p style="margin:0 0 14px;font-size:13px;line-height:1.5;">The console could not load its program. Nothing is wrong with your device.</p>
+        <p style="margin:0 0 16px;font-size:11px;line-height:1.5;color:#bdbdbd;word-break:break-all;"><code id="boot-detail">NO DIAGNOSTIC AVAILABLE</code></p>
+        <p style="margin:0;font-size:11px;line-height:1.6;color:#757575;">SITE ADMINISTRATOR: this host is serving repository source files instead of the built application. Set Settings &rarr; Pages &rarr; Build and deployment &rarr; Source to &ldquo;GitHub Actions&rdquo;, then re-run the deploy workflow.</p>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var detail = '';
+        function note(message) { if (!detail && message) detail = String(message); }
+        window.addEventListener('error', function (event) {
+          var target = event.target;
+          if (target && target !== window && target.src) note('Failed to load ' + target.src);
+          else note(event.message);
+        }, true);
+        window.addEventListener('unhandledrejection', function (event) {
+          note(event.reason && event.reason.message ? event.reason.message : event.reason);
+        });
+
+        var ticks = 0;
+        var poll = window.setInterval(function () {
+          var notice = document.getElementById('boot-notice');
+          if (!notice) { window.clearInterval(poll); return; }
+          if (document.querySelector('#app canvas')) {
+            notice.hidden = true;
+            window.clearInterval(poll);
+            return;
+          }
+          ticks += 1;
+          if (ticks < 10) return;
+          var slot = document.getElementById('boot-detail');
+          if (slot && detail) slot.textContent = detail;
+          notice.hidden = false;
+        }, 500);
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
