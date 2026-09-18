@@ -106,6 +106,22 @@ npm run validate
 
 It checks version alignment, viewport/safe-area configuration, authored-map structure, required spawn tags, the 80-frame sprite manifest, map sprite resolution/bounds, unique entity IDs, authored mission-target integrity, and core scene registration. GitHub Pages runs this validator automatically before the production Vite build.
 
+## Deployment
+
+`.github/workflows/deploy-pages.yml` validates, builds and publishes `dist/` to GitHub Pages on
+every push to `main`.
+
+**The repository's Pages source must be set to "GitHub Actions"** (Settings → Pages → Build and
+deployment → Source). With the alternative setting, "Deploy from a branch", Pages serves the
+repository files verbatim instead of the built application: visitors receive the source
+`index.html`, whose `<script type="module" src="/src/main.js">` points at the un-bundled dev entry.
+That request returns GitHub's 404 page, the browser rejects the module for its `text/html` MIME
+type, and the site renders as a black screen — while the deploy workflow still reports success,
+because it uploads and registers its artifact correctly either way.
+
+If the site is ever blank, `index.html` shows a boot notice naming the failed resource after five
+seconds, which distinguishes this misconfiguration from an application error.
+
 ## Audio, feedback, and settings
 
 Phase 10 adds a dependency-free Web Audio feedback system with restrained terminal/radio cues for UI taps, imagery acquisition, marking, confirmations, incorrect identifications, the final ten seconds, mission completion, and mission failure.
