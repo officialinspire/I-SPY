@@ -37,6 +37,15 @@ export const MAP_CATALOG = Object.freeze([
     recommendedZoom: 0.75,
     source: 'assets/maps/riverworks-sector.json',
   }),
+  Object.freeze({
+    id: 'border-farms',
+    title: 'BORDER FARMS',
+    environment: 'AGRICULTURAL BORDERLAND',
+    description: 'An open patchwork of crop fields divided by hedgerows and farm lanes, with a village farm compound, a muddy ditch crossing and a fortified post along the eastern border fence.',
+    difficulty: 4,
+    recommendedZoom: 0.75,
+    source: 'assets/maps/border-farms.json',
+  }),
 ]);
 
 export function getCatalogEntry(id) {
