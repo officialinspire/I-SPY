@@ -2333,7 +2333,14 @@
           "y": 900,
           "zoom": 0.75
         },
-        "authoringNotes": "Military activity is embedded in working farmland rather than fenced away from it: a fuel truck stands in the farmyard beside farm fuel tanks, an artillery piece sits under a net in a hedgerow, and military and civilian trucks share the same lanes. Nothing on the map is tall or dense enough to block a sightline."
+        "authoringNotes": "Military activity is embedded in working farmland rather than fenced away from it: a fuel truck stands in the farmyard beside farm fuel tanks, an artillery piece sits under a net in a hedgerow, and military and civilian trucks share the same lanes. Nothing on the map is tall or dense enough to block a sightline.",
+        "changeDetection": {
+          "destination": {
+            "x": 1400,
+            "y": 1212
+          },
+          "summary": "UTILITY JEEP moved from the border staging yard onto the southern farm lane."
+        }
       }
     }
   ]

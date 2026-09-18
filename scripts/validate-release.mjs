@@ -80,8 +80,24 @@ for (const entry of MAP_CATALOG) {
   const entityIds = (objectLayer?.items ?? []).map((item) => item.id).filter(Boolean);
   assert(entityIds.length === new Set(entityIds).size, `[${entry.id}] authored entity ids are unique`);
 
-  const missionTargetId = (map.layers ?? []).find((layer) => layer.id === 'metadata')?.data?.missionTargetId;
+  const metadata = (map.layers ?? []).find((layer) => layer.id === 'metadata')?.data ?? {};
+  const missionTargetId = metadata.missionTargetId;
   assert(!missionTargetId || entityIds.includes(missionTargetId), `[${entry.id}] authored mission target resolves: ${missionTargetId ?? 'none'}`);
+
+  // Every sector has to be playable in all three modes, so the change-detection
+  // subject must exist and its authored second-pass position must be a real,
+  // different place inside the sector.
+  const changeSubject = (objectLayer?.items ?? []).find((item) => item.id === 'jeep-01');
+  assert(Boolean(changeSubject), `[${entry.id}] change-detection subject jeep-01 exists`);
+  const destination = metadata.changeDetection?.destination;
+  if (changeSubject && destination) {
+    const width = changeSubject.width ?? GAME_CONFIG.sprites.frameSize;
+    const height = changeSubject.height ?? GAME_CONFIG.sprites.frameSize;
+    assert(destination.x >= 0 && destination.y >= 0 && destination.x + width <= map.width && destination.y + height <= map.height,
+      `[${entry.id}] change-detection destination sits inside the sector`);
+    assert(Math.hypot(destination.x - changeSubject.x, destination.y - changeSubject.y) >= 200,
+      `[${entry.id}] change-detection destination is a visible move`);
+  }
 }
 
 ['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'ResultsScene'].forEach((sceneName) => {

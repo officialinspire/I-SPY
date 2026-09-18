@@ -3554,7 +3554,14 @@
           "y": 820,
           "zoom": 0.75
         },
-        "authoringNotes": "Military logistics are mixed into working industry rather than fenced off from it: military and civilian trucks share the crossing and the yards, the heavy transporter sits under a camouflage net among ordinary crates and barrels, and fuel vehicles stand beside civilian fuel storage. No spawn zone overlaps the channel."
+        "authoringNotes": "Military logistics are mixed into working industry rather than fenced off from it: military and civilian trucks share the crossing and the yards, the heavy transporter sits under a camouflage net among ordinary crates and barrels, and fuel vehicles stand beside civilian fuel storage. No spawn zone overlaps the channel.",
+        "changeDetection": {
+          "destination": {
+            "x": 2000,
+            "y": 1330
+          },
+          "summary": "UTILITY JEEP moved from the east bank road into the fenced fuel depot."
+        }
       }
     }
   ]

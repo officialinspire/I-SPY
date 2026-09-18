@@ -6,6 +6,7 @@ const DEFAULTS = Object.freeze({
   hapticsEnabled: true,
   scanlinesEnabled: true,
   imageGrainEnabled: true,
+  sector: 'any',
 });
 
 let state = load();
@@ -17,6 +18,8 @@ function sanitize(input = {}) {
     hapticsEnabled: input.hapticsEnabled !== false,
     scanlinesEnabled: input.scanlinesEnabled !== false,
     imageGrainEnabled: input.imageGrainEnabled !== false,
+    // Validated against the registry where it is used; stored as written.
+    sector: typeof input.sector === 'string' && input.sector.trim() ? input.sector.trim() : DEFAULTS.sector,
   };
 }
 

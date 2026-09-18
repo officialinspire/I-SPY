@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../runtime-config.js';
-import { getMapEntities } from '../world/reconMapSchema.js';
+import { getMapEntities, getMapMetadata } from '../world/reconMapSchema.js';
 import { resolveReconMap } from '../world/mapRegistry.js';
 
 export const CHANGE_TYPES = Object.freeze({
@@ -16,7 +16,20 @@ export function createChangeDetectionMission(mapSource) {
   const target = entities.find((entity) => entity.id === 'jeep-01');
   if (!target) throw new Error(`Change-detection mission target jeep-01 is missing from map '${map.id}'.`);
 
-  const destination = { x: 1515, y: 870 };
+  // Each sector authors where its jeep goes, so the second pass puts it on
+  // ground that sector actually has — a road, a yard, a lane. A sector that
+  // says nothing gets a derived move across the map, clamped inside bounds, so
+  // the tasking still works rather than failing to build.
+  const authored = getMapMetadata(map).changeDetection ?? {};
+  const destination = authored.destination ?? {
+    x: Math.round(Math.min(map.width - target.width - 40, Math.max(40, target.x > map.width / 2 ? target.x - map.width * 0.28 : target.x + map.width * 0.28))),
+    y: Math.round(Math.min(map.height - target.height - 40, Math.max(40, target.y + map.height * 0.06))),
+  };
+  const focus = authored.focus ?? {
+    x: Math.round((target.x + destination.x) / 2 + target.width / 2),
+    y: Math.round((target.y + destination.y) / 2 + target.height / 2),
+    zoom: 0.75,
+  };
   return {
     id: 'OP-SECOND-LOOK-001',
     operation: 'OPERATION SECOND LOOK',
@@ -30,11 +43,11 @@ export function createChangeDetectionMission(mapSource) {
     changeType: CHANGE_TYPES.VEHICLE_MOVED,
     passA: { id: 'A', label: 'PASS A', time: '05:12 ZULU' },
     passB: { id: 'B', label: 'PASS B', time: '05:27 ZULU' },
-    focus: { x: 1730, y: 760, zoom: 0.75 },
+    focus,
     passBOperations: [
       { type: 'move_entity', entityId: target.id, x: destination.x, y: destination.y },
     ],
-    changeSummary: `${target.label} moved from its original compound position to the eastern road approach.`,
+    changeSummary: authored.summary ?? `${target.label} moved position between the two reconnaissance passes.`,
     timeLimitSeconds: GAME_CONFIG.change.timeLimitSeconds,
   };
 }

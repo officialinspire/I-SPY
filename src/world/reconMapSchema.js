@@ -101,5 +101,14 @@ export function validateReconMap(map) {
   const metadata = getMapMetadata(map);
   if (metadata.missionTargetId && !entityIds.has(metadata.missionTargetId)) errors.push(`Metadata missionTargetId '${metadata.missionTargetId}' does not match an entity.`);
 
+  // A sector may author where its change-detection subject moves to. If it
+  // does, that spot has to be somewhere the analyst can actually look at.
+  const destination = metadata.changeDetection?.destination;
+  if (destination) {
+    const nominal = 64;
+    if (![destination.x, destination.y].every(Number.isFinite)) errors.push('Metadata changeDetection.destination needs numeric x and y.');
+    else if (destination.x < 0 || destination.y < 0 || destination.x + nominal > map.width || destination.y + nominal > map.height) errors.push('Metadata changeDetection.destination falls outside map bounds.');
+  }
+
   return { valid: errors.length === 0, errors, warnings };
 }

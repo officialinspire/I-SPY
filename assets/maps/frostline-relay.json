@@ -2046,7 +2046,14 @@
           "y": 760,
           "zoom": 0.75
         },
-        "authoringNotes": "Targets and decoys share the same four-tone palette and the same contexts: military and civilian vehicles both appear on the corridor, and four strategic installations share the ridge so no single silhouette gives an objective away."
+        "authoringNotes": "Targets and decoys share the same four-tone palette and the same contexts: military and civilian vehicles both appear on the corridor, and four strategic installations share the ridge so no single silhouette gives an objective away.",
+        "changeDetection": {
+          "destination": {
+            "x": 1960,
+            "y": 692
+          },
+          "summary": "UTILITY JEEP moved from the valley bench up onto the pass road."
+        }
       }
     }
   ]

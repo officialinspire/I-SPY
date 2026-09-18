@@ -9,6 +9,7 @@ import { createLocateMission } from '../game/locateMission.js';
 import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
+import { isAnySector, listSectorOptions, normalizeSector, sectorTitle } from '../world/mapRegistry.js';
 import { cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
 import { fadeIn } from '../ui/presentation.js';
 
@@ -22,6 +23,8 @@ const FIELD_GUIDE = [
   'COUNT    INSPECT THE MARKED GRID AND SUBMIT A TOTAL.',
   'CHANGE   COMPARE PASS A / PASS B AND MARK THE CHANGE.',
   '',
+  'SECTOR PICKS THE MAP. ANY SECTOR LETS THE SEED CHOOSE.',
+  '',
   'ESC PAUSES RECON. TAB WALKS CONSOLE CONTROLS.',
 ];
 
@@ -34,7 +37,7 @@ const TIERS = [
   {
     id: 'full',
     titleFont: 62, subtitleFont: 14, statusFont: 10, sectionFont: 10, readoutFont: 10,
-    primaryHeight: 84, primaryFont: 21, cardHeight: 78, cardFont: 16, descriptionFont: 10,
+    primaryHeight: 84, primaryFont: 21, sectorHeight: 34, sectorFont: 11, cardHeight: 78, cardFont: 16, descriptionFont: 10,
     systemHeight: 44, systemFont: 13, iconSize: 26,
     sectionGap: 20, labelGap: 16, headerGap: 22,
     showSubtitle: true, showStatus: true, showDescriptions: true, showReadout: true, showIcons: true,
@@ -42,7 +45,7 @@ const TIERS = [
   {
     id: 'mid',
     titleFont: 46, subtitleFont: 12, statusFont: 9, sectionFont: 9, readoutFont: 9,
-    primaryHeight: 72, primaryFont: 18, cardHeight: 68, cardFont: 14, descriptionFont: 9,
+    primaryHeight: 72, primaryFont: 18, sectorHeight: 32, sectorFont: 10, cardHeight: 68, cardFont: 14, descriptionFont: 9,
     systemHeight: 40, systemFont: 12, iconSize: 22,
     sectionGap: 15, labelGap: 13, headerGap: 16,
     showSubtitle: true, showStatus: true, showDescriptions: true, showReadout: true, showIcons: true,
@@ -50,7 +53,7 @@ const TIERS = [
   {
     id: 'tight',
     titleFont: 30, subtitleFont: 9, statusFont: 8, sectionFont: 8, readoutFont: 8,
-    primaryHeight: 54, primaryFont: 15, cardHeight: 50, cardFont: 12, descriptionFont: 8,
+    primaryHeight: 54, primaryFont: 15, sectorHeight: 28, sectorFont: 9, cardHeight: 50, cardFont: 12, descriptionFont: 8,
     systemHeight: 36, systemFont: 11, iconSize: 18,
     sectionGap: 10, labelGap: 9, headerGap: 11,
     showSubtitle: true, showStatus: true, showDescriptions: true, showReadout: false, showIcons: true,
@@ -58,12 +61,22 @@ const TIERS = [
   {
     id: 'minimal',
     titleFont: 26, subtitleFont: 9, statusFont: 8, sectionFont: 8, readoutFont: 8,
-    primaryHeight: 46, primaryFont: 14, cardHeight: 40, cardFont: 12, descriptionFont: 8,
+    primaryHeight: 46, primaryFont: 14, sectorHeight: 26, sectorFont: 9, cardHeight: 40, cardFont: 12, descriptionFont: 8,
     systemHeight: 32, systemFont: 10, iconSize: 16,
     sectionGap: 8, labelGap: 8, headerGap: 8,
     showSubtitle: false, showStatus: true, showDescriptions: false, showReadout: false, showIcons: false,
   },
 ];
+
+/** Gap between the tasking card and the sector row it is tied to. */
+function sectorGap(tier) {
+  return Math.round(tier.sectionGap * 0.4);
+}
+
+/** The tasking card plus its sector row, measured as one block. */
+function primaryBlockHeight(tier) {
+  return tier.primaryHeight + sectorGap(tier) + tier.sectorHeight;
+}
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() { super('MainMenu'); }
@@ -73,6 +86,11 @@ export default class MainMenuScene extends Phaser.Scene {
     this.reducedMotion = prefersReducedMotion();
     this.settingsOpen = false;
     this.noticeOpen = false;
+    // ?map= wins for this visit; otherwise the console remembers the last
+    // sector the analyst selected. Either way the registry has the last word,
+    // so a retired sector id degrades to ANY rather than to a broken launch.
+    const requestedMap = getGeneratorOptions().map;
+    this.sector = normalizeSector(requestedMap ?? getSettings().sector);
     this.chrome = createTerminalChrome(this, {
       station: 'INTELLIGENCE DIRECTORATE // IMAGE ANALYSIS STATION 04',
       classification: GAME_CONFIG.presentation.classification,
@@ -164,27 +182,40 @@ export default class MainMenuScene extends Phaser.Scene {
       onHover: (hovered) => this.setReadout(hovered ? this.readoutFor(this.randomCard) : DEFAULT_READOUT),
     });
 
+    // One restrained row under the tasking card: the sector the console is
+    // pointed at. It cycles rather than opening a menu, in the same idiom as
+    // the settings rows, so the primary action keeps the emphasis.
+    this.sectorButton = createButton(this, 0, 0, '', () => this.cycleSector(), {
+      variant: 'secondary',
+      pressSound: 'toggle',
+      width: 480,
+      height: 34,
+      fontSize: 11,
+      onHover: (hovered) => this.setReadout(hovered ? this.readoutFor(this.sectorButton) : DEFAULT_READOUT),
+    });
+    this.refreshSectorLabel();
+
     const modes = [
       {
         label: 'LOCATE',
         description: 'IDENTIFY A REQUESTED OBJECT.',
         icon: 'reticle',
         accentColor: UI_TOKENS.color.phosphorBright,
-        launch: () => this.scene.start('MissionBriefing', { mission: createLocateMission() }),
+        launch: () => this.scene.start('MissionBriefing', { mission: createLocateMission(this.authoredMapId()) }),
       },
       {
         label: 'COUNT',
         description: 'COUNT A REQUESTED CATEGORY INSIDE A GRID.',
         icon: 'grid_dot',
         accentColor: UI_TOKENS.color.steelBright,
-        launch: () => this.scene.start('MissionBriefing', { mission: createCountMission() }),
+        launch: () => this.scene.start('MissionBriefing', { mission: createCountMission(this.authoredMapId()) }),
       },
       {
         label: 'CHANGE',
         description: 'COMPARE TWO RECONNAISSANCE PASSES.',
         icon: 'scanline_v',
         accentColor: UI_TOKENS.color.amber,
-        launch: () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission() }),
+        launch: () => this.scene.start('MissionBriefing', { mission: createChangeDetectionMission(this.authoredMapId()) }),
       },
     ];
 
@@ -220,13 +251,14 @@ export default class MainMenuScene extends Phaser.Scene {
       onHover: (hovered) => this.setReadout(hovered ? 'SYSTEM CONFIGURATION' : DEFAULT_READOUT),
     });
     this.systemButtons = [this.howToPlayButton, this.settingsButton];
-    this.buttons = [this.randomCard, ...this.modeCards, ...this.systemButtons];
+    this.buttons = [this.randomCard, this.sectorButton, ...this.modeCards, ...this.systemButtons];
   }
 
   readoutFor(button) {
     if (!button) return DEFAULT_READOUT;
     if (button === this.howToPlayButton) return 'ANALYST FIELD GUIDE';
     if (button === this.settingsButton) return 'SYSTEM CONFIGURATION';
+    if (button === this.sectorButton) return this.sectorReadout();
     const description = button.description?.text;
     return description ? `${button.text.text} // ${description}` : button.text.text;
   }
@@ -380,9 +412,36 @@ export default class MainMenuScene extends Phaser.Scene {
     this.layout(this.scale.gameSize);
   }
 
+  /** The sector to author a fixed mission in; null means "wherever the console defaults to". */
+  authoredMapId() {
+    return isAnySector(this.sector) ? null : this.sector;
+  }
+
+  cycleSector() {
+    const options = listSectorOptions();
+    const index = options.findIndex((option) => option.id === this.sector);
+    this.sector = options[(index + 1) % options.length].id;
+    updateSettings({ sector: this.sector });
+    this.refreshSectorLabel();
+    this.setReadout(this.sectorReadout());
+  }
+
+  refreshSectorLabel() {
+    const any = isAnySector(this.sector);
+    this.sectorButton?.setLabel(`SECTOR // ${sectorTitle(this.sector)}`);
+    this.sectorButton?.setSelected(!any);
+  }
+
+  sectorReadout() {
+    const option = listSectorOptions().find((entry) => entry.id === this.sector);
+    return option?.environment ? `SECTOR // ${option.title} — ${option.environment}` : `SECTOR // ${sectorTitle(this.sector)}`;
+  }
+
   launchGeneratedMission() {
     const options = getGeneratorOptions();
-    const mission = createGeneratedMission({ seed: options.seed, mode: options.mode, map: options.map });
+    // `this.sector` already folds in ?map= and the stored preference, and is
+    // always either ANY or a registered id.
+    const mission = createGeneratedMission({ seed: options.seed, mode: options.mode, map: this.sector });
     this.scene.start('MissionBriefing', { mission });
   }
 
@@ -401,7 +460,7 @@ export default class MainMenuScene extends Phaser.Scene {
       : tier.cardHeight;
     const sectionBlock = (bodyHeight) => tier.sectionFont + tier.labelGap + bodyHeight;
     return tier.statusFont + tier.labelGap + 6
-      + sectionBlock(tier.primaryHeight) + tier.sectionGap
+      + sectionBlock(primaryBlockHeight(tier)) + tier.sectionGap
       + sectionBlock(archiveHeight) + tier.sectionGap
       + sectionBlock(tier.systemHeight);
   }
@@ -461,7 +520,7 @@ export default class MainMenuScene extends Phaser.Scene {
       return { labelY, bodyTop };
     };
 
-    const primary = placeSection(this.primarySectionLabel, tier.primaryHeight);
+    const primary = placeSection(this.primarySectionLabel, primaryBlockHeight(tier));
     const primaryWidth = stackCards ? innerWidth : Math.min(innerWidth, Math.max(420, innerWidth * 0.62));
     this.randomCard
       .resize({
@@ -475,6 +534,10 @@ export default class MainMenuScene extends Phaser.Scene {
         showIcon: tier.showIcons,
       })
       .setPosition(innerLeft + primaryWidth / 2, primary.bodyTop + tier.primaryHeight / 2);
+    this.sectorButton
+      .resize({ width: primaryWidth, height: tier.sectorHeight, fontSize: tier.sectorFont })
+      .setPosition(innerLeft + primaryWidth / 2,
+        primary.bodyTop + tier.primaryHeight + sectorGap(tier) + tier.sectorHeight / 2);
 
     const archiveHeight = stackCards
       ? tier.cardHeight * 3 + tier.sectionGap * 0.4 * 2

@@ -53,6 +53,12 @@ Phase 13B rebuilds the Main Menu as an operations console: a title block, a stat
 
 RANDOM MISSION is the emphasized primary tasking; LOCATE, COUNT and CHANGE are equal-weight mission cards, each with a one-line description, an existing UI sprite icon and its own restrained accent (phosphor, steel, amber). A readout beneath the console echoes whichever control is hovered or keyboard-focused. Layout picks the richest of four density tiers that fits the viewport and stacks cards on narrow or tall-portrait screens, so short landscape screens drop ornament rather than overlap. Settings still opens inside the same scene.
 
+Phase 15E adds one row under RANDOM MISSION: `SECTOR // ANY SECTOR`. It cycles through ANY SECTOR
+and the four registered sectors rather than opening a menu, so the primary action keeps the emphasis
+and the menu gains no new modal surface. The card and its sector row are measured as one block, so
+the row is part of the density tier rather than laid on top of it. The selection persists, and a
+named sector renders in the button's selected state. See `docs/PHASE-15E-SECTOR-SELECT.md`.
+
 ## Graphics quality
 
 Phase 12A/12B improves image clarity without changing gameplay coordinates or hit boxes. The Phaser backing canvas follows the device pixel ratio up to 2x, antialiasing is enabled for text/graphics/vector-derived textures, CSS no longer forces the final canvas through pixelated scaling, and each 64x64 logical SVG frame is rasterized internally at 128x128 before display.
@@ -110,10 +116,17 @@ east-west between two rocky massifs), **RIVERWORKS SECTOR** (an industrial river
 canalised channel cut corner to corner) and **BORDER FARMS** (open agricultural borderland, a
 patchwork of crop fields divided by hedgerows with a fortified post on the eastern fence line). A mission carries a `mapId` and
 the recon scene builds *that* sector; an unknown id warns and falls
-back to the default rather than throwing. The generator's map is never drawn from the seeded RNG, so
-choosing a sector cannot shift the random stream and a seed keeps producing the same mission — 303
-seeded missions hash identically across the refactor. `?map=<id>` joins `?seed=` and `?mode=` as a
-generator option. See `docs/PHASE-15A-MAP-REGISTRY.md`.
+back to the default rather than throwing.
+
+The Main Menu's SECTOR control picks which sector missions are drawn from. On `ANY SECTOR` a seed
+chooses the sector as well as the task; on a named sector both RANDOM and the LOCATE / COUNT /
+CHANGE cards stay inside it. The sector draw runs on its own RNG stream, keyed `<seed>:sector`, so
+naming a sector never shifts the mission stream: a seed produces the same mission on a given sector
+whether that sector was drawn by the seed or named by the analyst. The pre-registry fingerprint of
+303 seeded woodland missions still hashes identically. `?map=<id>` joins `?seed=` and `?mode=` as a
+generator option and also sets what the control displays for that visit. Each sector authors its own
+CHANGE second pass in map metadata, so change detection is portable rather than pinned to woodland's
+coordinates. See `docs/PHASE-15A-MAP-REGISTRY.md` and `docs/PHASE-15E-SECTOR-SELECT.md`.
 
 ## Release validation
 
@@ -123,7 +136,7 @@ Run the static release validator with:
 npm run validate
 ```
 
-It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, and core scene registration, then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. GitHub Pages runs this validator automatically before the production Vite build.
+It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, and core scene registration, then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each sector to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Deployment
 
@@ -169,11 +182,14 @@ Developer/query controls:
 - `?mode=LOCATE` — constrain generation to LOCATE
 - `?mode=COUNT` — constrain generation to COUNT
 - `?mode=CHANGE` — constrain generation to CHANGE
+- `?map=frostline-relay` — constrain generation to one sector (`woodland-corridor-7`, `frostline-relay`, `riverworks-sector`, `border-farms`)
 - `?debugMission=1` — display generator seed/attempt metadata
 - `?debugTargets=1` — show selectable entity hit boxes
 - `?debugMap=1` — show spawn-zone bounds
 
-Example: `?seed=COLDWAR-77&mode=CHANGE&debugMission=1`
+Example: `?seed=COLDWAR-77&mode=CHANGE&map=riverworks-sector&debugMission=1`
+
+Without `?map=` the Main Menu's SECTOR selection applies; on `ANY SECTOR` the seed picks the sector too.
 
 ## Mission modes
 
@@ -296,3 +312,4 @@ npm run build
 - Phase 15B — FROSTLINE RELAY authored map ✅
 - Phase 15C — RIVERWORKS SECTOR authored map ✅
 - Phase 15D — BORDER FARMS authored map ✅
+- Phase 15E — Sector select and multi-map RANDOM missions ✅

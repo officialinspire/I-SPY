@@ -1,6 +1,6 @@
 import { GAME_CONFIG } from '../runtime-config.js';
 import { getMapEntities, getMapLayer, getMapSpawnZones } from '../world/reconMapSchema.js';
-import { resolveReconMap } from '../world/mapRegistry.js';
+import { isAnySector, listReconMaps, resolveReconMap } from '../world/mapRegistry.js';
 import { createLocateMission } from './locateMission.js';
 import { createCountMission } from './countMission.js';
 import { createChangeDetectionMission, CHANGE_TYPES } from './changeDetectionMission.js';
@@ -336,7 +336,7 @@ function createChangeGenerated(rng, seed, map) {
  * against another.
  */
 export function validateGeneratedMission(mission, mapSource) {
-  const map = resolveReconMap(mapSource ?? mission?.mapId);
+  const map = resolveReconMap(isAnySector(mapSource) ? mission?.mapId : mapSource);
   const errors = [];
   if (!mission || !MODES.includes(mission.mode)) return { valid: false, errors: ['Generated mission mode is invalid.'] };
   if (!mission.seed) errors.push('Generated mission is missing a seed.');
@@ -379,13 +379,25 @@ function fallbackMission(mode, seed, map) {
 }
 
 /**
- * `map` may be a registry id, a registry entry or raw map data; omitting it
- * generates for the default sector. The map is never drawn from the seeded
- * RNG, so choosing a sector cannot shift the random stream and a seed keeps
- * producing the same mission on the map it was generated for.
+ * Picks the sector for a seed when none is named.
+ *
+ * The draw runs on its own RNG stream, keyed `<seed>:sector`, so choosing a
+ * sector never shifts the mission stream: a seed produces the same mission on
+ * a given map whether that map was chosen by the seed or named explicitly.
+ */
+function selectReconMap(seed, mapSource) {
+  if (!isAnySector(mapSource)) return resolveReconMap(mapSource);
+  const entries = listReconMaps();
+  const rng = mulberry32(hashSeed(`${seed}:sector`));
+  return (entries[Math.floor(rng() * entries.length)] ?? entries[0]).map;
+}
+
+/**
+ * `map` may be a registry id, a registry entry or raw map data. Omitting it,
+ * or passing 'any', lets the seed choose the sector as well as the task.
  */
 export function createGeneratedMission({ seed = randomSeed(), mode = null, map: mapSource = null } = {}) {
-  const map = resolveReconMap(mapSource);
+  const map = selectReconMap(seed, mapSource);
   const normalizedMode = MODES.includes(String(mode).toUpperCase()) ? String(mode).toUpperCase() : null;
   for (let attempt = 0; attempt < GAME_CONFIG.generator.maxAttempts; attempt += 1) {
     const rng = mulberry32(hashSeed(`${seed}:${attempt}`));
