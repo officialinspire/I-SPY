@@ -1,5 +1,6 @@
 import { GAME_CONFIG } from '../runtime-config.js';
-import { DEFAULT_RECON_MAP, getMapLayer } from '../world/authoredReconMap.js';
+import { getMapEntities } from '../world/reconMapSchema.js';
+import { resolveReconMap } from '../world/mapRegistry.js';
 
 export const CHANGE_TYPES = Object.freeze({
   VEHICLE_MOVED: 'vehicle_moved',
@@ -9,17 +10,18 @@ export const CHANGE_TYPES = Object.freeze({
   TERRAIN_CHANGED: 'terrain_changed',
 });
 
-export function createChangeDetectionMission(map = DEFAULT_RECON_MAP) {
-  const entities = getMapLayer(map, 'objects')?.items ?? [];
+export function createChangeDetectionMission(mapSource) {
+  const map = resolveReconMap(mapSource);
+  const entities = getMapEntities(map);
   const target = entities.find((entity) => entity.id === 'jeep-01');
-  if (!target) throw new Error('Change-detection mission target jeep-01 is missing from authored map data.');
+  if (!target) throw new Error(`Change-detection mission target jeep-01 is missing from map '${map.id}'.`);
 
   const destination = { x: 1515, y: 870 };
   return {
     id: 'OP-SECOND-LOOK-001',
     operation: 'OPERATION SECOND LOOK',
     satellitePass: 'PASS A 05:12 ZULU // PASS B 05:27 ZULU',
-    sector: map.title ?? 'WOODLAND CORRIDOR 7',
+    sector: map.title,
     mapId: map.id,
     mode: 'CHANGE',
     objective: 'IDENTIFY THE MILITARY VEHICLE THAT CHANGED POSITION BETWEEN PASS A AND PASS B.',

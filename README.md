@@ -96,6 +96,20 @@ timer and every control left the screen — and that split view framed the two p
 through its own camera fixed at 1x and both panes share identical viewports. No mission generation,
 validation, scoring or map data changed. See `docs/PHASE-13-RELEASE-AUDIT.md`.
 
+## Map registry
+
+Sectors live in a registry rather than in a hard-coded import. `src/world/mapCatalog.js` lists what
+exists (id, title, environment, description, difficulty, recommended zoom, source path),
+`src/world/mapRegistry.js` binds each entry to its map data and resolves a sector from an id, a
+registry entry or raw data, and `src/world/reconMapSchema.js` holds `validateReconMap()` free of any
+map data so the release validator can run the game's own rules over every registered map in Node.
+
+A mission carries a `mapId` and the recon scene builds *that* sector; an unknown id warns and falls
+back to the default rather than throwing. The generator's map is never drawn from the seeded RNG, so
+choosing a sector cannot shift the random stream and a seed keeps producing the same mission — 303
+seeded missions hash identically across the refactor. `?map=<id>` joins `?seed=` and `?mode=` as a
+generator option. See `docs/PHASE-15A-MAP-REGISTRY.md`.
+
 ## Release validation
 
 Run the static release validator with:
@@ -104,7 +118,7 @@ Run the static release validator with:
 npm run validate
 ```
 
-It checks version alignment, viewport/safe-area configuration, authored-map structure, required spawn tags, the 80-frame sprite manifest, map sprite resolution/bounds, unique entity IDs, authored mission-target integrity, and core scene registration. GitHub Pages runs this validator automatically before the production Vite build.
+It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, and core scene registration, then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Deployment
 
@@ -273,3 +287,4 @@ npm run build
 - Phase 13E — Mode-specific gameplay UX ✅
 - Phase 13F — Microinteraction and feedback polish ✅
 - Phase 13 RC — Release-candidate audit and fixes ✅
+- Phase 15A — Multi-map architecture and map registry ✅

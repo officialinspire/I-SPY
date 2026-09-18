@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GAME_CONFIG } from '../src/runtime-config.js';
 import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
+import { MAP_CATALOG } from '../src/world/mapCatalog.js';
+import { validateReconMap } from '../src/world/reconMapSchema.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -18,7 +20,6 @@ const warn = (condition, message) => {
 };
 
 const packageJson = JSON.parse(read('package.json'));
-const map = JSON.parse(read('assets/maps/woodland-corridor-7.json'));
 const indexHtml = read('index.html');
 const styles = read('src/styles.css');
 const mainSource = read('src/main.js');
@@ -28,40 +29,60 @@ assert(indexHtml.includes('viewport-fit=cover'), 'viewport uses viewport-fit=cov
 assert(styles.includes('safe-area-inset-top') && styles.includes('safe-area-inset-bottom'), 'safe-area CSS is present');
 assert(!styles.includes('image-rendering: pixelated'), 'final canvas is not forced through pixelated CSS scaling');
 
-const requiredLayers = ['terrain', 'vegetation', 'infrastructure', 'structures', 'objects', 'recon-clues', 'spawn-zones', 'metadata'];
-const layerIds = new Set((map.layers ?? []).map((layer) => layer.id));
-requiredLayers.forEach((id) => assert(layerIds.has(id), `map layer present: ${id}`));
-
-const spawnLayer = (map.layers ?? []).find((layer) => layer.id === 'spawn-zones');
-const requiredSpawnTags = ['road_vehicle', 'forest_concealment', 'compound_vehicle', 'open_field', 'structure', 'radar_site', 'civilian', 'clue_zone'];
-const spawnTags = new Set((spawnLayer?.zones ?? []).map((zone) => zone.tag));
-requiredSpawnTags.forEach((tag) => assert(spawnTags.has(tag), `spawn tag present: ${tag}`));
+// Every catalogued sector is loaded from disk and put through the same schema
+// the game uses, so a map cannot ship registered but unplayable.
+assert(MAP_CATALOG.length > 0, 'map catalog registers at least one sector');
+assert(MAP_CATALOG.some((entry) => entry.id === GAME_CONFIG.recon.defaultMapId), `default map id is registered: ${GAME_CONFIG.recon.defaultMapId}`);
+assert(new Set(MAP_CATALOG.map((entry) => entry.id)).size === MAP_CATALOG.length, 'registered map ids are unique');
 
 const spriteNames = Object.values(SPRITE_SHEETS).flatMap((sheet) => sheet.names);
 assert(spriteNames.length === 80, `sprite library contains 80 frames (found ${spriteNames.length})`);
 assert(new Set(spriteNames).size === spriteNames.length, 'sprite frame names are unique');
 
-for (const layer of map.layers ?? []) {
-  const entries = layer.type === 'areas' ? (layer.areas ?? []) : (layer.items ?? []);
-  for (const item of entries) {
-    if (!item.sprite) continue;
-    assert(Boolean(findSprite(item.sprite)), `map sprite resolves: ${item.sprite}`);
-    const width = item.width ?? GAME_CONFIG.sprites.frameSize;
-    const height = item.height ?? GAME_CONFIG.sprites.frameSize;
-    const coordinatesValid = Number.isFinite(item.x) && Number.isFinite(item.y);
-    assert(coordinatesValid, `map coordinates valid: ${item.sprite}`);
-    if (coordinatesValid) {
-      warn(item.x >= 0 && item.y >= 0 && item.x + width <= map.width && item.y + height <= map.height, `authored sprite clips map bounds: ${item.sprite}`);
+const loadedMaps = [];
+for (const entry of MAP_CATALOG) {
+  assert(Boolean(entry.title && entry.environment && entry.description), `map catalog entry is described: ${entry.id}`);
+  assert(Number.isFinite(entry.recommendedZoom) && entry.recommendedZoom > 0, `map recommended zoom is valid: ${entry.id}`);
+
+  let map;
+  try {
+    map = JSON.parse(read(entry.source));
+  } catch (error) {
+    errors.push(`map source unreadable: ${entry.source} (${error.message})`);
+    continue;
+  }
+  loadedMaps.push(map);
+
+  assert(map.id === entry.id, `map data id matches catalog: ${entry.id}`);
+  assert(map.title === entry.title, `map data title matches catalog: ${entry.id}`);
+
+  const schema = validateReconMap(map);
+  schema.errors.forEach((message) => errors.push(`[${entry.id}] ${message}`));
+  schema.warnings.forEach((message) => warnings.push(`[${entry.id}] ${message}`));
+  assert(schema.valid, `map passes validateReconMap: ${entry.id}`);
+
+  for (const layer of map.layers ?? []) {
+    const entries = layer.type === 'areas' ? (layer.areas ?? []) : (layer.items ?? []);
+    for (const item of entries) {
+      if (!item.sprite) continue;
+      assert(Boolean(findSprite(item.sprite)), `[${entry.id}] map sprite resolves: ${item.sprite}`);
+      const width = item.width ?? GAME_CONFIG.sprites.frameSize;
+      const height = item.height ?? GAME_CONFIG.sprites.frameSize;
+      const coordinatesValid = Number.isFinite(item.x) && Number.isFinite(item.y);
+      assert(coordinatesValid, `[${entry.id}] map coordinates valid: ${item.sprite}`);
+      if (coordinatesValid) {
+        warn(item.x >= 0 && item.y >= 0 && item.x + width <= map.width && item.y + height <= map.height, `[${entry.id}] authored sprite clips map bounds: ${item.sprite}`);
+      }
     }
   }
+
+  const objectLayer = (map.layers ?? []).find((layer) => layer.id === 'objects');
+  const entityIds = (objectLayer?.items ?? []).map((item) => item.id).filter(Boolean);
+  assert(entityIds.length === new Set(entityIds).size, `[${entry.id}] authored entity ids are unique`);
+
+  const missionTargetId = (map.layers ?? []).find((layer) => layer.id === 'metadata')?.data?.missionTargetId;
+  assert(!missionTargetId || entityIds.includes(missionTargetId), `[${entry.id}] authored mission target resolves: ${missionTargetId ?? 'none'}`);
 }
-
-const objectLayer = (map.layers ?? []).find((layer) => layer.id === 'objects');
-const entityIds = (objectLayer?.items ?? []).map((entity) => entity.id).filter(Boolean);
-assert(entityIds.length === new Set(entityIds).size, 'authored entity ids are unique');
-
-const missionTargetId = (map.layers ?? []).find((layer) => layer.id === 'metadata')?.data?.missionTargetId;
-assert(!missionTargetId || entityIds.includes(missionTargetId), `authored mission target resolves: ${missionTargetId ?? 'none'}`);
 
 ['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'ResultsScene'].forEach((sceneName) => {
   assert(mainSource.includes(sceneName), `main scene registration includes ${sceneName}`);
@@ -81,5 +102,5 @@ if (errors.length) {
 
 console.log(`I SPY release validation passed: ${checks.length} checks; ${warnings.length} warnings.`);
 console.log(`Version: ${GAME_CONFIG.version}`);
-console.log(`Map: ${map.id} (${map.width}x${map.height})`);
+console.log(`Maps: ${loadedMaps.map((entry) => `${entry.id} (${entry.width}x${entry.height})`).join(', ')}`);
 console.log(`Sprite frames: ${spriteNames.length}`);

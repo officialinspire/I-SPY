@@ -48,9 +48,11 @@ export default class ReconScene extends Phaser.Scene {
 
   createWorldState() {
     const commonOperations = this.mission.worldOperations ?? [];
+    // The mission names its sector; the scene builds that one, not a default.
+    const mapSource = this.mission.mapId;
     if (this.isChangeMode) {
-      this.worldA = createAuthoredReconMap(this);
-      this.worldB = createAuthoredReconMap(this);
+      this.worldA = createAuthoredReconMap(this, mapSource);
+      this.worldB = createAuthoredReconMap(this, mapSource);
       applyReconOperations(this, this.worldA, commonOperations);
       applyReconOperations(this, this.worldB, commonOperations);
       applyReconOperations(this, this.worldB, this.mission.passBOperations ?? []);
@@ -65,7 +67,7 @@ export default class ReconScene extends Phaser.Scene {
       return;
     }
 
-    const world = createAuthoredReconMap(this);
+    const world = createAuthoredReconMap(this, mapSource);
     applyReconOperations(this, world, commonOperations);
     this.worldLayer = world.root;
     this.map = world.map;

@@ -382,7 +382,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
   launchGeneratedMission() {
     const options = getGeneratorOptions();
-    const mission = createGeneratedMission({ seed: options.seed, mode: options.mode });
+    const mission = createGeneratedMission({ seed: options.seed, mode: options.mode, map: options.map });
     this.scene.start('MissionBriefing', { mission });
   }
 

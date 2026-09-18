@@ -1,12 +1,19 @@
 import { GAME_CONFIG } from '../runtime-config.js';
+import { resolveReconMap } from '../world/mapRegistry.js';
 
-export function createLocateMission() {
+/**
+ * The authored LOCATE tasking. Its sector and map id come from the registry
+ * rather than from literals, so the briefing always names the map the recon
+ * scene will actually build.
+ */
+export function createLocateMission(mapSource) {
+  const map = resolveReconMap(mapSource);
   return {
     id: 'OP-NIGHT-WATCH-001',
     operation: 'OPERATION NIGHT WATCH',
     satellitePass: '03:42 ZULU',
-    sector: 'WOODLAND CORRIDOR 7',
-    mapId: GAME_CONFIG.recon.defaultMapId,
+    sector: map.title,
+    mapId: map.id,
     mode: 'LOCATE',
     objective: 'LOCATE THE RADAR INSTALLATION.',
     targetId: 'radar-01',

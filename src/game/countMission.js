@@ -1,5 +1,6 @@
 import { GAME_CONFIG } from '../runtime-config.js';
-import { DEFAULT_RECON_MAP, getMapLayer } from '../world/authoredReconMap.js';
+import { getMapEntities } from '../world/reconMapSchema.js';
+import { resolveReconMap } from '../world/mapRegistry.js';
 
 export const COUNT_REGION = Object.freeze({
   id: 'delta-3',
@@ -20,8 +21,9 @@ export function countEntitiesInRegion(entities, region, targetCategory) {
   return (entities ?? []).filter((entity) => entity.category === targetCategory && entityCenterInRegion(entity, region)).length;
 }
 
-export function createCountMission(map = DEFAULT_RECON_MAP) {
-  const entities = getMapLayer(map, 'objects')?.items ?? [];
+export function createCountMission(mapSource) {
+  const map = resolveReconMap(mapSource);
+  const entities = getMapEntities(map);
   const targetCategory = 'military_vehicle';
   const expectedCount = countEntitiesInRegion(entities, COUNT_REGION, targetCategory);
 
@@ -29,7 +31,7 @@ export function createCountMission(map = DEFAULT_RECON_MAP) {
     id: 'OP-TALLY-SHEET-001',
     operation: 'OPERATION TALLY SHEET',
     satellitePass: '04:17 ZULU',
-    sector: map.title ?? 'WOODLAND CORRIDOR 7',
+    sector: map.title,
     mapId: map.id,
     mode: 'COUNT',
     objective: `COUNT ALL MILITARY VEHICLES INSIDE ${COUNT_REGION.label}.`,
