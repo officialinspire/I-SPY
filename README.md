@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A/13B/13C/13D polish work implemented.** Runtime/package version: **`1.2.1-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented, with a Phase 13 release-candidate audit.** Runtime/package version: **`1.2.2-demo`**.
 
 I SPY currently includes:
 
@@ -37,7 +37,7 @@ I SPY currently includes:
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, and `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, and `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass.
 
 ## Interaction design system
 
@@ -79,6 +79,23 @@ Phase 13D gives the recon workspace four distinct interaction states. Normal ana
 
 Marking now resolves on pointer release after a drag-threshold check, so dragging pans the imagery with marking still armed and only a tap marks. Presses that land on a HUD control never reach the map, the HUD tap guard is converted into HUD space so it matches where the HUD is actually drawn, and confirmation is single-shot. Touch gets a slightly larger invisible selection tolerance than a mouse while authored metadata bounds stay authoritative — no sprite is enlarged and no hitbox changes. Nothing reacts to what is under the pointer, and result feedback lands only on the analyst's own mark, so no interaction leaks answers.
 
+## Mode tools
+
+Phase 13E gives the workspace one information hierarchy — objective, timer, mode state, primary action, secondary utilities — and then makes each mode's tools its own. A mode chip under the objective carries state (`LOCATE · MARKING`), tinted amber while marking, phosphor while a mark is pending and rust while held, and each mode shows one counter rather than a paragraph.
+
+COUNT defines its area by dimming everything outside it with phosphor corner brackets, and separates a captioned ADJUST group (larger steppers, a bordered tally readout) from a captioned SUBMIT action; a refused total turns the readout muted red until the number changes, without interrupting inspection. CHANGE replaces the VIEW PASS toggle with a PASS A | PASS B segmented control whose live segment is lit, and switching passes plays a brief opaque wipe that never shows both passes at once. Split view labels each pane with its own pass and time and keeps the two cameras exactly synchronised.
+
+## Release-candidate audit
+
+The Phase 13 build was audited end to end before release: menu and panel layout at four viewports,
+the full mission flow, all three analysis modes, the seeded generator, artwork, input and
+accessibility, feedback, and responsive behaviour. Eight defects were reproduced and fixed, the
+largest being that the recon HUD inherited the camera's zoom — at maximum zoom the objective, the
+timer and every control left the screen — and that split view framed the two passes
+`360 * (1 - zoom)` pixels apart, which is a fairness bug in a comparison puzzle. The HUD now renders
+through its own camera fixed at 1x and both panes share identical viewports. No mission generation,
+validation, scoring or map data changed. See `docs/PHASE-13-RELEASE-AUDIT.md`.
+
 ## Release validation
 
 Run the static release validator with:
@@ -92,6 +109,8 @@ It checks version alignment, viewport/safe-area configuration, authored-map stru
 ## Audio, feedback, and settings
 
 Phase 10 adds a dependency-free Web Audio feedback system with restrained terminal/radio cues for UI taps, imagery acquisition, marking, confirmations, incorrect identifications, the final ten seconds, mission completion, and mission failure.
+
+Phase 13F rebuilt that system around named cues. Callers ask for `feedback('arm')` rather than describing a waveform, so every event — hover, press, mission card, acquisition, marking, selection, cancel, confirmation, false identification, pass switch, count adjustment, count submission, pause/resume, completion, failure — has exactly one voice and exactly one call site. Everything is still synthesised at runtime from short square blips, pitch slides and band-limited noise clicks: a military terminal, not an arcade cabinet. A per-event repeat guard makes it impossible for rapid navigation to stack a cue on itself, haptics stay sparing (a small pulse for selection, a pattern only for outcomes), and microanimations stay in the 80–160 ms band — a 90 ms press, a 140 ms panel fade, a 150 ms reticle settle — with nothing in the reconnaissance imagery animating in a way that could reveal an answer. See `docs/PHASE-13F-FEEDBACK.md`.
 
 Settings are stored locally on the device and include:
 
@@ -235,3 +254,6 @@ npm run build
 - Phase 13B — Main menu operations-console redesign ✅
 - Phase 13C — Reconnaissance graphics and environmental art ✅
 - Phase 13D — Recon interaction and marking polish ✅
+- Phase 13E — Mode-specific gameplay UX ✅
+- Phase 13F — Microinteraction and feedback polish ✅
+- Phase 13 RC — Release-candidate audit and fixes ✅

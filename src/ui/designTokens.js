@@ -67,13 +67,16 @@ export const UI_TOKENS = Object.freeze({
   }),
   motion: Object.freeze({
     hoverMs: 110,
-    pressMs: 70,
-    releaseMs: 110,
+    pressMs: 90,
+    releaseMs: 120,
     focusMs: 90,
     ease: 'Sine.easeOut',
     pressScale: 0.975,
     hoverScale: 1.012,
     hoverLift: 1,
+    // Selected controls breathe their accent bar; nothing else moves.
+    selectedPulseMs: 1150,
+    selectedPulseFloor: 0.62,
   }),
   metrics: Object.freeze({
     minTouchTarget: 44,

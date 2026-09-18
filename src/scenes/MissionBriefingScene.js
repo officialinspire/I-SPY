@@ -6,7 +6,6 @@ import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
-import { feedback } from '../audio/feedback.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
@@ -71,7 +70,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
       padding: { x: 18, y: 14 },
     }).setOrigin(0.5).setDepth(50).setVisible(false);
 
-    this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon(), { variant: 'primary' });
+    this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon(), { variant: 'primary', pressSound: 'acquire' });
     this.back = createButton(this, 0, 0, 'RETURN', () => this.scene.start('MainMenu'), { width: 180, fontSize: 16, variant: 'secondary' });
     this.focusGroup = createFocusGroup(this, [this.begin, this.back]);
 
@@ -87,7 +86,6 @@ export default class MissionBriefingScene extends Phaser.Scene {
   beginRecon() {
     if (this.transitioning) return;
     this.transitioning = true;
-    feedback('acquire', [10, 18, 10]);
     this.focusGroup?.clearFocus();
     this.begin.setVisible(false);
     this.back.setVisible(false);
@@ -107,11 +105,34 @@ export default class MissionBriefingScene extends Phaser.Scene {
     const sideMargin = compact ? 18 : 36;
     const panelWidth = Math.min(900, width - sideMargin * 2);
     const panelLeft = width / 2 - panelWidth / 2;
-    const controlsHeight = compact ? 118 : 82;
-    const panelTop = Math.max(54, short ? 52 : height * 0.07);
-    const panelBottom = Math.max(panelTop + 210, height - controlsHeight - 22);
-    const panelHeight = panelBottom - panelTop;
+    const controlsHeight = compact ? 148 : 82;
     const paddingX = compact ? 18 : 30;
+    const bodyOffset = short ? 62 : 70;
+    const briefingFont = short ? (compact ? 9 : 10) : (compact ? 11 : 14);
+
+    this.briefing
+      .setFontSize(briefingFont)
+      .setLineSpacing(short ? 2 : 5)
+      .setWordWrapWidth(panelWidth - paddingX * 2);
+
+    // The order is still typing itself out, so the panel is measured against
+    // the finished text rather than the characters printed so far. Without
+    // this the dossier stretched to the bottom of the window whatever it had
+    // to say, leaving most of the sheet empty.
+    const typed = this.briefing.text;
+    if (typed !== this.fullBriefing) this.briefing.setText(this.fullBriefing);
+    const briefingHeight = this.briefing.height;
+    if (typed !== this.fullBriefing) this.briefing.setText(typed);
+
+    const stampVisible = width >= 540 && height >= 430;
+    const areaTop = Math.max(54, short ? 46 : 62);
+    const areaBottom = Math.max(areaTop + 210, height - controlsHeight - 22);
+    const panelHeight = Phaser.Math.Clamp(bodyOffset + briefingHeight + (stampVisible ? 78 : 44),
+      210, areaBottom - areaTop);
+    const panelTop = Math.round(areaTop + (areaBottom - areaTop - panelHeight) / 2);
+    const panelBottom = panelTop + panelHeight;
+    const briefingTop = panelTop + bodyOffset;
+    this.briefing.setPosition(panelLeft + paddingX, briefingTop);
 
     this.documentGraphics.clear();
     this.documentGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), UI_TOKENS.surface.panelAlpha).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
@@ -122,22 +143,16 @@ export default class MissionBriefingScene extends Phaser.Scene {
     this.header.setFontSize(compact ? 11 : 13).setPosition(panelLeft + paddingX, panelTop + 24);
     this.documentCode.setFontSize(compact ? 8 : 10).setPosition(panelLeft + panelWidth - paddingX, panelTop + 24).setVisible(width >= 470);
 
-    const briefingTop = panelTop + (short ? 62 : 70);
-    const briefingFont = short ? (compact ? 9 : 10) : (compact ? 11 : 14);
-    this.briefing
-      .setFontSize(briefingFont)
-      .setLineSpacing(short ? 2 : 5)
-      .setWordWrapWidth(panelWidth - paddingX * 2)
-      .setPosition(panelLeft + paddingX, briefingTop);
-
     this.stamp
       .setFontSize(short ? 11 : 14)
       .setPosition(panelLeft + panelWidth - (compact ? 58 : 82), panelBottom - 52)
-      .setVisible(width >= 540 && height >= 430);
+      .setVisible(stampVisible);
 
     if (compact) {
-      this.begin.setPosition(width / 2, height - 91);
-      this.back.setPosition(width / 2, height - 43);
+      // Stacked controls need a gap between them and have to clear the
+      // terminal chrome caption along the bottom edge.
+      this.begin.setPosition(width / 2, height - 112);
+      this.back.setPosition(width / 2, height - 58);
     } else {
       this.begin.setPosition(width / 2 - 115, height - 48);
       this.back.setPosition(width / 2 + 150, height - 48);

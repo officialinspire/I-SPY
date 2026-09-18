@@ -60,6 +60,30 @@ export function createTerminalChrome(scene, options = {}) {
   return { graphics, topLeft, topRight, bottomLeft, bottomRight, layout };
 }
 
+/**
+ * Slight panel settle: alpha only, never position, so a transition can never
+ * fight a responsive layout. Reduced motion lands the panel already solid.
+ */
+export function fadeIn(scene, targets, options = {}) {
+  const list = (Array.isArray(targets) ? targets : [targets]).filter(Boolean);
+  if (!list.length) return null;
+  const to = options.to ?? 1;
+  if (prefersReducedMotion()) {
+    scene.tweens.killTweensOf(list);
+    list.forEach((target) => target.setAlpha?.(to));
+    return null;
+  }
+  // Re-opening a panel mid-fade must not stack two tweens on one target.
+  scene.tweens.killTweensOf(list);
+  list.forEach((target) => target.setAlpha?.(options.from ?? 0));
+  return scene.tweens.add({
+    targets: list,
+    alpha: to,
+    duration: options.duration ?? 140,
+    ease: 'Sine.easeOut',
+  });
+}
+
 export function typeText(scene, textObject, fullText, options = {}) {
   const charsPerSecond = options.charsPerSecond ?? 110;
   if (prefersReducedMotion() || options.instant) {

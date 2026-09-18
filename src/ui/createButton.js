@@ -78,6 +78,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   // factor the press/hover scale multiplies rather than replaces.
   let iconBaseScale = 1;
   let motionTween = null;
+  let accentPulse = null;
 
   const focusRing = scene.add
     .rectangle(x, y, size.width + metrics.focusRingOffset * 2, size.height + metrics.focusRingOffset * 2)
@@ -228,6 +229,28 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     });
   };
 
+  /**
+   * A selected control breathes its accent bar so "this one is live" reads
+   * without any layout movement. Reduced motion holds it steady.
+   */
+  const applyAccentPulse = (stateName) => {
+    const wants = stateName === 'selected' && showAccent && status.visible && !prefersReducedMotion();
+    if (!wants) {
+      accentPulse?.remove();
+      accentPulse = null;
+      return;
+    }
+    if (accentPulse) return;
+    accentPulse = scene.tweens.add({
+      targets: accent,
+      alpha: motion.selectedPulseFloor,
+      duration: motion.selectedPulseMs,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  };
+
   const applyVisual = (animated = true) => {
     const stateName = resolveStateName();
     const tokens = variant.states[stateName];
@@ -237,6 +260,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     text.setColor(tokens.label);
     description?.setColor(tokens.label).setAlpha(stateName === 'disabled' ? 0.5 : 0.68);
     accent.setFillStyle(hexToNumber(accentColor)).setAlpha(tokens.accentAlpha);
+    applyAccentPulse(stateName);
     if (icon) {
       icon.setTint(hexToNumber(accentColor));
       if (stateName === 'disabled') icon.setAlpha(0.3);
@@ -285,7 +309,10 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   const activate = () => {
     if (!status.enabled || !status.visible) return;
-    feedback('button', 8);
+    // Exactly one cue per activation. Controls whose handler voices the
+    // outcome itself (confirm, cancel, tally steppers, pass segments) pass
+    // `pressSound: false` so the press is not voiced twice.
+    if (options.pressSound !== false) feedback(options.pressSound ?? 'press');
     onPress?.();
   };
 
@@ -455,8 +482,13 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       activate();
       return controller;
     },
+    setAlpha(alpha) {
+      objects.forEach((object) => object.setAlpha(alpha));
+      return controller;
+    },
     destroy() {
       armedPointerId = null;
+      accentPulse?.remove();
       motionTween?.remove();
       scene.input.off('pointerup', onSceneRelease);
       scene.input.off('pointerupoutside', onSceneRelease);
@@ -466,6 +498,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   };
 
   scene.events.once('shutdown', () => {
+    accentPulse?.remove();
     motionTween?.remove();
     scene.input.off('pointerup', onSceneRelease);
     scene.input.off('pointerupoutside', onSceneRelease);

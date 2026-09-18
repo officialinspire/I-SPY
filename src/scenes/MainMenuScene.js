@@ -10,7 +10,7 @@ import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
 import { cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
-import { feedback } from '../audio/feedback.js';
+import { fadeIn } from '../ui/presentation.js';
 
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
 
@@ -155,6 +155,7 @@ export default class MainMenuScene extends Phaser.Scene {
   createTasking() {
     this.randomCard = createButton(this, 0, 0, 'RANDOM MISSION', () => this.launchGeneratedMission(), {
       variant: 'primary',
+      pressSound: 'card',
       icon: this.uiIcon('reticle_lock'),
       description: 'GENERATE A SEEDED INTELLIGENCE TASK.',
       width: 480,
@@ -190,6 +191,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.modeCards = modes.map((mode) => {
       const card = createButton(this, 0, 0, mode.label, mode.launch, {
         variant: 'tactical',
+        pressSound: 'card',
         icon: this.uiIcon(mode.icon),
         description: mode.description,
         accentColor: mode.accentColor,
@@ -274,6 +276,8 @@ export default class MainMenuScene extends Phaser.Scene {
     this.noticeTitle.setVisible(true);
     this.noticeBody.setVisible(true);
     this.noticeHint.setVisible(true);
+    fadeIn(this, [this.noticeBackdrop, this.noticeGraphics, this.noticeTitle,
+      this.noticeBody, this.noticeHint]);
     this.readout?.setText('ANALYST FIELD GUIDE // OPEN');
     this.noticeTimer?.remove(false);
     this.noticeTimer = this.time.delayedCall(9000, () => this.hideNotice());
@@ -308,15 +312,16 @@ export default class MainMenuScene extends Phaser.Scene {
       color: GAME_CONFIG.palette.gray,
     }).setOrigin(0.5).setDepth(61).setVisible(false);
 
+    // The button's own toggle cue is the acknowledgement; a second sound here
+    // would voice one press twice.
     this.masterSettingButton = createButton(this, 0, 0, '', () => {
       cycleMasterVolume();
       this.refreshSettingsLabels();
-      feedback('confirm', 10);
-    }, { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
-    this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary' });
+    }, { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13, variant: 'primary' });
     this.settingsButtons = [this.masterSettingButton, this.sfxSettingButton, this.hapticsSettingButton, this.scanlineSettingButton, this.grainSettingButton, this.closeSettingsButton];
     this.settingsButtons.forEach((button) => {
@@ -330,7 +335,6 @@ export default class MainMenuScene extends Phaser.Scene {
     const settings = getSettings();
     updateSettings({ [key]: !settings[key] });
     this.refreshSettingsLabels();
-    feedback('confirm', 10);
   }
 
   refreshSettingsLabels() {
@@ -358,6 +362,9 @@ export default class MainMenuScene extends Phaser.Scene {
     this.refreshSettingsLabels();
     this.focusGroup?.refresh();
     this.layout(this.scale.gameSize);
+    // Only the panel chrome fades: the buttons manage their own per-state
+    // alphas, so tweening them would flatten accent and icon tones.
+    fadeIn(this, [this.settingsGraphics, this.settingsTitle, this.settingsHint]);
   }
 
   closeSettings() {
@@ -649,7 +656,16 @@ export default class MainMenuScene extends Phaser.Scene {
     const { width, height } = gameSize;
     const short = height < 560;
     const settingsPanelWidth = Math.min(520, width - 28);
-    const settingsPanelHeight = Math.min(450, Math.max(300, height - 42));
+    const settingsPanelCap = Math.min(450, Math.max(300, height - 42));
+
+    // Size the panel to the rows it actually holds. Fixing the height left a
+    // deep empty box under RETURN TO CONSOLE on every window tall enough.
+    const rows = Math.max(1, this.settingsButtons.length);
+    const headerBlock = short ? 84 : 98;
+    const rowSpan = Math.max(178, settingsPanelCap - (short ? 116 : 132));
+    const rowSpacing = Math.min(52, Math.max(35, rowSpan / Math.max(1, rows - 1)));
+    const settingsPanelHeight = Math.min(settingsPanelCap,
+      Math.ceil(headerBlock + (rows - 1) * rowSpacing + 20 + (short ? 18 : 26)));
 
     // Sit the panel under the header when it fits; otherwise centre it and
     // stand the header down so nothing is clipped behind the panel.
@@ -677,13 +693,11 @@ export default class MainMenuScene extends Phaser.Scene {
     this.settingsTitle.setPosition(width / 2, settingsTop + 29).setFontSize(short ? 16 : 20);
     this.settingsHint.setPosition(width / 2, settingsTop + 50).setVisible(height >= 350);
 
-    const settingsStartY = settingsTop + (short ? 84 : 98);
-    const availableSpan = Math.max(178, settingsPanelHeight - (short ? 116 : 132));
-    const settingsSpacing = Math.min(52, Math.max(35, availableSpan / Math.max(1, this.settingsButtons.length - 1)));
+    const settingsStartY = settingsTop + headerBlock;
     const buttonWidth = Math.min(300, settingsPanelWidth - 44);
     this.settingsButtons.forEach((button, index) => {
       button.resize({ width: buttonWidth });
-      button.setPosition(width / 2, settingsStartY + index * settingsSpacing);
+      button.setPosition(width / 2, settingsStartY + index * rowSpacing);
     });
   }
 }

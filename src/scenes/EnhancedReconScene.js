@@ -6,18 +6,11 @@ import { createPointerReticle, drawCandidateReticle } from '../ui/reconInteracti
 import { prefersReducedMotion } from '../ui/presentation.js';
 import { getSettings } from '../settings/userSettings.js';
 
-const MARKING_BANNERS = Object.freeze({
-  marking: 'MARKING ACTIVE // TAP AN OBJECT',
-  markingChange: 'CHANGE MARKING // TAP THE CHANGED OBJECT',
-});
-
 export default class EnhancedReconScene extends ReconScene {
   constructor() {
     super();
     this.lastCountdownSecond = null;
     this.analysisMode = 'analysis';
-    this.lastStatusMessage = null;
-    this.lastStatusAt = 0;
   }
 
   createHud() {
@@ -28,13 +21,10 @@ export default class EnhancedReconScene extends ReconScene {
     // to what is underneath it, so sweeping it cannot reveal objects.
     this.pointerReticle = createPointerReticle(this, { depth: 960, color: UI_TOKENS.color.amber });
 
-    this.markingBanner = this.add.text(0, 0, '', {
-      fontFamily: GAME_CONFIG.typography.family,
-      fontSize: '11px',
-      color: UI_TOKENS.text.attention,
-      letterSpacing: 1,
-    }).setOrigin(0.5, 0.5).setVisible(false);
-    this.hud.add(this.markingBanner);
+    // Brief opaque wipe when the analyst switches pass. It never shows A and
+    // B together, so it cannot make the difference easier to spot.
+    this.passWipe = this.add.rectangle(0, 0, 10, 10, hexToNumber(UI_TOKENS.color.black), 1)
+      .setOrigin(0).setScrollFactor(0).setDepth(940).setVisible(false);
 
     // Grab/grabbing while navigating: the image reads as draggable before the
     // analyst has touched it. Presses that belong to a HUD control are skipped.
@@ -58,14 +48,14 @@ export default class EnhancedReconScene extends ReconScene {
       .setScrollFactor(0)
       .setDepth(1002)
       .setVisible(false);
-    this.splitLeftLabel = this.add.text(0, 0, 'PASS A // EARLIER IMAGE', {
+    this.splitLeftLabel = this.add.text(0, 0, `PASS A \u00b7 ${this.mission.passA?.time ?? 'EARLIER'}`, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: UI_TOKENS.text.body,
+      color: UI_TOKENS.text.positiveBright,
       backgroundColor: GAME_CONFIG.palette.nearBlack,
       padding: { x: 8, y: 4 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1004).setVisible(false);
-    this.splitRightLabel = this.add.text(0, 0, 'PASS B // LATER IMAGE', {
+    this.splitRightLabel = this.add.text(0, 0, `PASS B \u00b7 ${this.mission.passB?.time ?? 'LATER'}`, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
       color: UI_TOKENS.text.attention,
@@ -81,6 +71,10 @@ export default class EnhancedReconScene extends ReconScene {
       ...super.getUiObjects(),
       this.layoutChrome,
       this.railLabel,
+      this.passWipe,
+      this.splitDivider,
+      this.splitLeftLabel,
+      this.splitRightLabel,
       this.pointerReticle?.graphics,
     ].filter(Boolean);
   }
@@ -99,15 +93,6 @@ export default class EnhancedReconScene extends ReconScene {
       marking || selected ? UI_TOKENS.color.amber : UI_TOKENS.color.phosphorDim,
     ));
 
-    if (this.markingBanner) {
-      // Only the armed state gets a banner; once a mark exists the pending
-      // buttons and the status line already say what to do next.
-      const text = marking
-        ? (this.isChangeMode ? MARKING_BANNERS.markingChange : MARKING_BANNERS.marking)
-        : '';
-      this.markingBanner.setText(text).setVisible(Boolean(text) && this.scale.gameSize.width >= 480);
-    }
-
     let cursor = 'grab';
     if (marking) cursor = 'crosshair';
     else if (selected || this.paused) cursor = 'default';
@@ -122,22 +107,59 @@ export default class EnhancedReconScene extends ReconScene {
   }
 
   armMarking() {
+    const wasMarking = this.marking;
     super.armMarking();
+    if (this.marking && !wasMarking) feedback('arm');
     this.refreshAnalysisMode();
   }
 
   placeCandidate(pointer) {
     super.placeCandidate(pointer);
+    if (this.candidate) {
+      feedback('select');
+      this.settleMarker();
+    }
     this.refreshAnalysisMode();
   }
 
   cancelCandidate() {
+    const hadCandidate = Boolean(this.candidate) || this.marking;
     super.cancelCandidate();
+    if (hadCandidate) feedback('cancel');
     this.refreshAnalysisMode();
+  }
+
+  /**
+   * The reticle settles onto the mark rather than appearing at final size.
+   * It is drawn at the analyst's own mark, so it reveals nothing about the
+   * imagery underneath it.
+   */
+  settleMarker() {
+    this.markerSettleTween?.remove();
+    this.markerScale = 1;
+    if (prefersReducedMotion() || !this.candidate) {
+      this.drawCandidateMarker();
+      return;
+    }
+    const settle = { scale: 1.34 };
+    this.markerScale = settle.scale;
+    this.drawCandidateMarker();
+    this.markerSettleTween = this.tweens.add({
+      targets: settle,
+      scale: 1,
+      duration: 150,
+      ease: 'Sine.easeOut',
+      onUpdate: () => {
+        this.markerScale = settle.scale;
+        if (this.candidate) this.drawCandidateMarker();
+      },
+      onComplete: () => { this.markerScale = 1; },
+    });
   }
 
   togglePause() {
     super.togglePause();
+    feedback(this.paused ? 'hold' : 'resume');
     if (this.paused) {
       this.pointerReticle?.setActive(false);
       this.input.setDefaultCursor('default');
@@ -146,11 +168,80 @@ export default class EnhancedReconScene extends ReconScene {
     }
   }
 
+  setActivePass(passId, showMessage = true) {
+    const previous = this.activePass;
+    super.setActivePass(passId, showMessage);
+    // Re-selecting the live segment changes nothing, so it acknowledges as a
+    // plain press instead of a relay throw.
+    if (this.activePass === previous) feedback('press');
+  }
+
+  /** Pass switch: a relay clack, then mask the swap. */
+  onPassSwitched() {
+    feedback('relay');
+    if (!this.passWipe) return;
+    const { width, height } = this.scale.gameSize;
+    this.passWipe.setSize(width, height).setPosition(0, 0);
+    this.passWipeTween?.remove();
+    if (prefersReducedMotion()) {
+      this.passWipe.setVisible(false);
+      return;
+    }
+    this.passWipe.setAlpha(0.95).setVisible(true);
+    this.passWipeTween = this.tweens.add({
+      targets: this.passWipe,
+      alpha: 0,
+      duration: 170,
+      ease: 'Sine.easeOut',
+      onComplete: () => this.passWipe.setVisible(false),
+    });
+  }
+
+  /**
+   * A rejected tally is acknowledged on the readout itself: no dialog, no
+   * camera move, nothing that interrupts inspection. The readout holds the
+   * rejected state until the analyst changes the number, which is calmer than
+   * a flash and still says exactly which total was refused.
+   */
+  onCountRejected() {
+    feedback('error');
+    if (!this.tallyFrame) return;
+    this.countRejected = true;
+    // A near-black red fill would vanish against the rail, so the block itself
+    // carries the muted red and the number flips to off-white on top of it.
+    this.tallyFrame.setFillStyle(hexToNumber(UI_TOKENS.color.rust), 0.9)
+      .setStrokeStyle(3, hexToNumber(UI_TOKENS.color.rustBright));
+    this.answerText?.setColor(UI_TOKENS.text.primary);
+  }
+
+  onCountConfirmed() {
+    feedback('confirm');
+  }
+
+  clearCountRejection() {
+    if (!this.countRejected) return;
+    this.countRejected = false;
+    this.tallyFrame?.setFillStyle(hexToNumber(UI_TOKENS.color.black), 0.92)
+      .setStrokeStyle(2, hexToNumber(UI_TOKENS.color.phosphorDim));
+    this.answerText?.setColor(UI_TOKENS.text.positiveBright);
+  }
+
+  /** Every route to a new total (buttons, arrows, digits) clears it. */
+  setAnswer(value) {
+    const previous = this.answerValue;
+    super.setAnswer(value);
+    if (this.answerValue === previous) return;
+    // Every route to a new total — steppers, arrows, digits — ticks once.
+    feedback(this.answerValue > previous ? 'tickUp' : 'tickDown');
+    this.clearCountRejection();
+  }
+
   /**
    * Result feedback lands on the mark the analyst made and nowhere else, so a
    * wrong call never points at the objects around it.
    */
   onIdentificationResolved(result, mark) {
+    feedback(result.correct ? 'confirm' : 'error');
     this.setAnalysisMode('analysis');
     if (!mark || !this.selectionGraphics) {
       super.onIdentificationResolved(result, mark);
@@ -181,28 +272,10 @@ export default class EnhancedReconScene extends ReconScene {
         const second = Math.ceil(this.remainingSeconds);
         if (second > 0 && second <= 10 && second !== this.lastCountdownSecond) {
           this.lastCountdownSecond = second;
-          feedback('countdown', 6);
+          feedback('countdown');
         }
       },
     });
-  }
-
-  flashStatus(message) {
-    super.flashStatus(message);
-    const normalized = String(message ?? '').toUpperCase();
-    const now = this.time.now;
-    if (normalized === this.lastStatusMessage && now - this.lastStatusAt < 320) return;
-    this.lastStatusMessage = normalized;
-    this.lastStatusAt = now;
-    if (normalized.includes('UNVERIFIED') || normalized.includes('FALSE ID')) {
-      feedback('error', [18, 26, 18]);
-    } else if (normalized.includes('CONFIRMED')) {
-      feedback('confirm', [12, 18, 20]);
-    } else if (normalized.includes('MARKING ACTIVE')) {
-      feedback('mark', 10);
-    } else if (normalized.includes('PASS A ACQUIRED') || normalized.includes('PASS B ACQUIRED')) {
-      feedback('acquire', 8);
-    }
   }
 
   redrawAtmosphere(width, height) {
@@ -221,25 +294,17 @@ export default class EnhancedReconScene extends ReconScene {
     if (!this.layoutChrome) return;
 
     const { width, height } = gameSize;
-    this.markingBanner?.setPosition(width / 2, 44);
-    if (this.markingBanner?.text) this.markingBanner.setVisible(width >= 480);
     const compact = width < 680;
     const hudHeight = GAME_CONFIG.recon.hudHeight;
-    let railHeight = 0;
+    const railHeight = this.railHeight(width);
     let railWidth = width;
     let railLabel = '';
 
-    if (this.isCountMode) {
-      railHeight = compact ? 112 : 66;
-      railLabel = 'COUNT CONSOLE // ADJUST TOTAL AND SUBMIT';
-    } else if (this.isChangeMode) {
-      railHeight = compact ? 128 : 72;
+    if (this.isCountMode) railLabel = 'COUNT CONSOLE';
+    else if (this.isChangeMode) {
       railWidth = this.splitView ? Math.floor(width / 2) : width;
-      railLabel = this.splitView ? 'CHANGE CONSOLE // PASS A CONTROL DECK' : 'CHANGE CONSOLE // COMPARE AND MARK';
-    } else if (compact) {
-      railHeight = 66;
-      railLabel = 'TARGETING CONSOLE';
-    }
+      railLabel = this.splitView ? 'PASS A DECK' : 'CHANGE CONSOLE';
+    } else if (compact) railLabel = 'TARGETING CONSOLE';
 
     this.layoutChrome.clear();
     this.layoutChrome.lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), UI_TOKENS.surface.dividerAlpha).lineBetween(0, hudHeight, width, hudHeight);
@@ -256,10 +321,26 @@ export default class EnhancedReconScene extends ReconScene {
     if (this.isChangeMode && this.splitView) {
       const half = Math.floor(width / 2);
       const bottom = railHeight > 0 ? height - railHeight : height;
-      this.splitDivider.setPosition(half, hudHeight + (bottom - hudHeight) / 2).setSize(3, Math.max(0, bottom - hudHeight)).setVisible(true);
+      this.splitDivider.setPosition(half, hudHeight + (bottom - hudHeight) / 2)
+        .setSize(3, Math.max(0, bottom - hudHeight)).setVisible(true);
+
+      // Instrument ticks along the divider read as a comparator rather than a
+      // bar dropped between two pictures.
+      this.layoutChrome.lineStyle(1, hexToNumber(UI_TOKENS.color.amber), 0.55);
+      for (let y = hudHeight + 24; y < bottom - 12; y += 42) {
+        this.layoutChrome.lineBetween(half - 8, y, half - 3, y);
+        this.layoutChrome.lineBetween(half + 3, y, half + 8, y);
+      }
+      const mid = hudHeight + (bottom - hudHeight) / 2;
+      this.layoutChrome.lineStyle(2, hexToNumber(UI_TOKENS.color.amber), 0.9);
+      this.layoutChrome.strokeTriangle(half - 9, mid, half - 2, mid - 6, half - 2, mid + 6);
+      this.layoutChrome.strokeTriangle(half + 9, mid, half + 2, mid - 6, half + 2, mid + 6);
+
       this.splitLeftLabel.setPosition(half * 0.5, hudHeight + 20).setVisible(true);
+      // Both pane labels are drawn by the HUD camera, which spans the whole
+      // viewport, so each one sits over its own pane in screen coordinates.
       this.splitRightLabel.setPosition(half + (width - half) * 0.5, hudHeight + 20).setVisible(true);
-      this.passStatusText?.setPosition(half * 0.5, hudHeight + 50);
+      this.passStatusText?.setPosition(half * 0.5, hudHeight + 48);
     } else {
       this.splitDivider.setVisible(false);
       this.splitLeftLabel.setVisible(false);
@@ -269,7 +350,6 @@ export default class EnhancedReconScene extends ReconScene {
 
   finishMission(success) {
     this.pointerReticle?.setActive(false);
-    this.markingBanner?.setVisible(false);
     this.input.setDefaultCursor('default');
     super.finishMission(success);
   }
@@ -277,6 +357,8 @@ export default class EnhancedReconScene extends ReconScene {
   cleanup() {
     this.countdownFeedbackEvent?.remove(false);
     this.resultFlashEvent?.remove(false);
+    this.passWipeTween?.remove();
+    this.markerSettleTween?.remove();
     this.pointerReticle?.destroy();
     this.input.setDefaultCursor('default');
     super.cleanup();
