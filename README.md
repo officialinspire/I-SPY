@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented, with a Phase 13 release-candidate audit, and Phase 15A–15I multi-sector, training and onboarding work, with a Phase 15 release-candidate audit.** Runtime/package version: **`1.2.2-demo`**.
+**Original Phases 0–11 plus Phase 12A–12D, Phase 13A–13F, the complete Phase 14A–14F sprite-art overhaul, and Phase 15A–15I multi-sector, training and onboarding work implemented, with Phase 13, Phase 14 and Phase 15 release audits.** Runtime/package version: **`1.2.2-demo`**.
 
 I SPY currently includes:
 
@@ -42,7 +42,7 @@ I SPY currently includes:
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass, and `docs/PHASE-15-RELEASE-AUDIT.md` for the Phase 15 release-candidate audit. The Phase 15 feature passes are documented in `docs/PHASE-15A-MAP-REGISTRY.md`, `docs/PHASE-15B-FROSTLINE-RELAY.md`, `docs/PHASE-15C-RIVERWORKS-SECTOR.md`, `docs/PHASE-15D-BORDER-FARMS.md`, `docs/PHASE-15E-SECTOR-SELECT.md`, `docs/PHASE-15F-ANALYST-TRAINING.md`, `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`, `docs/PHASE-15H-HAPTICS.md` and `docs/PHASE-15I-ORIENTATION.md`.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass, `docs/PHASE-14-SPRITE-ART.md` for the complete high-fidelity 80-frame sprite-art overhaul and consistency audit, and `docs/PHASE-15-RELEASE-AUDIT.md` for the Phase 15 release-candidate audit. The Phase 15 feature passes are documented in `docs/PHASE-15A-MAP-REGISTRY.md`, `docs/PHASE-15B-FROSTLINE-RELAY.md`, `docs/PHASE-15C-RIVERWORKS-SECTOR.md`, `docs/PHASE-15D-BORDER-FARMS.md`, `docs/PHASE-15E-SECTOR-SELECT.md`, `docs/PHASE-15F-ANALYST-TRAINING.md`, `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`, `docs/PHASE-15H-HAPTICS.md` and `docs/PHASE-15I-ORIENTATION.md`.
 
 ## Interaction design system
 
@@ -127,6 +127,12 @@ See `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`.
 Phase 12A/12B improves image clarity without changing gameplay coordinates or hit boxes. The Phaser backing canvas follows the device pixel ratio up to 2x, antialiasing is enabled for text/graphics/vector-derived textures, CSS no longer forces the final canvas through pixelated scaling, and each 64x64 logical SVG frame is rasterized internally at 128x128 before display.
 
 The visual style remains intentionally monochrome and retro; the higher-density pipeline is meant to make the existing art direction cleaner rather than replace it with a different aesthetic.
+
+## Phase 14 sprite art
+
+Phase 14 redraws all five production sprite sheets while preserving the frozen 80-frame runtime contract. Targets, infrastructure, terrain/vegetation, intelligence clues/decoys, and UI symbols now share a denser four-tone tactical-reconnaissance language with upper-left highlights, lower-right deep shadows, stronger silhouettes, and purpose-built mechanical/material detail. The final UI sheet uses fictional analyst reticles, lock brackets, confirmation marks, grids, framing corners and terminal-panel symbology instead of generic app-icon shapes.
+
+All five sheets remain 256×256, 4×4, and 64×64 per logical frame with the same names/order, map coordinates, hitboxes and manifest API. The final cross-sheet audit verified all 80 clipped cells, exact palette compliance, no gradients/filters/scripts/text, target/decoy fairness, and consistent perspective/lighting. See `docs/PHASE-14-SPRITE-ART.md`.
 
 ## Layout quality
 
@@ -400,6 +406,12 @@ npm run build
 - Phase 13E — Mode-specific gameplay UX ✅
 - Phase 13F — Microinteraction and feedback polish ✅
 - Phase 13 RC — Release-candidate audit and fixes ✅
+- Phase 14A — High-fidelity sprite-art contract ✅
+- Phase 14B — Target/installation sprite redraw ✅
+- Phase 14C — Infrastructure sprite redraw ✅
+- Phase 14D — Environment/vegetation sprite redraw ✅
+- Phase 14E — Intel/clue/decoy sprite redraw ✅
+- Phase 14F — UI sprite redraw + full-library consistency audit ✅
 - Phase 15A — Multi-map architecture and map registry ✅
 - Phase 15B — FROSTLINE RELAY authored map ✅
 - Phase 15C — RIVERWORKS SECTOR authored map ✅
@@ -409,3 +421,4 @@ npm run build
 - Phase 15G — IDENTIFICATION GUIDE recognition manual ✅
 - Phase 15H — Haptics plus: patterns, strength levels, feature detection ✅
 - Phase 15I — First-run orientation and certification standing ✅
+- Phase 15 RC — Release-candidate audit and fixes ✅
