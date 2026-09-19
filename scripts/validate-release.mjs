@@ -31,6 +31,13 @@ const mainSource = read('src/main.js');
 
 assert(packageJson.version === GAME_CONFIG.version, `version match: ${packageJson.version}`);
 assert(indexHtml.includes('viewport-fit=cover'), 'viewport uses viewport-fit=cover');
+const socialPageUrl = 'https://officialinspire.github.io/I-SPY/';
+const socialImageUrl = 'https://raw.githubusercontent.com/officialinspire/I-SPY/main/I-Spy-Banner-Image-Cover-Version-01.png';
+assert(indexHtml.includes(`rel="canonical" href="${socialPageUrl}"`), 'canonical URL points to the live GitHub Pages game');
+assert(indexHtml.includes(`property="og:url" content="${socialPageUrl}"`), 'Open Graph URL points to the live GitHub Pages game');
+assert(indexHtml.includes(`property="og:image" content="${socialImageUrl}"`), 'Open Graph uses the I SPY banner image');
+assert(indexHtml.includes('name="twitter:card" content="summary_large_image"'), 'Twitter/X preview requests a large image card');
+assert(indexHtml.includes(`name="twitter:image" content="${socialImageUrl}"`), 'Twitter/X uses the I SPY banner image');
 assert(styles.includes('safe-area-inset-top') && styles.includes('safe-area-inset-bottom'), 'safe-area CSS is present');
 assert(!styles.includes('image-rendering: pixelated'), 'final canvas is not forced through pixelated CSS scaling');
 
