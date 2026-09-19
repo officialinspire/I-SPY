@@ -69,33 +69,41 @@ export function unlockSamples() {
   });
 }
 
+function stopOtherSamples(eventName) {
+  if (!samples) return;
+  Object.entries(samples).forEach(([name, player]) => {
+    if (name === eventName) return;
+    player.pause();
+    player.currentTime = 0;
+  });
+}
+
 /**
- * Play a mission sample without stacking. Haptics remain independent of the
- * file channel, so disabling SFX does not remove tactile confirmation.
+ * Play a mission sample on one exclusive target-voice channel.
+ *
+ * Acquired/secured can never overlap each other, and a repeated request for
+ * the same clip while it is already speaking is ignored. Haptics remain
+ * independent of the file channel, so disabling SFX does not remove tactile
+ * confirmation.
  */
 export function sampleFeedback(eventName) {
   const players = ensureSamples();
   const sample = players?.[eventName];
   if (!sample) return false;
 
-  const now = globalThis.performance?.now?.() ?? Date.now();
-  const previous = lastPlayed.get(eventName);
-  if (previous !== undefined && now - previous < COOLDOWN_MS[eventName]) return false;
-  lastPlayed.set(eventName, now);
-
   const hapticEvent = eventName === SAMPLE_EVENTS.TARGET_SECURED ? 'confirm' : 'select';
   haptic(HAPTICS[hapticEvent]);
 
   const settings = getSettings();
   if (!settings.sfxEnabled || settings.masterVolume <= 0) return false;
+
+  const now = globalThis.performance?.now?.() ?? Date.now();
+  const previous = lastPlayed.get(eventName);
+  if (previous !== undefined && now - previous < COOLDOWN_MS[eventName]) return false;
   if (!sample.paused && !sample.ended) return false;
 
-  if (eventName === SAMPLE_EVENTS.TARGET_SECURED) {
-    const acquired = players[SAMPLE_EVENTS.TARGET_ACQUIRED];
-    acquired.pause();
-    acquired.currentTime = 0;
-  }
-
+  stopOtherSamples(eventName);
+  lastPlayed.set(eventName, now);
   sample.currentTime = 0;
   sample.volume = Math.max(0, Math.min(1, settings.masterVolume * SAMPLE_GAIN[eventName]));
   try {
