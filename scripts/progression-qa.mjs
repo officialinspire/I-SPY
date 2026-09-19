@@ -9,6 +9,10 @@ import {
   ANALYST_RECORD_VERSION,
   applyMissionResultToRecord,
   createEmptyAnalystRecord,
+  getAnalystRecord,
+  recordOperationOutcome,
+  recordOperationStarted,
+  resetAnalystRecord,
   sanitizeAnalystRecord,
 } from '../src/game/analystRecord.js';
 import { createGeneratedMission } from '../src/game/missionGenerator.js';
@@ -76,6 +80,31 @@ update = applyMissionResultToRecord(record, mission, {
 record = update.record;
 assert(record.missions.failures === 1 && record.missions.currentStreak === 0, 'failure increments failures and resets current streak');
 assert(record.missions.bestStreak === 2, 'failure preserves best streak');
+
+resetAnalystRecord();
+recordOperationStarted({ kind: 'daily', dailyDate: '2026-09-19' });
+recordOperationOutcome({
+  kind: 'daily',
+  dailyDate: '2026-09-19',
+  cumulative: { score: 900, wins: 1, directives: 1, errors: 1 },
+}, 'failed');
+let persisted = getAnalystRecord();
+assert(persisted.operations.failed === 1 && persisted.operations.bestScore === 0,
+  'failed operation counts but cannot establish an operation PB');
+assert(persisted.daily['2026-09-19'].attempts === 1 && persisted.daily['2026-09-19'].bestScore === 0,
+  'failed daily attempt is retained without replacing the daily best');
+
+recordOperationStarted({ kind: 'daily', dailyDate: '2026-09-19' });
+const completedRecord = recordOperationOutcome({
+  kind: 'daily',
+  dailyDate: '2026-09-19',
+  cumulative: { score: 3200, wins: 3, directives: 2, errors: 0 },
+}, 'complete');
+persisted = completedRecord.record;
+assert(completedRecord.newBest && completedRecord.newDailyBest
+  && persisted.operations.bestScore === 3200
+  && persisted.daily['2026-09-19'].bestScore === 3200,
+'completed daily operation establishes operation and daily PBs');
 
 // --- Operation Series -----------------------------------------------------
 const rootSeed = 'QA-17D-ROOT';
