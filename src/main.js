@@ -3,6 +3,7 @@ import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
 import './settings/userSettings.js';
 import BootScene from './scenes/BootScene.js';
+import StartIntroScene from './scenes/StartIntroScene.js';
 import MainMenuScene from './scenes/MainMenuScene.js';
 import MissionBriefingScene from './scenes/MissionBriefingScene.js';
 import EnhancedReconScene from './scenes/EnhancedReconScene.js';
@@ -39,7 +40,7 @@ const config = {
   input: {
     activePointers: 3,
   },
-  scene: [BootScene, MainMenuScene, MissionBriefingScene, EnhancedReconScene, TrainingScene, IdentificationGuideScene, ResultsScene],
+  scene: [BootScene, StartIntroScene, MainMenuScene, MissionBriefingScene, EnhancedReconScene, TrainingScene, IdentificationGuideScene, ResultsScene],
 };
 
 new Phaser.Game(config);

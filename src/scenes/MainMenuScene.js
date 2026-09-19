@@ -14,6 +14,7 @@ import { cycleHapticsLevel, cycleMasterVolume, getSettings, updateSettings } fro
 import { feedback, hapticsSupported } from '../audio/feedback.js';
 import { TRAINING_STEP_COUNT, resumeTrainingStep } from '../game/trainingMissions.js';
 import { fadeIn } from '../ui/presentation.js';
+import { INSPIRE_LOGO_KEY } from '../assets/brandAssets.js';
 
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
 const GUIDE_READOUT = 'IDENTIFICATION GUIDE // RECOGNITION MANUAL FOR EVERY OBJECT CLASS';
@@ -143,6 +144,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.createHeader();
     this.createTasking();
     this.createSystemRow();
+    this.createBranding();
     this.createNoticePanel();
     this.createSettingsPanel();
     this.createOrientationPanel();
@@ -160,6 +162,18 @@ export default class MainMenuScene extends Phaser.Scene {
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
     this.layout(this.scale.gameSize);
+  }
+
+  createBranding() {
+    this.brandLogo = this.add.image(0, 0, INSPIRE_LOGO_KEY).setOrigin(1, 0.5).setAlpha(0.62);
+    this.brandLink = this.add.text(0, 0, 'www.inspireclothing.art', {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '9px',
+      color: UI_TOKENS.text.faint,
+    }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+    this.brandLink.on('pointerup', () => {
+      window.open('https://www.inspireclothing.art', '_blank', 'noopener,noreferrer');
+    });
   }
 
   /** UI sprite frame, or undefined when the sheet is unavailable. */
@@ -766,11 +780,14 @@ export default class MainMenuScene extends Phaser.Scene {
     const innerWidth = innerRight - innerLeft;
 
     const topSafe = width < 540 ? 34 : 42;
-    const bottomSafe = height < 420 ? 26 : 40;
+    const bottomSafe = height < 420 ? 12 : 18;
+    // This slot is outside the console composition, so the footer never sits
+    // over a control even when a short screen forces the minimal density tier.
+    const brandingSlot = height < 480 ? 28 : 38;
 
     // Pick the richest tier that fits, then centre the composition in the
     // space that is left so tall screens do not hang everything off the top.
-    const available = height - topSafe - bottomSafe;
+    const available = height - topSafe - bottomSafe - brandingSlot;
     const tier = TIERS.find((candidate) => this.composedHeight(candidate, stackCards, framePadX, innerWidth).total <= available)
       ?? TIERS[TIERS.length - 1];
     const composed = this.composedHeight(tier, stackCards, framePadX, innerWidth);
@@ -906,6 +923,13 @@ export default class MainMenuScene extends Phaser.Scene {
       primaryWidth,
       tier,
     });
+
+    const brandY = height - bottomSafe - brandingSlot / 2;
+    const logoWidth = width < 380 ? 54 : 68;
+    const logoHeight = logoWidth * (181 / 600);
+    const linkFont = width < 380 ? 8 : 9;
+    this.brandLogo.setDisplaySize(logoWidth, logoHeight).setPosition(width / 2 - 7, brandY);
+    this.brandLink.setFontSize(linkFont).setPosition(width / 2 + 7, brandY);
 
     this.layoutSettings(gameSize);
     this.layoutNotice(gameSize);

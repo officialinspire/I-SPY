@@ -2,11 +2,15 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { preloadSpriteSheets, registerSpriteFrames } from '../assets/registerSpriteFrames.js';
 import { createTerminalChrome, drawReticle, prefersReducedMotion } from '../ui/presentation.js';
+import { INSPIRE_LOGO_KEY, inspireLogoUrl } from '../assets/brandAssets.js';
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('Boot'); }
 
-  preload() { preloadSpriteSheets(this); }
+  preload() {
+    preloadSpriteSheets(this);
+    this.load.image(INSPIRE_LOGO_KEY, inspireLogoUrl);
+  }
 
   create() {
     registerSpriteFrames(this);
@@ -56,7 +60,7 @@ export default class BootScene extends Phaser.Scene {
       this.status.setText('IMAGERY CHANNEL OPEN // ANALYSIS CONSOLE READY');
     }
 
-    this.time.delayedCall(this.reducedMotion ? 180 : GAME_CONFIG.presentation.bootDurationMs, () => this.scene.start('MainMenu'));
+    this.time.delayedCall(this.reducedMotion ? 180 : GAME_CONFIG.presentation.bootDurationMs, () => this.scene.start('StartIntro'));
   }
 
   layout(gameSize) {
