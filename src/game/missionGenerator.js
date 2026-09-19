@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../runtime-config.js';
-import { getMapEntities, getMapLayer, getMapSpawnZones } from '../world/reconMapSchema.js';
+import { findSelectableOverlaps, getMapEntities, getMapLayer, getMapSpawnZones } from '../world/reconMapSchema.js';
 import { isAnySector, listReconMaps, resolveReconMap } from '../world/mapRegistry.js';
 import { createLocateMission } from './locateMission.js';
 import { createCountMission } from './countMission.js';
@@ -105,7 +105,13 @@ function generatedTimeLimit(rng) {
   return pick(rng, GAME_CONFIG.generator.timeLimits) ?? 90;
 }
 
-function simulateEntities(map, operations = []) {
+/**
+ * The entity state a set of operations leaves behind.
+ *
+ * Exported so the release QA can read the same final state the validator
+ * judges, rather than keeping a second copy of what an operation means.
+ */
+export function simulateEntities(map, operations = []) {
   const entities = authoredEntities(map);
   for (const operation of operations) {
     if (operation.type === 'move_entity') {
@@ -149,6 +155,43 @@ function operationBoundsValid(operation, map) {
     return Number.isFinite(item.x) && Number.isFinite(item.y) && item.x >= 0 && item.y >= 0 && item.x + width <= map.width && item.y + height <= map.height;
   }
   return true;
+}
+
+/**
+ * The shortest move a CHANGE event may call a change.
+ *
+ * Comparing two passes is a visual diff: a shift of a few pixels reads as
+ * registration noise between frames, not as something that drove away. This is
+ * the distance at which the object has plainly left where it was.
+ */
+export const MIN_CHANGE_MOVE = 90;
+
+/** A generated COUNT is a tally, and a tally of one is a yes/no question. */
+export const MIN_GENERATED_COUNT = 2;
+
+/**
+ * The entities a mission's own operations put somewhere.
+ *
+ * Overlap is judged against these rather than the whole plate: a map's own
+ * crowding is the map's to answer for (the release validator checks it), while
+ * anything the generator moved or added landing on top of something is this
+ * mission's fault and is worth another attempt.
+ */
+function placedEntityIds(operations = []) {
+  const ids = new Set();
+  for (const operation of operations) {
+    if (operation?.type === 'move_entity' && operation.entityId) ids.add(operation.entityId);
+    else if (operation?.type === 'add_entity' && operation.entity?.id) ids.add(operation.entity.id);
+  }
+  return ids;
+}
+
+function overlapErrors(entities, operations, passLabel) {
+  const placed = placedEntityIds(operations);
+  if (!placed.size) return [];
+  return findSelectableOverlaps(entities, { only: placed }).map(
+    ({ a, b, ratio }) => `${passLabel}: '${a}' and '${b}' overlap by ${Math.round(ratio * 100)}% of the smaller object.`,
+  );
 }
 
 function createLocateGenerated(rng, seed, map) {
@@ -345,7 +388,13 @@ export function validateGeneratedMission(mission, mapSource) {
     if (!operationBoundsValid(operation, map)) errors.push(`Operation '${operation.type ?? 'unknown'}' exceeds map bounds.`);
   }
 
-  const passA = simulateEntities(map, mission.worldOperations ?? []);
+  const worldOperations = mission.worldOperations ?? [];
+  const passBOperations = mission.passBOperations ?? [];
+  const passA = simulateEntities(map, worldOperations);
+  // A mark has to resolve to one object, so nothing this mission placed may
+  // sit materially on top of another selectable object — in either pass.
+  errors.push(...overlapErrors(passA, worldOperations, 'PASS A'));
+
   if (mission.mode === 'LOCATE') {
     const target = passA.find((entity) => entity.id === mission.targetId);
     if (!target || target.hidden || !target.selectable) errors.push('LOCATE target is not visible/selectable after generation.');
@@ -355,19 +404,21 @@ export function validateGeneratedMission(mission, mapSource) {
     const region = mission.region;
     if (!region || region.x < 0 || region.y < 0 || region.x + region.width > map.width || region.y + region.height > map.height) errors.push('COUNT region is outside map bounds.');
     const count = passA.filter((entity) => entity.category === mission.targetCategory && entityCenterInRegion(entity, region)).length;
-    if (count <= 0) errors.push('COUNT mission generated no valid target objects.');
+    if (count < MIN_GENERATED_COUNT) errors.push(`COUNT mission generated ${count} target object(s); a tally needs at least ${MIN_GENERATED_COUNT}.`);
     if (count !== mission.expectedCount) errors.push('COUNT expected answer does not match generated entity state.');
   }
 
   if (mission.mode === 'CHANGE') {
-    const passB = simulateEntities(map, [...(mission.worldOperations ?? []), ...(mission.passBOperations ?? [])]);
+    const passB = simulateEntities(map, [...worldOperations, ...passBOperations]);
+    errors.push(...overlapErrors(passB, [...worldOperations, ...passBOperations], 'PASS B'));
     const targetA = passA.find((entity) => entity.id === mission.targetId);
     const targetB = passB.find((entity) => entity.id === mission.targetId);
     const visibleA = Boolean(targetA && !targetA.hidden);
     const visibleB = Boolean(targetB && !targetB.hidden);
-    const moved = visibleA && visibleB && (Math.abs(targetA.x - targetB.x) > 8 || Math.abs(targetA.y - targetB.y) > 8);
+    const distance = visibleA && visibleB ? Math.hypot(targetA.x - targetB.x, targetA.y - targetB.y) : 0;
+    const moved = distance >= MIN_CHANGE_MOVE;
     if (!visibleA && !visibleB) errors.push('CHANGE target is not visible in either pass.');
-    if (visibleA === visibleB && !moved) errors.push('CHANGE target state does not materially differ between passes.');
+    if (visibleA === visibleB && !moved) errors.push(`CHANGE target moved ${Math.round(distance)} units; a visible move is at least ${MIN_CHANGE_MOVE}.`);
   }
 
   return { valid: errors.length === 0, errors };

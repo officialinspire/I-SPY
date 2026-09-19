@@ -103,3 +103,156 @@ authors its own count region, so that path tallies a real bay rather than a bad 
 ## Checks
 
 `npm run validate` — 2789 checks, 0 warnings. `npm run build` — clean.
+
+---
+
+# Phase 15J — bug-fix and regression pass
+
+A second pass over the shipped Phase 15 build, fixing verified defects only. No features, maps,
+sprites, modes or scoring were added or changed. Each defect below was reproduced against the
+deployed build before it was fixed, and every fix is held by a test that fails on that build.
+
+## Generation
+
+### 1. Generated objects could land on top of each other
+
+**Severity: high — it affects the puzzle.** Placement drew a position inside a spawn zone without
+asking what was already there, so a moved target, a moved decoy or an appeared contact could come to
+rest materially on top of another selectable object. A buried silhouette cannot be recognised, and a
+mark on the pair resolves to one of them for reasons the analyst cannot see.
+
+**Measured.** Over 768 seeded missions (four sectors x three modes x 64 fixed seeds), the shipped
+generator produced **236** missions in which something it had placed overlapped another selectable
+object by at least a quarter of the smaller footprint. After the fix: **0**.
+
+**Fix.** `src/world/reconMapSchema.js` gained `entityOverlapRatio()` and `findSelectableOverlaps()`
+— shared area as a fraction of the *smaller* footprint, hidden and non-selectable objects skipped,
+`OVERLAP_LIMIT` at 25% so a clipped corner stays allowed. `validateGeneratedMission()` now rejects
+any mission whose own operations produced an over-limit pair, in PASS A and, for CHANGE, in PASS B
+as well; `add_entity` is included, so an appeared contact is judged like anything else. Rejection
+feeds the generator's existing retry loop, which was the sanctioned mechanism, so generation stays
+deterministic and no placement logic was rewritten. Overlap is judged only against what the mission
+placed: a map's own crowding is the map's to answer for, and the release validator now answers it.
+
+### 2. Generated COUNT could ask for a tally of one
+
+**Severity: medium.** `createCountGenerated` chose one to three vehicles for the region, so the
+expected answer could be 1 — a yes/no question wearing a counting task's clothes. **68 of 256**
+seeded COUNT missions asked for a tally of 1. The validator now requires `expectedCount >= 2`
+(`MIN_GENERATED_COUNT`) and retries below it. Scoring is untouched. After the fix: **0**.
+
+### 3. A generated CHANGE could "move" an object eight pixels
+
+**Severity: medium.** The move check was per-axis and asked only for more than 8 units, which is
+registration noise between two frames rather than something that drove away. **9** of the 768 seeded
+missions passed on a move under 90 units. The check is now Euclidean against `MIN_CHANGE_MOVE = 90`.
+Appeared and disappeared events are unchanged. After the fix: **0**.
+
+## Interaction
+
+### 4. An exact overlap was marked back to front
+
+**Severity: high.** `entityAtPoint()` walked the entity list forwards and returned the first match.
+Entities are drawn in that same order, and an added contact is appended, so the first match is the
+object drawn *underneath*: where two objects overlapped, the analyst clicked the sprite they could
+see and marked the one they could not. The search now runs in reverse, so the object on top — the
+one that was clicked — wins, and it only considers objects that can be marked at all.
+`entityNearPoint()` keeps its two steps: exact hit first, then the touch-tolerance ring.
+
+### 5. BORDER FARMS parked a truck inside a barn
+
+**Severity: high.** `mil-truck-02` overlapped `barn-01` by **64%** of the truck, and clipped
+`generator-01` by 14%. The truck moved 67 units, from `420,1220` to `400,1284` — still in the same
+farmyard, now alongside the barn rather than under it. It stays inside the `farmyard` spawn zone, it
+is nowhere near the sector's COUNT region, and the COUNT total is unchanged. An audit of all five
+maps found no other over-limit pair; FROSTLINE RELAY's `mil-truck-02` clips `fuel-tanks-01` by 9%,
+which is the ordinary crowding the limit is set to allow. The release validator now fails on any
+authored selectable pair over the limit, so this cannot be re-authored by accident.
+
+### 6. The identification guide's masked grid took input it could not show
+
+**Severity: medium.** The grid is clipped by a geometry mask, which Phaser's hit testing knows
+nothing about, so a cell scrolled half out of the box still answered clicks in the part that was not
+drawn. The wheel scrolled the grid wherever the pointer was, including while reading the detail
+panel. A drag to scroll opened whichever cell it began on when the finger lifted. And cells below
+the fold were hidden to stop the stray clicks, which put them beyond the keyboard as well: at a
+window where the last row sits outside the box, **Tab reached six of the nine entries**.
+
+**Fix.** `createButton` gained an optional `pointerGuard`, asked on press *and* on release, so the
+owner of a mask can say whether a pointer is somewhere its button can be pressed; keyboard
+activation never consults it. The guide's cells use it to require the pointer inside the grid box
+and to veto a press that has turned into a drag (past a six-pixel threshold). The wheel handler asks
+the same question. Cells below the fold stay visible and focusable — the mask does the clipping —
+and focusing one scrolls it into view. After the fix Tab reaches all nine.
+
+### 7. A category was laid out against the category just left
+
+**Severity: low.** `layout()` measured the summary's height to position everything under it, then
+set the summary's text at the end of the pass. A category switch therefore measured the previous
+category's text. It was invisible in the shipped build only because `selectCategory` runs the layout
+twice and the second pass saw the text the first had set. The text is now written before anything
+measures it, so one pass is correct. (`selectCategory` still calls `layout` explicitly, because the
+argument it passes to `showEntry` as `layoutAfter` is its own `silent` flag.)
+
+### 8. The settings rows answered in the state you had just left
+
+**Severity: medium.** A button's press cue fires before its handler runs, so the three rows that
+change how feedback itself behaves acknowledged the old state:
+
+- turning SOUND EFFECTS on was **silent**, because the cue was voiced while sound was still off;
+- raising MASTER LEVEL from zero was **silent**, for the same reason;
+- stepping HAPTICS pulsed **twice** — once at the strength being left and once at the new one — and
+  stepping to OFF still pulsed.
+
+Measured against the shipped build: SFX OFF -> ON started 0 notes; MASTER 0 -> 100% started 0 notes;
+stepping to STANDARD vibrated `[6, 16]`, to STRONG `[10, 23]`, and to OFF `[15]`.
+
+**Fix.** Those three rows take `pressSound: false` and voice themselves after the change. Now:
+SFX OFF -> ON is heard, MASTER 0 -> non-zero is heard at the new level, each haptic step is exactly
+one pulse at the new strength (`[6]`, `[10]`, `[15]`) and OFF is `[]`. Sound and touch stay
+independent: with SFX off and master at zero, the haptics row still pulses once and starts no notes.
+
+### 9. HOW TO PLAY closed itself mid-sentence
+
+**Severity: low.** The field guide carried a 9000ms auto-dismiss, so it was taken away while being
+read. The timer is gone; it closes on a backdrop tap or ESC, which is what its own hint says.
+
+## Validation
+
+### 10. Authored mission validation
+
+The release validator now requires every registered map — training range included, because its
+lessons mark the same two objects — to carry a **selectable** `radar-01` and a **selectable**
+`jeep-01`, and to hold an authored COUNT total of at least two. It also fails on any authored
+selectable overlap over the limit. 2809 checks, up from 2789.
+
+### 11. Generator QA in the release gate
+
+`scripts/generator-qa.mjs` plays the real generator over every playable sector and mode for 64 fixed
+seeds — 768 missions, 7861 assertions — and holds each result to the rules above: a visible,
+selectable LOCATE target; a COUNT of at least two that matches the plate; a CHANGE whose target
+state genuinely differs, whose move clears the minimum, and whose disappeared target existed in
+PASS A; no material overlap in either pass; no out-of-bounds operation; and the same seed, map and
+mode reproducing an identical mission. It imports the runtime generator and the runtime schema
+rather than restating either. `npm run validate` now runs it after the static validator, and CI runs
+`npm run validate` before the production build, so a generator that can produce an unplayable
+mission cannot deploy.
+
+To make that possible in plain Node, `src/world/mapRegistry.js` now spells its five JSON imports
+with `with { type: 'json' }`. Vite builds it unchanged; Node 22 can now import the generator
+directly, so the QA needs no bundler and no second copy of anything.
+
+## The generator fingerprint moved, on purpose
+
+The 303-mission woodland fingerprint that Phase 15A–15I held at
+`5a3b3c6cddf9e49f17664cd1c5e3b0192cf056f7b76f88cd987441dd3fcce312` is now
+`3fb71cf852bf71a259bbd224dada220a123e4185b1a6736f7af651c3c760106a`. That is the point of this pass:
+a stricter validator sends some seeds to a different attempt in the retry loop. **212 of the 300
+missions are byte-identical**; the 88 that changed are the ones the old rules let through with an
+overlap, a tally of one, or a move too small to see. The fingerprint is re-pinned at the new value
+for the next refactor to be measured against.
+
+## Checks
+
+`npm run validate` — 2809 static checks, 0 warnings, then 7861 generator assertions over 768
+missions. `npm run build` — clean.

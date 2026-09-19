@@ -413,15 +413,14 @@ export default class MainMenuScene extends Phaser.Scene {
     fadeIn(this, [this.noticeBackdrop, this.noticeGraphics, this.noticeTitle,
       this.noticeBody, this.noticeHint]);
     this.readout?.setText('ANALYST FIELD GUIDE // OPEN');
-    this.noticeTimer?.remove(false);
-    this.noticeTimer = this.time.delayedCall(9000, () => this.hideNotice());
+    // No timer: a field guide that closes itself mid-sentence is a page that
+    // was taken away. It waits for the backdrop or ESC.
     this.layout(this.scale.gameSize);
   }
 
   hideNotice() {
     if (!this.noticeOpen) return;
     this.noticeOpen = false;
-    this.noticeTimer?.remove(false);
     this.buttons.forEach((button) => button.setEnabled(true));
     this.noticeBackdrop.disableInteractive().setVisible(false);
     this.noticeGraphics.setVisible(false);
@@ -590,14 +589,16 @@ export default class MainMenuScene extends Phaser.Scene {
       color: GAME_CONFIG.palette.gray,
     }).setOrigin(0.5).setDepth(61).setVisible(false);
 
-    // The button's own toggle cue is the acknowledgement; a second sound here
-    // would voice one press twice.
-    this.masterSettingButton = createButton(this, 0, 0, '', () => {
-      cycleMasterVolume();
-      this.refreshSettingsLabels();
-    }, { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
-    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
-    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.cycleHaptics(), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    // The three rows that change how feedback itself behaves are voiced by
+    // their handlers, not by the button. A press cue fires before the handler
+    // runs, so it always answered in the state the analyst had just left:
+    // turning sound on was silent, and stepping the haptics buzzed at the old
+    // strength and then again at the new one. `pressSound: false` removes that
+    // first cue so each of these rows acknowledges exactly once, in the state
+    // it has just been put into.
+    this.masterSettingButton = createButton(this, 0, 0, '', () => this.stepMasterVolume(), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: false });
+    this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleFeedbackSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: false });
+    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.cycleHaptics(), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: false });
     this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13, variant: 'primary' });
@@ -612,14 +613,31 @@ export default class MainMenuScene extends Phaser.Scene {
   /**
    * Step the haptic strength, then let the new level introduce itself.
    *
-   * The button's own press cue fires before the handler runs, so it would
-   * always be the previous strength; this second pulse is the one that answers
-   * the question the analyst is actually asking.
+   * Exactly one pulse, at the strength just chosen. OFF pulses not at all —
+   * `haptic()` reads the stored level, so the cue simply has no haptic
+   * channel to speak on — while the row's sound is unaffected either way.
    */
   cycleHaptics() {
-    const level = cycleHapticsLevel().hapticsLevel;
+    cycleHapticsLevel();
     this.refreshSettingsLabels();
-    if (level !== 'off') this.time.delayedCall(90, () => feedback('select'));
+    feedback('toggle');
+  }
+
+  /** Step the master level, then acknowledge at the level just set. */
+  stepMasterVolume() {
+    cycleMasterVolume();
+    this.refreshSettingsLabels();
+    feedback('toggle');
+  }
+
+  /**
+   * A feedback switch acknowledges itself after the switch, never before, so
+   * SOUND EFFECTS // ON is the first thing the analyst hears when they turn it
+   * on and OFF is silent because it is off.
+   */
+  toggleFeedbackSetting(key) {
+    this.toggleSetting(key);
+    feedback('toggle');
   }
 
   toggleSetting(key) {

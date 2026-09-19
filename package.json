@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "validate": "node scripts/validate-release.mjs",
+    "validate": "node scripts/validate-release.mjs && node scripts/generator-qa.mjs",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "qa": "node scripts/generator-qa.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

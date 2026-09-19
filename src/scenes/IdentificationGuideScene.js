@@ -25,6 +25,8 @@ const CELL_GAP = 8;
 const CAPTION_AT = 96;
 /** Matches the letterSpacing the title is drawn with. */
 const TITLE_LETTER_SPACING = 4;
+/** Movement past which a press on the grid is a scroll rather than a tap. */
+const DRAG_SLOP = 6;
 
 export default class IdentificationGuideScene extends Phaser.Scene {
   constructor() { super('IdentificationGuide'); }
@@ -50,7 +52,11 @@ export default class IdentificationGuideScene extends Phaser.Scene {
     this.focusGroup = createFocusGroup(this, this.focusMembers(), {
       onFocus: (button) => {
         const cell = this.cells.find((entry) => entry.button === button);
-        if (cell) this.showEntry(cell.categoryIndex, cell.entryIndex, false);
+        if (!cell) return;
+        // Keyboard reaches every entry, including the rows below the fold, so
+        // the grid follows the focus ring instead of leaving it off screen.
+        this.scrollCellIntoView(cell);
+        this.showEntry(cell.categoryIndex, cell.entryIndex, false);
       },
     });
 
@@ -113,6 +119,9 @@ export default class IdentificationGuideScene extends Phaser.Scene {
           width: 96,
           height: 96,
           fontSize: 8,
+          // The grid is masked, so a cell's hit area can reach outside the box
+          // it is drawn in; and a drag across the grid is a scroll, not a tap.
+          pointerGuard: (pointer) => this.withinGrid(pointer) && !this.gridDragged,
         });
         const image = definition
           ? this.add.image(0, 0, definition.sheet.key, item.sprite)
@@ -179,19 +188,32 @@ export default class IdentificationGuideScene extends Phaser.Scene {
 
   bindInput() {
     this.input.keyboard?.on('keydown-ESC', () => this.scene.start('MainMenu'));
+    // The wheel belongs to whatever the pointer is over: rolling it while
+    // reading the detail panel must not scroll the grid behind the cursor.
     this.input.on('wheel', (pointer, objects, deltaX, deltaY) => {
-      if (!this.gridScrollable) return;
+      if (!this.gridScrollable || !this.withinGrid(pointer)) return;
       this.scrollGridBy(deltaY);
     });
     this.input.on('pointerdown', (pointer) => {
-      this.gridDrag = this.gridScrollable && this.withinGrid(pointer) ? { y: pointer.y } : null;
+      this.gridDragged = false;
+      this.gridDrag = this.gridScrollable && this.withinGrid(pointer)
+        ? { y: pointer.y, startY: pointer.y }
+        : null;
     });
     this.input.on('pointermove', (pointer) => {
       if (!this.gridDrag || !pointer.isDown) return;
+      // Past the threshold this gesture is a scroll for good, so the cell it
+      // started on does not open when the finger lifts.
+      if (Math.abs(pointer.y - this.gridDrag.startY) >= DRAG_SLOP) this.gridDragged = true;
       this.scrollGridBy(this.gridDrag.y - pointer.y);
       this.gridDrag.y = pointer.y;
     });
-    this.input.on('pointerup', () => { this.gridDrag = null; });
+    // The flag is cleared a beat after release: the button's own pointerup
+    // runs first and has to still see that this was a drag.
+    this.input.on('pointerup', () => {
+      this.gridDrag = null;
+      if (this.gridDragged) this.time.delayedCall(0, () => { this.gridDragged = false; });
+    });
   }
 
   // --- state ---------------------------------------------------------------
@@ -208,6 +230,9 @@ export default class IdentificationGuideScene extends Phaser.Scene {
     this.categoryIndex = ((index % GUIDE_CATEGORIES.length) + GUIDE_CATEGORIES.length) % GUIDE_CATEGORIES.length;
     this.gridScroll = 0;
     this.tabs.forEach((tab, tabIndex) => tab.setSelected(tabIndex === this.categoryIndex));
+    // `silent` doubles as showEntry's layoutAfter, so an ordinary switch lays
+    // out here rather than there. Either way the pass is measured against this
+    // category's own header text now, which is what it was getting wrong.
     this.showEntry(this.categoryIndex, 0, silent);
     this.focusGroup?.setMembers(this.focusMembers());
     this.layout(this.scale.gameSize);
@@ -276,6 +301,12 @@ export default class IdentificationGuideScene extends Phaser.Scene {
   layout(gameSize) {
     const { width, height } = gameSize;
     this.chrome.layout(gameSize);
+    // Written before a single measurement is taken. The summary's height is
+    // what the tabs below it are positioned from, so setting it at the end of
+    // the pass laid this category out against the last category's text.
+    const activeCategory = this.activeCategory();
+    this.summary.setText(activeCategory.summary);
+    this.counter.setText(`${activeCategory.title} · ${activeCategory.entries.length} ENTRIES`);
     const margin = width < 540 ? 10 : 16;
     const inset = width < 520 ? 14 : 26;
     const left = margin + inset;
@@ -383,10 +414,6 @@ export default class IdentificationGuideScene extends Phaser.Scene {
     this.layoutGrid(gridBox);
     this.layoutDetail(detailBox, compact);
     this.drawFrames(gridBox, detailBox);
-
-    const category = this.activeCategory();
-    this.summary.setText(category.summary);
-    this.counter.setText(`${category.title} · ${category.entries.length} ENTRIES`);
   }
 
   layoutGrid(box) {
@@ -443,12 +470,29 @@ export default class IdentificationGuideScene extends Phaser.Scene {
       cell.caption.setOrigin(0.5, 1)
         .setPosition(x, y + fit.size / 2 - 6)
         .setVisible(showCaption);
-      // A cell scrolled out of the box must not be clickable through the mask.
-      const inside = y + fit.size / 2 > box.top && y - fit.size / 2 < box.top + box.height;
-      cell.button.setVisible(inside);
-      cell.image.setVisible(inside);
-      cell.caption.setVisible(inside && showCaption);
+      // Cells scrolled past the fold stay visible and focusable — the mask
+      // keeps them off the screen, and the cells' pointer guard keeps a click
+      // that lands outside the box from reaching a hit area that pokes out of
+      // it. Hiding them instead is what used to put them beyond the keyboard.
+      cell.button.setVisible(true);
+      cell.image.setVisible(true);
+      cell.caption.setVisible(showCaption);
     });
+  }
+
+  /** Scroll so a whole cell sits inside the grid box, if it does not already. */
+  scrollCellIntoView(cell) {
+    const fit = this.gridFit;
+    if (!fit || !this.gridScrollable || cell.categoryIndex !== this.categoryIndex) return;
+    const index = this.activeCells().indexOf(cell);
+    if (index < 0) return;
+    const row = Math.floor(index / fit.columns);
+    const top = row * (fit.size + CELL_GAP);
+    const bottom = top + fit.size;
+    if (top < this.gridScroll) this.scrollGridBy(top - this.gridScroll);
+    else if (bottom > this.gridScroll + this.gridBox.height) {
+      this.scrollGridBy(bottom - this.gridBox.height - this.gridScroll);
+    }
   }
 
   layoutDetail(box, compact) {

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { GAME_CONFIG } from '../src/runtime-config.js';
 import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
 import { MAP_CATALOG } from '../src/world/mapCatalog.js';
-import { validateReconMap, getCountRegion, countEntitiesInRegion } from '../src/world/reconMapSchema.js';
+import { validateReconMap, getCountRegion, countEntitiesInRegion, findSelectableOverlaps, OVERLAP_LIMIT } from '../src/world/reconMapSchema.js';
 import { GUIDE_CATEGORIES, validateIdentificationGuide } from '../src/game/identificationGuide.js';
 import { HAPTICS, LEVEL_SCALE, MAX_PULSE_MS, SILENT_HAPTIC_EVENTS, VOICES, scaleHapticPattern } from '../src/audio/feedback.js';
 import { HAPTIC_LEVELS } from '../src/settings/userSettings.js';
@@ -89,11 +89,27 @@ for (const entry of MAP_CATALOG) {
   const missionTargetId = metadata.missionTargetId;
   assert(!missionTargetId || entityIds.includes(missionTargetId), `[${entry.id}] authored mission target resolves: ${missionTargetId ?? 'none'}`);
 
-  // Every sector has to be playable in all three modes, so the change-detection
-  // subject must exist and its authored second-pass position must be a real,
-  // different place inside the sector.
-  const changeSubject = (objectLayer?.items ?? []).find((item) => item.id === 'jeep-01');
-  assert(Boolean(changeSubject), `[${entry.id}] change-detection subject jeep-01 exists`);
+  // Two selectable objects sharing a silhouette cannot be told apart, and a
+  // mark on the pair can only resolve to one of them. A clipped corner is
+  // ordinary aerial crowding; a quarter of the smaller object is not.
+  const overlaps = findSelectableOverlaps(objectLayer?.items ?? []);
+  overlaps.forEach(({ a, b, ratio }) => errors.push(
+    `[${entry.id}] authored selectable objects '${a}' and '${b}' overlap by ${Math.round(ratio * 100)}% of the smaller object.`,
+  ));
+  assert(overlaps.length === 0,
+    `[${entry.id}] no authored selectable object is buried under another (limit ${Math.round(OVERLAP_LIMIT * 100)}%)`);
+
+  // Every sector has to be playable in all three modes, so the objects the
+  // three modes are built around have to exist and be markable. A training
+  // range is held to the same bar: its lessons mark the same two objects.
+  const findEntity = (id) => (objectLayer?.items ?? []).find((item) => item.id === id);
+  for (const id of ['radar-01', 'jeep-01']) {
+    const authored = findEntity(id);
+    assert(Boolean(authored), `[${entry.id}] mission object ${id} exists`);
+    assert(Boolean(authored?.selectable), `[${entry.id}] mission object ${id} is selectable`);
+  }
+
+  const changeSubject = findEntity('jeep-01');
   const destination = metadata.changeDetection?.destination;
   if (changeSubject && destination) {
     const width = changeSubject.width ?? GAME_CONFIG.sprites.frameSize;
