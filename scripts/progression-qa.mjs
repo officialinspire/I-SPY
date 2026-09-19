@@ -51,6 +51,7 @@ assert(Array.isArray(sanitized.processed.missions) && Array.isArray(sanitized.pr
   'v1-shaped records migrate into the v2 processed-result ledger');
 
 let record = createEmptyAnalystRecord();
+let persisted;
 const mission = { mode: 'LOCATE', mapId: 'woodland-corridor-7' };
 let update = applyMissionResultToRecord(record, mission, {
   success: true,
@@ -107,7 +108,7 @@ recordOperationOutcome({
   dailyDate: '2026-09-19',
   cumulative: { score: 900, wins: 1, directives: 1, errors: 1 },
 }, 'failed');
-let persisted = getAnalystRecord();
+persisted = getAnalystRecord();
 assert(persisted.operations.failed === 1 && persisted.operations.bestScore === 0,
   'failed operation counts but cannot establish an operation PB');
 assert(persisted.daily['2026-09-19'].attempts === 1 && persisted.daily['2026-09-19'].bestScore === 0,
