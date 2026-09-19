@@ -133,8 +133,9 @@ export function resolveOperationMissionResult(mission, result = {}) {
   if (!success) return { status: 'failed', context, nextMission: null };
   if (context.index >= OPERATION_MISSION_COUNT - 1) return { status: 'complete', context, nextMission: null };
 
-  context.index += 1;
-  return { status: 'continue', context, nextMission: missionForOperationContext(context) };
+  const nextContext = cloneContext(context);
+  nextContext.index += 1;
+  return { status: 'continue', context, nextMission: missionForOperationContext(nextContext) };
 }
 
 export function restartOperation(context) {
