@@ -7,6 +7,8 @@ import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { createGeneratedMission } from '../game/missionGenerator.js';
 import { feedback } from '../audio/feedback.js';
+import { recordMissionResult, recordOperationOutcome, recordOperationStarted } from '../game/analystRecord.js';
+import { operationCleanSweep, resolveOperationMissionResult, restartOperation } from '../game/operationSeries.js';
 
 export default class ResultsScene extends Phaser.Scene {
   constructor() { super('Results'); }
@@ -24,25 +26,46 @@ export default class ResultsScene extends Phaser.Scene {
       ? `\nDIRECTIVE: ${mission.directive.label} // ${performance.directive?.completed ? 'COMPLETE' : 'FAILED'}\nDIRECTIVE BONUS: +${score.directiveBonus ?? 0}`
       : '';
 
+    const recordUpdate = recordMissionResult(mission, {
+      ...data,
+      success,
+      score,
+      performance,
+      errors: performance.errors ?? 0,
+    });
+    const operationOutcome = resolveOperationMissionResult(mission, { ...data, success, score, performance });
+    const operationFinal = operationOutcome && operationOutcome.status !== 'continue';
+    const operationRecord = operationFinal
+      ? recordOperationOutcome(operationOutcome.context, operationOutcome.status)
+      : null;
+    const operationContext = operationOutcome?.context ?? null;
+    const operationScore = operationContext?.cumulative?.score ?? score.totalScore ?? 0;
+    const operationLabel = operationContext?.kind === 'daily' ? 'DAILY DOSSIER' : 'OPERATION SERIES';
+    const titleText = operationOutcome
+      ? operationOutcome.status === 'complete' ? `${operationLabel} COMPLETE`
+        : operationOutcome.status === 'failed' ? `${operationLabel} FAILED`
+          : `MISSION ${operationContext.index + 1} OF ${operationContext.modeOrder.length} COMPLETE`
+      : (success ? 'MISSION COMPLETE' : 'MISSION FAILED');
+
     this.chrome = createTerminalChrome(this, {
       station: 'INTELLIGENCE DIRECTORATE // POST-MISSION ANALYSIS',
       classification: GAME_CONFIG.presentation.classification,
     });
     this.panelGraphics = this.add.graphics();
 
-    this.kicker = this.add.text(0, 0, 'ASSESSMENT COMPLETE // ANALYST DEBRIEF', {
+    this.kicker = this.add.text(0, 0, operationOutcome ? `${operationLabel} // SERIES DEBRIEF` : 'ASSESSMENT COMPLETE // ANALYST DEBRIEF', {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '11px',
       color: GAME_CONFIG.palette.gray,
       letterSpacing: 1,
     }).setOrigin(0, 0.5);
-    this.title = this.add.text(0, 0, success ? 'MISSION COMPLETE' : 'MISSION FAILED', {
+    this.title = this.add.text(0, 0, titleText, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '32px',
-      color: success ? UI_TOKENS.text.positiveBright : UI_TOKENS.text.negative,
+      color: operationOutcome ? (operationOutcome.status === 'failed' ? UI_TOKENS.text.negative : UI_TOKENS.text.positiveBright) : (success ? UI_TOKENS.text.positiveBright : UI_TOKENS.text.negative),
       letterSpacing: 2,
     }).setOrigin(0, 0.5);
-    this.scoreText = this.add.text(0, 0, `TOTAL SCORE // ${score.totalScore ?? 0}`, {
+    this.scoreText = this.add.text(0, 0, `${operationOutcome ? 'SERIES SCORE' : 'TOTAL SCORE'} // ${operationOutcome ? operationScore : (score.totalScore ?? 0)}`, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '18px',
       fontStyle: 'bold',
@@ -59,6 +82,28 @@ export default class ResultsScene extends Phaser.Scene {
       bodyText = `TARGET: ${data.targetLabel ?? mission.targetLabel ?? 'UNKNOWN'}\nTIME: ${data.elapsedSeconds ?? 0}s\nFALSE IDENTIFICATIONS: ${data.falseIdentifications ?? 0}${gradeLine}${directiveLine}${seedLine}\n\nSCORING LEDGER\nBASE SCORE: ${score.baseScore ?? 0}\nFALSE ID PENALTY: -${score.falsePenalty ?? 0}\nTIME BONUS: +${score.timeBonus ?? 0}\nPERFECT BONUS: +${score.perfectBonus ?? 0}\nDIRECTIVE BONUS: +${score.directiveBonus ?? 0}`;
     }
 
+    const recordFlags = [
+      recordUpdate.newBestScore ? 'NEW BEST SCORE' : null,
+      recordUpdate.newFastestTime ? 'NEW FASTEST TIME' : null,
+    ].filter(Boolean);
+    bodyText += `\n\nANALYST RECORD\n${recordFlags.length ? recordFlags.join(' // ') : 'MISSION LOGGED'}\nCURRENT STREAK: ${recordUpdate.streak}`;
+
+    if (operationOutcome) {
+      const cumulative = operationContext.cumulative;
+      const progress = Math.min(operationContext.index + 1, operationContext.modeOrder.length);
+      bodyText += `\n\n${operationLabel}\nPROGRESS: ${progress}/${operationContext.modeOrder.length} // WINS ${cumulative.wins} // ERRORS ${cumulative.errors}\nSERIES SCORE: ${cumulative.score} // DIRECTIVES: ${cumulative.directives}\nGRADES: ${cumulative.grades.join(' / ')}`;
+      if (operationOutcome.status === 'continue') {
+        bodyText += `\nNEXT TASKING: ${operationOutcome.nextMission.mode}`;
+      } else {
+        const clean = operationCleanSweep(operationContext);
+        const pb = operationRecord?.newDailyBest || operationRecord?.newBest;
+        bodyText += `\nCLEAN SWEEP: ${clean ? 'YES' : 'NO'} // ${pb ? 'NEW OPERATION BEST' : 'RECORD RETAINED'}`;
+        if (operationContext.kind === 'daily') {
+          bodyText += `\nUTC DATE: ${operationContext.dailyDate} // ${operationContext.replay ? 'REPLAY' : 'FIRST ATTEMPT'}`;
+        }
+      }
+    }
+
     this.body = this.add.text(0, 0, bodyText, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '14px',
@@ -67,13 +112,28 @@ export default class ResultsScene extends Phaser.Scene {
       align: 'left',
     }).setOrigin(0, 0);
 
-    this.disposition = this.add.text(0, 0, success ? 'INTELLIGENCE DISPOSITION: ACCEPTED' : 'INTELLIGENCE DISPOSITION: INCOMPLETE', {
+    const dispositionText = operationOutcome
+      ? operationOutcome.status === 'continue' ? 'OPERATION DISPOSITION: CONTINUE'
+        : operationOutcome.status === 'complete' ? 'OPERATION DISPOSITION: COMPLETE'
+          : 'OPERATION DISPOSITION: TERMINATED'
+      : (success ? 'INTELLIGENCE DISPOSITION: ACCEPTED' : 'INTELLIGENCE DISPOSITION: INCOMPLETE');
+    this.disposition = this.add.text(0, 0, dispositionText, {
       fontFamily: GAME_CONFIG.typography.family,
       fontSize: '10px',
-      color: success ? UI_TOKENS.text.positive : UI_TOKENS.text.negative,
+      color: operationOutcome ? (operationOutcome.status === 'failed' ? UI_TOKENS.text.negative : UI_TOKENS.text.positive) : (success ? UI_TOKENS.text.positive : UI_TOKENS.text.negative),
     }).setOrigin(0, 0.5);
 
     const nextAction = () => {
+      if (operationOutcome) {
+        if (operationOutcome.status === 'continue') {
+          this.scene.start('MissionBriefing', { mission: operationOutcome.nextMission });
+          return;
+        }
+        const restarted = restartOperation(operationContext);
+        recordOperationStarted({ kind: restarted.context.kind, dailyDate: restarted.context.dailyDate });
+        this.scene.start('MissionBriefing', { mission: restarted.mission });
+        return;
+      }
       if (!success) {
         this.scene.start('MissionBriefing', { mission });
         return;
@@ -81,7 +141,12 @@ export default class ResultsScene extends Phaser.Scene {
       const nextMission = createGeneratedMission({ mode: mission.mode, map: mission.mapId });
       this.scene.start('MissionBriefing', { mission: nextMission });
     };
-    this.retry = createButton(this, 0, 0, success ? 'NEXT MISSION' : 'RETRY MISSION', nextAction, { width: 250, fontSize: 16, variant: 'primary' });
+    const primaryLabel = operationOutcome
+      ? operationOutcome.status === 'continue' ? 'CONTINUE OPERATION'
+        : operationContext.kind === 'daily' ? 'REPLAY DAILY DOSSIER'
+          : operationOutcome.status === 'failed' ? 'RETRY OPERATION' : 'REPLAY OPERATION'
+      : (success ? 'NEXT MISSION' : 'RETRY MISSION');
+    this.retry = createButton(this, 0, 0, primaryLabel, nextAction, { width: 250, fontSize: 16, variant: 'primary' });
     this.menu = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), { width: 250, fontSize: 16, variant: 'secondary' });
     this.focusGroup = createFocusGroup(this, [this.retry, this.menu]);
     this.scale.on('resize', this.layout, this);
