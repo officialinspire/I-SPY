@@ -28,6 +28,10 @@ const packageJson = JSON.parse(read('package.json'));
 const indexHtml = read('index.html');
 const styles = read('src/styles.css');
 const mainSource = read('src/main.js');
+const menuSource = read('src/scenes/MainMenuScene.js');
+const resultsSource = read('src/scenes/ResultsScene.js');
+const recordSource = read('src/game/analystRecord.js');
+const operationSource = read('src/game/operationSeries.js');
 
 assert(packageJson.version === GAME_CONFIG.version, `version match: ${packageJson.version}`);
 assert(indexHtml.includes('viewport-fit=cover'), 'viewport uses viewport-fit=cover');
@@ -40,6 +44,14 @@ assert(indexHtml.includes('name="twitter:card" content="summary_large_image"'), 
 assert(indexHtml.includes(`name="twitter:image" content="${socialImageUrl}"`), 'Twitter/X uses the I SPY banner image');
 assert(styles.includes('safe-area-inset-top') && styles.includes('safe-area-inset-bottom'), 'safe-area CSS is present');
 assert(!styles.includes('image-rendering: pixelated'), 'final canvas is not forced through pixelated CSS scaling');
+assert(menuSource.includes('OPERATION SERIES') && menuSource.includes('DAILY DOSSIER') && menuSource.includes('ANALYST RECORD'),
+  'main console exposes operation series, daily dossier and analyst record');
+assert(resultsSource.includes('recordMissionResult') && resultsSource.includes('resolveOperationMissionResult'),
+  'results scene records missions and advances operation series');
+assert(recordSource.includes('schemaVersion') && recordSource.includes('RESET') === false,
+  'analyst record uses versioned persistence separate from UI reset controls');
+assert(operationSource.includes('LOCATE') && operationSource.includes('COUNT') && operationSource.includes('CHANGE'),
+  'operation series defines all three mission modes');
 
 // Every catalogued sector is loaded from disk and put through the same schema
 // the game uses, so a map cannot ship registered but unplayable.
@@ -199,7 +211,7 @@ Object.entries(HAPTICS).forEach(([eventName, pattern]) => {
   }
 });
 
-['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'TrainingScene', 'IdentificationGuideScene', 'ResultsScene'].forEach((sceneName) => {
+['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'TrainingScene', 'IdentificationGuideScene', 'ResultsScene', 'AnalystRecordScene'].forEach((sceneName) => {
   assert(mainSource.includes(sceneName), `main scene registration includes ${sceneName}`);
 });
 
