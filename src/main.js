@@ -7,6 +7,7 @@ import MainMenuScene from './scenes/MainMenuScene.js';
 import MissionBriefingScene from './scenes/MissionBriefingScene.js';
 import EnhancedReconScene from './scenes/EnhancedReconScene.js';
 import TrainingScene from './scenes/TrainingScene.js';
+import IdentificationGuideScene from './scenes/IdentificationGuideScene.js';
 import ResultsScene from './scenes/ResultsScene.js';
 
 const devicePixelRatio = Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : 1;
@@ -38,7 +39,7 @@ const config = {
   input: {
     activePointers: 3,
   },
-  scene: [BootScene, MainMenuScene, MissionBriefingScene, EnhancedReconScene, TrainingScene, ResultsScene],
+  scene: [BootScene, MainMenuScene, MissionBriefingScene, EnhancedReconScene, TrainingScene, IdentificationGuideScene, ResultsScene],
 };
 
 new Phaser.Game(config);

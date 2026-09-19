@@ -15,6 +15,7 @@ import { TRAINING_STEP_COUNT, resumeTrainingStep } from '../game/trainingMission
 import { fadeIn } from '../ui/presentation.js';
 
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
+const GUIDE_READOUT = 'IDENTIFICATION GUIDE // RECOGNITION MANUAL FOR EVERY OBJECT CLASS';
 
 const FIELD_GUIDE = [
   'PAN AND ZOOM THE IMAGERY WITH DRAG, WHEEL OR PINCH.',
@@ -27,6 +28,7 @@ const FIELD_GUIDE = [
   'SECTOR PICKS THE MAP. ANY SECTOR LETS THE SEED CHOOSE.',
   '',
   'ANALYST TRAINING WALKS THE CONSOLE STEP BY STEP.',
+  'IDENTIFICATION GUIDE NAMES EVERY SHAPE ON THE IMAGERY.',
   '',
   'ESC PAUSES RECON. TAB WALKS CONSOLE CONTROLS.',
 ];
@@ -81,13 +83,30 @@ function primaryBlockHeight(tier) {
   return tier.primaryHeight + sectorGap(tier) + tier.sectorHeight;
 }
 
+const SYSTEM_GAP = 14;
+/** The longest SYSTEM label decides how many will fit across a row. */
+const SYSTEM_LABEL_CHARS = 'IDENTIFICATION GUIDE'.length;
+
 /**
- * SYSTEM holds three controls. They sit three-up when there is room and fold
- * to two rows — ANALYST TRAINING over the pair — when the console stacks, so
- * no label is ever squeezed to fit.
+ * SYSTEM holds four controls and its labels are long, so the column count is
+ * the widest arrangement whose cells can still hold the longest label at this
+ * tier's font — four across on a desktop, two by two on a tablet, one per row
+ * on a phone. Measuring the label rather than the viewport is what keeps a
+ * short landscape window from folding to two tall rows it has no height for.
  */
-function systemBlockHeight(tier, stackCards) {
-  return stackCards ? tier.systemHeight * 2 + sectorGap(tier) : tier.systemHeight;
+function systemColumns(tier, innerWidth, count) {
+  // Courier advances at roughly 0.6em, plus the button's own padding.
+  const needed = SYSTEM_LABEL_CHARS * tier.systemFont * 0.6 + 28;
+  for (const columns of [4, 2, 1]) {
+    if (columns > count) continue;
+    if ((innerWidth - SYSTEM_GAP * (columns - 1)) / columns >= needed) return columns;
+  }
+  return 1;
+}
+
+function systemBlockHeight(tier, innerWidth, count) {
+  const rows = Math.ceil(count / systemColumns(tier, innerWidth, count));
+  return rows * tier.systemHeight + (rows - 1) * sectorGap(tier);
 }
 
 export default class MainMenuScene extends Phaser.Scene {
@@ -257,6 +276,16 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: 13,
       onHover: (hovered) => this.setReadout(hovered ? this.trainingReadout() : DEFAULT_READOUT),
     });
+    // Three separate offers, and none of them stands in for another: training
+    // walks the console, the manual names what is on the ground, the field
+    // guide is a page to read.
+    this.guideButton = createButton(this, 0, 0, 'IDENTIFICATION GUIDE', () => this.scene.start('IdentificationGuide'), {
+      variant: 'secondary',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? GUIDE_READOUT : DEFAULT_READOUT),
+    });
     this.howToPlayButton = createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice(), {
       variant: 'secondary',
       width: 220,
@@ -271,7 +300,7 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: 13,
       onHover: (hovered) => this.setReadout(hovered ? 'SYSTEM CONFIGURATION' : DEFAULT_READOUT),
     });
-    this.systemButtons = [this.trainingButton, this.howToPlayButton, this.settingsButton];
+    this.systemButtons = [this.trainingButton, this.guideButton, this.howToPlayButton, this.settingsButton];
     this.buttons = [this.randomCard, this.sectorButton, ...this.modeCards, ...this.systemButtons];
     this.refreshTrainingLabel();
   }
@@ -300,6 +329,7 @@ export default class MainMenuScene extends Phaser.Scene {
     if (button === this.howToPlayButton) return 'ANALYST FIELD GUIDE';
     if (button === this.settingsButton) return 'SYSTEM CONFIGURATION';
     if (button === this.trainingButton) return this.trainingReadout();
+    if (button === this.guideButton) return GUIDE_READOUT;
     if (button === this.sectorButton) return this.sectorReadout();
     const description = button.description?.text;
     return description ? `${button.text.text} // ${description}` : button.text.text;
@@ -488,15 +518,15 @@ export default class MainMenuScene extends Phaser.Scene {
   }
 
   /** Height of the whole composition at a tier, used to pick and centre it. */
-  composedHeight(tier, stackCards, framePad) {
+  composedHeight(tier, stackCards, framePad, innerWidth) {
     const headerHeight = tier.titleFont * 1.05 + (tier.showSubtitle ? tier.subtitleFont + 12 : 0);
-    const bodyHeight = this.measureTier(tier, stackCards) + framePad * 2;
+    const bodyHeight = this.measureTier(tier, stackCards, innerWidth) + framePad * 2;
     const readoutHeight = tier.showReadout ? tier.readoutFont + 18 : 0;
     return { headerHeight, bodyHeight, readoutHeight, total: headerHeight + tier.headerGap + bodyHeight + readoutHeight };
   }
 
   /** Height the console body needs at a given tier, used to pick that tier. */
-  measureTier(tier, stackCards) {
+  measureTier(tier, stackCards, innerWidth) {
     const archiveHeight = stackCards
       ? tier.cardHeight * 3 + tier.sectionGap * 0.4 * 2
       : tier.cardHeight;
@@ -504,7 +534,7 @@ export default class MainMenuScene extends Phaser.Scene {
     return tier.statusFont + tier.labelGap + 6
       + sectionBlock(primaryBlockHeight(tier)) + tier.sectionGap
       + sectionBlock(archiveHeight) + tier.sectionGap
-      + sectionBlock(systemBlockHeight(tier, stackCards));
+      + sectionBlock(systemBlockHeight(tier, innerWidth, this.systemButtons.length));
   }
 
   layout(gameSize) {
@@ -530,9 +560,9 @@ export default class MainMenuScene extends Phaser.Scene {
     // Pick the richest tier that fits, then centre the composition in the
     // space that is left so tall screens do not hang everything off the top.
     const available = height - topSafe - bottomSafe;
-    const tier = TIERS.find((candidate) => this.composedHeight(candidate, stackCards, framePadX).total <= available)
+    const tier = TIERS.find((candidate) => this.composedHeight(candidate, stackCards, framePadX, innerWidth).total <= available)
       ?? TIERS[TIERS.length - 1];
-    const composed = this.composedHeight(tier, stackCards, framePadX);
+    const composed = this.composedHeight(tier, stackCards, framePadX, innerWidth);
     const startY = topSafe + Math.max(0, (available - composed.total) * 0.42);
 
     this.title.setFontSize(tier.titleFont).setPosition(width / 2, startY + tier.titleFont * 0.55);
@@ -619,30 +649,20 @@ export default class MainMenuScene extends Phaser.Scene {
           .setPosition(innerLeft + cardWidth / 2 + index * (cardWidth + columnGap), archive.bodyTop + tier.cardHeight / 2);
       });
     }
-    const system = placeSection(this.systemSectionLabel, systemBlockHeight(tier, stackCards));
-    const systemRowY = system.bodyTop + tier.systemHeight / 2;
-    if (stackCards) {
-      // Training takes the full width above the pair, so its longer label has
-      // the room it needs on a phone.
-      const pairWidth = (innerWidth - columnGap) / 2;
-      const secondRowY = systemRowY + tier.systemHeight + sectorGap(tier);
-      this.trainingButton
-        .resize({ width: innerWidth, height: tier.systemHeight, fontSize: tier.systemFont })
-        .setPosition(innerLeft + innerWidth / 2, systemRowY);
-      this.howToPlayButton
-        .resize({ width: pairWidth, height: tier.systemHeight, fontSize: tier.systemFont })
-        .setPosition(innerLeft + pairWidth / 2, secondRowY);
-      this.settingsButton
-        .resize({ width: pairWidth, height: tier.systemHeight, fontSize: tier.systemFont })
-        .setPosition(innerLeft + pairWidth + columnGap + pairWidth / 2, secondRowY);
-    } else {
-      const systemWidth = Math.min(260, (innerWidth - columnGap * 2) / 3);
-      this.systemButtons.forEach((button, index) => {
-        button
-          .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
-          .setPosition(innerLeft + systemWidth / 2 + index * (systemWidth + columnGap), systemRowY);
-      });
-    }
+    const system = placeSection(this.systemSectionLabel, systemBlockHeight(tier, innerWidth, this.systemButtons.length));
+    const systemCols = systemColumns(tier, innerWidth, this.systemButtons.length);
+    const systemWidth = (innerWidth - SYSTEM_GAP * (systemCols - 1)) / systemCols;
+    const systemRowGap = sectorGap(tier);
+    this.systemButtons.forEach((button, index) => {
+      const column = index % systemCols;
+      const row = Math.floor(index / systemCols);
+      button
+        .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+        .setPosition(
+          innerLeft + systemWidth / 2 + column * (systemWidth + SYSTEM_GAP),
+          system.bodyTop + tier.systemHeight / 2 + row * (tier.systemHeight + systemRowGap),
+        );
+    });
 
     const frameBottom = cursor - tier.sectionGap + framePadX;
     this.readout
@@ -752,9 +772,16 @@ export default class MainMenuScene extends Phaser.Scene {
 
     const compact = width < 620;
     const panelWidth = Math.min(620, width - (compact ? 24 : 72));
-    const bodyFont = compact ? 10 : 12;
-    this.noticeBody.setFontSize(bodyFont).setWordWrapWidth(panelWidth - 44);
-    const panelHeight = Math.min(height - 48, this.noticeBody.height + (compact ? 82 : 96));
+    const chrome = compact ? 82 : 96;
+    // The field guide has grown a line for every console feature, and a small
+    // phone has nowhere to put the overflow, so the body steps down a size
+    // until the page fits the panel rather than running off the bottom of it.
+    const bodyRoom = height - 48 - chrome;
+    for (let bodyFont = compact ? 10 : 12; bodyFont >= 7; bodyFont -= 1) {
+      this.noticeBody.setFontSize(bodyFont).setWordWrapWidth(panelWidth - 44);
+      if (this.noticeBody.height <= bodyRoom) break;
+    }
+    const panelHeight = Math.min(height - 48, this.noticeBody.height + chrome);
     const left = width / 2 - panelWidth / 2;
     const top = height / 2 - panelHeight / 2;
 

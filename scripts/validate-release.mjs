@@ -5,6 +5,7 @@ import { GAME_CONFIG } from '../src/runtime-config.js';
 import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
 import { MAP_CATALOG } from '../src/world/mapCatalog.js';
 import { validateReconMap } from '../src/world/reconMapSchema.js';
+import { GUIDE_CATEGORIES, validateIdentificationGuide } from '../src/game/identificationGuide.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -121,7 +122,19 @@ for (const entry of MAP_CATALOG) {
   }
 }
 
-['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'TrainingScene', 'ResultsScene'].forEach((sceneName) => {
+// The recognition manual: every entry has to name a frame that ships, no
+// frame may appear twice, and every note stays a short description of the art.
+const guide = validateIdentificationGuide();
+guide.errors.forEach((message) => errors.push(`[guide] ${message}`));
+assert(guide.valid, `identification guide passes its own rules (${guide.entryCount} entries)`);
+GUIDE_CATEGORIES.forEach((category) => {
+  category.entries.forEach((item) => {
+    assert(Boolean(findSprite(item.sprite)), `[guide] frame resolves: ${item.sprite}`);
+  });
+  assert(category.entries.length > 0, `[guide] category has entries: ${category.id}`);
+});
+
+['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'TrainingScene', 'IdentificationGuideScene', 'ResultsScene'].forEach((sceneName) => {
   assert(mainSource.includes(sceneName), `main scene registration includes ${sceneName}`);
 });
 

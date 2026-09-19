@@ -53,9 +53,11 @@ Phase 13B rebuilds the Main Menu as an operations console: a title block, a stat
 
 RANDOM MISSION is the emphasized primary tasking; LOCATE, COUNT and CHANGE are equal-weight mission cards, each with a one-line description, an existing UI sprite icon and its own restrained accent (phosphor, steel, amber). A readout beneath the console echoes whichever control is hovered or keyboard-focused. Layout picks the richest of four density tiers that fits the viewport and stacks cards on narrow or tall-portrait screens, so short landscape screens drop ornament rather than overlap. Settings still opens inside the same scene.
 
-Phase 15F adds `ANALYST TRAINING` beside HOW TO PLAY and SETTINGS. It does not replace the field
-guide — one is a page to read, the other walks the console — and the SYSTEM row is three-up where
-there is width for it, folding to two rows when the console stacks.
+Phase 15F adds `ANALYST TRAINING` and Phase 15G adds `IDENTIFICATION GUIDE`, beside HOW TO PLAY and
+SETTINGS. Four separate offers, none standing in for another: training walks the console, the manual
+names what is on the ground, the field guide is a page to read. The SYSTEM row picks its column count
+by measuring its longest label against the width each arrangement would give it at the current
+density tier — four across on a desktop, two by two on a tablet, one per row on a phone.
 
 Phase 15E adds one row under RANDOM MISSION: `SECTOR // ANY SECTOR`. It cycles through ANY SECTOR
 and the four registered sectors rather than opening a menu, so the primary action keeps the emphasis
@@ -84,6 +86,22 @@ in the SECTOR picker and no seed or `?map=` can put a live mission on it.
 `tutorialCompleted` is stored locally when the certification step is reached, and only marks the menu
 control — training is never forced, at first launch or any other.
 See `docs/PHASE-15F-ANALYST-TRAINING.md`.
+
+## Identification guide
+
+`IDENTIFICATION GUIDE` is a recognition manual built from the production sprite sheets themselves:
+five categories — MILITARY VEHICLES, INSTALLATIONS, CIVILIAN / DECOYS, RECON CLUES, INFRASTRUCTURE —
+and thirty-seven entries, each showing the actual registered frame with a display name and a one or
+two sentence note on how to recognise *this game's drawing* of it. No frame appears twice.
+
+Category tabs, a sprite grid sized to the space available, and a detail panel with an enlarged
+preview that keeps its place rather than opening as a modal, so a phone shows both at once. Tab and
+the arrows walk tabs, cells and the return control; Enter opens the focused entry and Escape returns
+to the console. The grid scrolls only when a comfortable cell will not fit.
+
+The manual carries no real-world specifications and no tactical advice — `validateIdentificationGuide()`
+rejects a note carrying a figure — and it is mission-blind, so reading it cannot spoil a mission.
+See `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`.
 
 ## Graphics quality
 
@@ -162,7 +180,7 @@ Run the static release validator with:
 npm run validate
 ```
 
-It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, and core scene registration, then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. GitHub Pages runs this validator automatically before the production Vite build.
+It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Deployment
 
@@ -298,7 +316,7 @@ npm run build
 ## Project structure
 
 - `src/scenes/` — Phaser scene flow and recon feedback/layout wrapper
-- `src/game/` — mission definitions, scoring, seeded generation, and the training script
+- `src/game/` — mission definitions, scoring, seeded generation, the training script, and the recognition manual
 - `src/world/` — authored-map renderer, state operations, and map helpers
 - `src/assets/` — runtime sprite manifest/registration
 - `src/audio/` — synthesized feedback engine
@@ -340,3 +358,4 @@ npm run build
 - Phase 15D — BORDER FARMS authored map ✅
 - Phase 15E — Sector select and multi-map RANDOM missions ✅
 - Phase 15F — ANALYST TRAINING interactive tutorial ✅
+- Phase 15G — IDENTIFICATION GUIDE recognition manual ✅
