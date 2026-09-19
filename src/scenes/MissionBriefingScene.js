@@ -13,6 +13,9 @@ export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
 
   create(data = {}) {
+    // Phaser reuses Scene instances after shutdown. Reset this per-run guard
+    // so a completed mission cannot leave the next briefing permanently locked.
+    this.transitioning = false;
     musicManager.request(MUSIC_STATES.MENU);
     this.mission = data.mission ?? createLocateMission();
     this.reducedMotion = prefersReducedMotion();
