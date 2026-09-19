@@ -172,9 +172,11 @@ export default class ResultsScene extends Phaser.Scene {
     // The debrief is measured before the panel is drawn, so the panel can be
     // sized to the debrief instead of stretching to the bottom of the window
     // and leaving a deep empty box under the last ledger line.
+    const extendedDebrief = Boolean(this.data?.mission?.operationSeries);
+    const baseBodyFont = short ? (compact ? 9 : 10) : (compact ? 11 : 13);
     this.body
-      .setFontSize(short ? (compact ? 9 : 10) : (compact ? 11 : 13))
-      .setLineSpacing(short ? 2 : 5)
+      .setFontSize(extendedDebrief ? Math.max(7, baseBodyFont - 2) : baseBodyFont)
+      .setLineSpacing(extendedDebrief ? (short ? 1 : 3) : (short ? 2 : 5))
       .setWordWrapWidth(panelWidth - paddingX * 2);
 
     const showDisposition = height >= 430;
