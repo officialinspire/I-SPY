@@ -10,7 +10,8 @@ import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
 import { isAnySector, listSectorOptions, normalizeSector, sectorTitle } from '../world/mapRegistry.js';
-import { cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
+import { cycleHapticsLevel, cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
+import { feedback, hapticsSupported } from '../audio/feedback.js';
 import { TRAINING_STEP_COUNT, resumeTrainingStep } from '../game/trainingMissions.js';
 import { fadeIn } from '../ui/presentation.js';
 
@@ -423,7 +424,7 @@ export default class MainMenuScene extends Phaser.Scene {
       this.refreshSettingsLabels();
     }, { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
-    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('hapticsEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
+    this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.cycleHaptics(), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13, variant: 'primary' });
@@ -433,6 +434,19 @@ export default class MainMenuScene extends Phaser.Scene {
       button.setVisible(false);
     });
     this.refreshSettingsLabels();
+  }
+
+  /**
+   * Step the haptic strength, then let the new level introduce itself.
+   *
+   * The button's own press cue fires before the handler runs, so it would
+   * always be the previous strength; this second pulse is the one that answers
+   * the question the analyst is actually asking.
+   */
+  cycleHaptics() {
+    const level = cycleHapticsLevel().hapticsLevel;
+    this.refreshSettingsLabels();
+    if (level !== 'off') this.time.delayedCall(90, () => feedback('select'));
   }
 
   toggleSetting(key) {
@@ -447,8 +461,14 @@ export default class MainMenuScene extends Phaser.Scene {
     this.masterSettingButton?.setSelected(settings.masterVolume > 0);
     this.sfxSettingButton?.setLabel(`SOUND EFFECTS // ${settings.sfxEnabled ? 'ON' : 'OFF'}`);
     this.sfxSettingButton?.setSelected(settings.sfxEnabled);
-    this.hapticsSettingButton?.setLabel(`HAPTICS // ${settings.hapticsEnabled ? 'ON' : 'OFF'}`);
-    this.hapticsSettingButton?.setSelected(settings.hapticsEnabled);
+    // A device with no vibration motor is told so rather than being offered a
+    // setting that could not do anything.
+    const hapticsAvailable = hapticsSupported();
+    this.hapticsSettingButton?.setLabel(hapticsAvailable
+      ? `HAPTICS // ${settings.hapticsLevel.toUpperCase()}`
+      : 'HAPTICS // UNAVAILABLE');
+    this.hapticsSettingButton?.setSelected(hapticsAvailable && settings.hapticsEnabled);
+    this.hapticsSettingButton?.setEnabled(hapticsAvailable);
     this.scanlineSettingButton?.setLabel(`CRT SCANLINES // ${settings.scanlinesEnabled ? 'ON' : 'OFF'}`);
     this.scanlineSettingButton?.setSelected(settings.scanlinesEnabled);
     this.grainSettingButton?.setLabel(`IMAGE GRAIN // ${settings.imageGrainEnabled ? 'ON' : 'OFF'}`);

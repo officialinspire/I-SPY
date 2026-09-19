@@ -6,6 +6,8 @@ import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
 import { MAP_CATALOG } from '../src/world/mapCatalog.js';
 import { validateReconMap } from '../src/world/reconMapSchema.js';
 import { GUIDE_CATEGORIES, validateIdentificationGuide } from '../src/game/identificationGuide.js';
+import { HAPTICS, LEVEL_SCALE, MAX_PULSE_MS, SILENT_HAPTIC_EVENTS, VOICES, scaleHapticPattern } from '../src/audio/feedback.js';
+import { HAPTIC_LEVELS } from '../src/settings/userSettings.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -132,6 +134,38 @@ GUIDE_CATEGORIES.forEach((category) => {
     assert(Boolean(findSprite(item.sprite)), `[guide] frame resolves: ${item.sprite}`);
   });
   assert(category.entries.length > 0, `[guide] category has entries: ${category.id}`);
+});
+
+// Haptics: a restrained vocabulary that scales by duration, with nothing
+// firing for pointer movement or focus.
+SILENT_HAPTIC_EVENTS.forEach((eventName) => {
+  assert(HAPTICS[eventName] === undefined, `[haptics] no pulse for '${eventName}'`);
+});
+Object.keys(HAPTICS).forEach((eventName) => {
+  assert(VOICES[eventName] !== undefined, `[haptics] '${eventName}' is a voiced event`);
+});
+assert(HAPTIC_LEVELS[0] === 'off' && LEVEL_SCALE.off === 0, '[haptics] OFF scales every pulse away');
+HAPTIC_LEVELS.forEach((level) => {
+  assert(typeof LEVEL_SCALE[level] === 'number', `[haptics] level has a scale: ${level}`);
+});
+Object.entries(HAPTICS).forEach(([eventName, pattern]) => {
+  assert(scaleHapticPattern(pattern, 'off') === null, `[haptics] OFF silences '${eventName}'`);
+  const pulses = (level) => {
+    const scaled = scaleHapticPattern(pattern, level);
+    return (Array.isArray(scaled) ? scaled.filter((_, index) => index % 2 === 0) : [scaled]);
+  };
+  const light = pulses('light');
+  const standard = pulses('standard');
+  const strong = pulses('strong');
+  assert(light.every((value, index) => value <= standard[index] && standard[index] <= strong[index]),
+    `[haptics] '${eventName}' grows with the level`);
+  assert(strong.every((value) => value >= 1 && value <= MAX_PULSE_MS),
+    `[haptics] '${eventName}' stays inside the pulse bounds at STRONG`);
+  if (Array.isArray(pattern)) {
+    const gaps = (level) => scaleHapticPattern(pattern, level).filter((_, index) => index % 2 === 1);
+    assert(gaps('light').join() === gaps('strong').join(),
+      `[haptics] '${eventName}' keeps its rhythm across levels`);
+  }
 });
 
 ['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'TrainingScene', 'IdentificationGuideScene', 'ResultsScene'].forEach((sceneName) => {

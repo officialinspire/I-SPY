@@ -180,7 +180,7 @@ Run the static release validator with:
 npm run validate
 ```
 
-It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. GitHub Pages runs this validator automatically before the production Vite build.
+It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, the haptic vocabulary — nothing on hover or focus, every pulse inside its bounds, and every pattern keeping its rhythm across strength levels — and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Deployment
 
@@ -204,11 +204,26 @@ Phase 10 adds a dependency-free Web Audio feedback system with restrained termin
 
 Phase 13F rebuilt that system around named cues. Callers ask for `feedback('arm')` rather than describing a waveform, so every event — hover, press, mission card, acquisition, marking, selection, cancel, confirmation, false identification, pass switch, count adjustment, count submission, pause/resume, completion, failure — has exactly one voice and exactly one call site. Everything is still synthesised at runtime from short square blips, pitch slides and band-limited noise clicks: a military terminal, not an arcade cabinet. A per-event repeat guard makes it impossible for rapid navigation to stack a cue on itself, haptics stay sparing (a small pulse for selection, a pattern only for outcomes), and microanimations stay in the 80–160 ms band — a 90 ms press, a 140 ms panel fade, a 150 ms reticle settle — with nothing in the reconnaissance imagery animating in a way that could reveal an answer. See `docs/PHASE-13F-FEEDBACK.md`.
 
+Phase 15H enriched the haptic channel on the devices that have one. Every named event carries either
+a single short pulse (press 10ms, select 16ms, relay 12ms) or, for an outcome, a pattern
+(confirm `[16, 20, 26]`, fail `[30, 38, 30]`). `hover` and `focus` carry none, and nothing fires while
+panning, zooming, holding a control or simply viewing imagery — structurally, since the scene that
+owns pan and zoom voices nothing at all.
+
+Strength is a stored preference, `hapticsLevel = off | light | standard | strong`, and a device that
+stored the old on/off switch migrates to STANDARD or OFF. The Vibration API offers duration and no
+amplitude, so the levels scale how long each pulse runs; inside a pattern only the pulses scale and
+the pauses keep their length, so the rhythm is the same at any strength. `navigator.vibrate` is
+feature-detected — there is no user-agent sniffing anywhere — and a browser without it gets a silent
+no-op and a settings row that says `HAPTICS // UNAVAILABLE`. Beyond the per-event repeat guard, an
+incidental pulse is dropped while an outcome pattern is still playing, so a stray press cannot cut a
+debrief short. See `docs/PHASE-15H-HAPTICS.md`.
+
 Settings are stored locally on the device and include:
 
 - Master level: 100 / 75 / 50 / 25 / 0 percent
 - Sound effects: on/off
-- Haptics: on/off
+- Haptics: off / light / standard / strong
 - CRT scanlines: on/off
 - Recon image grain: on/off
 
@@ -359,3 +374,4 @@ npm run build
 - Phase 15E — Sector select and multi-map RANDOM missions ✅
 - Phase 15F — ANALYST TRAINING interactive tutorial ✅
 - Phase 15G — IDENTIFICATION GUIDE recognition manual ✅
+- Phase 15H — Haptics plus: patterns, strength levels, feature detection ✅

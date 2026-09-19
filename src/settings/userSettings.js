@@ -1,9 +1,18 @@
 const STORAGE_KEY = 'i-spy-settings-v1';
 
+/**
+ * Haptic strength, weakest first after OFF.
+ *
+ * The Vibration API offers duration and nothing else — no amplitude — so
+ * "strength" here means how long each pulse runs. The levels scale the
+ * durations; they do not pretend to control how hard the motor is driven.
+ */
+export const HAPTIC_LEVELS = Object.freeze(['off', 'light', 'standard', 'strong']);
+
 const DEFAULTS = Object.freeze({
   masterVolume: 0.75,
   sfxEnabled: true,
-  hapticsEnabled: true,
+  hapticsLevel: 'standard',
   scanlinesEnabled: true,
   imageGrainEnabled: true,
   sector: 'any',
@@ -13,11 +22,35 @@ const DEFAULTS = Object.freeze({
 
 let state = load();
 
+/**
+ * The stored level, or the old on/off switch translated into one.
+ *
+ * Settings saved before Phase 15H carry `hapticsEnabled` and no level: ON
+ * becomes STANDARD and OFF becomes OFF, so an existing device keeps the
+ * setting it had rather than being silently turned back on.
+ */
+function resolveHapticsLevel(input) {
+  // A level that is present decides on its own. Reading the derived on/off
+  // flag as a fallback would let a corrupt level quietly inherit whatever the
+  // last state happened to be instead of resetting to the default.
+  if (input.hapticsLevel !== undefined && input.hapticsLevel !== null) {
+    const stored = String(input.hapticsLevel).trim().toLowerCase();
+    return HAPTIC_LEVELS.includes(stored) ? stored : DEFAULTS.hapticsLevel;
+  }
+  if (input.hapticsEnabled === false) return 'off';
+  if (input.hapticsEnabled === true) return 'standard';
+  return DEFAULTS.hapticsLevel;
+}
+
 function sanitize(input = {}) {
+  const level = resolveHapticsLevel(input);
   return {
     masterVolume: Math.max(0, Math.min(1, Number.isFinite(Number(input.masterVolume)) ? Number(input.masterVolume) : DEFAULTS.masterVolume)),
     sfxEnabled: input.sfxEnabled !== false,
-    hapticsEnabled: input.hapticsEnabled !== false,
+    hapticsLevel: level,
+    // Derived, never stored as the truth: everything that only needs to know
+    // whether haptics are on at all keeps reading this.
+    hapticsEnabled: level !== 'off',
     scanlinesEnabled: input.scanlinesEnabled !== false,
     imageGrainEnabled: input.imageGrainEnabled !== false,
     // Validated against the registry where it is used; stored as written.
@@ -36,7 +69,7 @@ function load() {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     return sanitize(raw ? JSON.parse(raw) : DEFAULTS);
   } catch {
-    return { ...DEFAULTS };
+    return sanitize(DEFAULTS);
   }
 }
 
@@ -56,7 +89,8 @@ export function updateSettings(patch = {}) {
 }
 
 export function resetSettings() {
-  state = { ...DEFAULTS };
+  // Through sanitize, so the derived fields are present on a reset too.
+  state = sanitize(DEFAULTS);
   persist();
   applyPresentationPreferences();
   return getSettings();
@@ -67,6 +101,12 @@ export function applyPresentationPreferences() {
   if (!root) return;
   root.dataset.scanlines = state.scanlinesEnabled ? 'on' : 'off';
   root.dataset.imageGrain = state.imageGrainEnabled ? 'on' : 'off';
+}
+
+/** OFF -> LIGHT -> STANDARD -> STRONG -> OFF. */
+export function cycleHapticsLevel() {
+  const index = HAPTIC_LEVELS.indexOf(state.hapticsLevel);
+  return updateSettings({ hapticsLevel: HAPTIC_LEVELS[(index + 1) % HAPTIC_LEVELS.length] });
 }
 
 export function cycleMasterVolume() {
