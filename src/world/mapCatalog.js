@@ -46,6 +46,18 @@ export const MAP_CATALOG = Object.freeze([
     recommendedZoom: 0.75,
     source: 'assets/maps/border-farms.json',
   }),
+  Object.freeze({
+    id: 'training-range-alpha',
+    title: 'TRAINING RANGE ALPHA',
+    environment: 'ANALYST TRAINING RANGE',
+    description: 'Three isolated instruction bays on an enclosed apron either side of a range road, with empty ground between them.',
+    difficulty: 0,
+    recommendedZoom: 0.62,
+    // Not a sector: ANALYST TRAINING builds it, the picker never lists it and
+    // no seed can draw it.
+    training: true,
+    source: 'assets/maps/training-range-alpha.json',
+  }),
 ]);
 
 export function getCatalogEntry(id) {

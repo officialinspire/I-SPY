@@ -7,6 +7,8 @@ const DEFAULTS = Object.freeze({
   scanlinesEnabled: true,
   imageGrainEnabled: true,
   sector: 'any',
+  tutorialCompleted: false,
+  tutorialStep: 0,
 });
 
 let state = load();
@@ -20,6 +22,12 @@ function sanitize(input = {}) {
     imageGrainEnabled: input.imageGrainEnabled !== false,
     // Validated against the registry where it is used; stored as written.
     sector: typeof input.sector === 'string' && input.sector.trim() ? input.sector.trim() : DEFAULTS.sector,
+    // Recorded so the console can say TRAINING COMPLETE. Nothing reads it to
+    // decide whether to show the tutorial: it is never forced, at any launch.
+    tutorialCompleted: input.tutorialCompleted === true,
+    // Where ANALYST TRAINING resumes. Clamped here so a hand-edited or stale
+    // value can never point at a step that does not exist.
+    tutorialStep: Math.min(5, Math.max(0, Math.floor(Number(input.tutorialStep)) || 0)),
   };
 }
 

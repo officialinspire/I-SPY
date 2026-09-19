@@ -9,6 +9,8 @@ import { validateReconMap } from '../src/world/reconMapSchema.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const errors = [];
+/** The framing checks are run against a nominal desktop viewport. */
+const REFERENCE_VIEWPORT = { width: 1440, height: 900 };
 const warnings = [];
 const checks = [];
 const assert = (condition, message) => {
@@ -98,9 +100,28 @@ for (const entry of MAP_CATALOG) {
     assert(Math.hypot(destination.x - changeSubject.x, destination.y - changeSubject.y) >= 200,
       `[${entry.id}] change-detection destination is a visible move`);
   }
+
+  // A camera is clamped to the map, so a focus that asks for ground past the
+  // edge quietly becomes a different focus. An authored training framing has
+  // to still hold both positions of the thing it is framing once clamped.
+  const focus = metadata.training?.changeFocus;
+  if (changeSubject && destination && focus) {
+    const zoom = focus.zoom ?? 1;
+    const halfWidth = REFERENCE_VIEWPORT.width / (2 * zoom);
+    const halfHeight = REFERENCE_VIEWPORT.height / (2 * zoom);
+    const clamp = (value, half, span) => Math.min(Math.max(value, half), Math.max(half, span - half));
+    const centreX = clamp(focus.x, halfWidth, map.width);
+    const centreY = clamp(focus.y, halfHeight, map.height);
+    const visible = (x, y, width, height) => x >= centreX - halfWidth && x + width <= centreX + halfWidth
+      && y >= centreY - halfHeight && y + height <= centreY + halfHeight;
+    assert(visible(changeSubject.x, changeSubject.y, changeSubject.width, changeSubject.height),
+      `[${entry.id}] training change framing holds the subject's first position`);
+    assert(visible(destination.x, destination.y, changeSubject.width, changeSubject.height),
+      `[${entry.id}] training change framing holds the subject's second position`);
+  }
 }
 
-['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'ResultsScene'].forEach((sceneName) => {
+['BootScene', 'MainMenuScene', 'MissionBriefingScene', 'EnhancedReconScene', 'TrainingScene', 'ResultsScene'].forEach((sceneName) => {
   assert(mainSource.includes(sceneName), `main scene registration includes ${sceneName}`);
 });
 

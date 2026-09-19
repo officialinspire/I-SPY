@@ -11,6 +11,7 @@ import { createChangeDetectionMission } from '../game/changeDetectionMission.js'
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
 import { isAnySector, listSectorOptions, normalizeSector, sectorTitle } from '../world/mapRegistry.js';
 import { cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
+import { TRAINING_STEP_COUNT, resumeTrainingStep } from '../game/trainingMissions.js';
 import { fadeIn } from '../ui/presentation.js';
 
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
@@ -24,6 +25,8 @@ const FIELD_GUIDE = [
   'CHANGE   COMPARE PASS A / PASS B AND MARK THE CHANGE.',
   '',
   'SECTOR PICKS THE MAP. ANY SECTOR LETS THE SEED CHOOSE.',
+  '',
+  'ANALYST TRAINING WALKS THE CONSOLE STEP BY STEP.',
   '',
   'ESC PAUSES RECON. TAB WALKS CONSOLE CONTROLS.',
 ];
@@ -76,6 +79,15 @@ function sectorGap(tier) {
 /** The tasking card plus its sector row, measured as one block. */
 function primaryBlockHeight(tier) {
   return tier.primaryHeight + sectorGap(tier) + tier.sectorHeight;
+}
+
+/**
+ * SYSTEM holds three controls. They sit three-up when there is room and fold
+ * to two rows — ANALYST TRAINING over the pair — when the console stacks, so
+ * no label is ever squeezed to fit.
+ */
+function systemBlockHeight(tier, stackCards) {
+  return stackCards ? tier.systemHeight * 2 + sectorGap(tier) : tier.systemHeight;
 }
 
 export default class MainMenuScene extends Phaser.Scene {
@@ -236,6 +248,15 @@ export default class MainMenuScene extends Phaser.Scene {
   }
 
   createSystemRow() {
+    // Training is a separate offer from the field guide: one walks the console,
+    // the other is a page to read. Neither replaces the other.
+    this.trainingButton = createButton(this, 0, 0, 'ANALYST TRAINING', () => this.startTraining(), {
+      variant: 'secondary',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? this.trainingReadout() : DEFAULT_READOUT),
+    });
     this.howToPlayButton = createButton(this, 0, 0, 'HOW TO PLAY', () => this.showNotice(), {
       variant: 'secondary',
       width: 220,
@@ -250,14 +271,35 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: 13,
       onHover: (hovered) => this.setReadout(hovered ? 'SYSTEM CONFIGURATION' : DEFAULT_READOUT),
     });
-    this.systemButtons = [this.howToPlayButton, this.settingsButton];
+    this.systemButtons = [this.trainingButton, this.howToPlayButton, this.settingsButton];
     this.buttons = [this.randomCard, this.sectorButton, ...this.modeCards, ...this.systemButtons];
+    this.refreshTrainingLabel();
+  }
+
+  /** What the console knows about this analyst's training, in one line. */
+  trainingReadout() {
+    const settings = getSettings();
+    if (settings.tutorialCompleted) return 'ANALYST TRAINING // CERTIFICATION COMPLETE \u00b7 REPEAT ANY TIME';
+    const step = resumeTrainingStep();
+    if (step > 0) return `ANALYST TRAINING // RESUME AT STEP ${step + 1} OF ${TRAINING_STEP_COUNT}`;
+    return 'ANALYST TRAINING // GUIDED INTRODUCTION TO THE CONSOLE';
+  }
+
+  refreshTrainingLabel() {
+    // Training is offered, never imposed: a completed certification only marks
+    // the control, it does not hide it or gate anything behind it.
+    this.trainingButton?.setSelected(getSettings().tutorialCompleted);
+  }
+
+  startTraining() {
+    this.scene.start('Training', { step: resumeTrainingStep() });
   }
 
   readoutFor(button) {
     if (!button) return DEFAULT_READOUT;
     if (button === this.howToPlayButton) return 'ANALYST FIELD GUIDE';
     if (button === this.settingsButton) return 'SYSTEM CONFIGURATION';
+    if (button === this.trainingButton) return this.trainingReadout();
     if (button === this.sectorButton) return this.sectorReadout();
     const description = button.description?.text;
     return description ? `${button.text.text} // ${description}` : button.text.text;
@@ -462,7 +504,7 @@ export default class MainMenuScene extends Phaser.Scene {
     return tier.statusFont + tier.labelGap + 6
       + sectionBlock(primaryBlockHeight(tier)) + tier.sectionGap
       + sectionBlock(archiveHeight) + tier.sectionGap
-      + sectionBlock(tier.systemHeight);
+      + sectionBlock(systemBlockHeight(tier, stackCards));
   }
 
   layout(gameSize) {
@@ -577,14 +619,30 @@ export default class MainMenuScene extends Phaser.Scene {
           .setPosition(innerLeft + cardWidth / 2 + index * (cardWidth + columnGap), archive.bodyTop + tier.cardHeight / 2);
       });
     }
-    const system = placeSection(this.systemSectionLabel, tier.systemHeight);
-    const systemWidth = Math.min(260, (innerWidth - columnGap) / 2);
-    this.howToPlayButton
-      .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
-      .setPosition(innerLeft + systemWidth / 2, system.bodyTop + tier.systemHeight / 2);
-    this.settingsButton
-      .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
-      .setPosition(innerLeft + systemWidth + columnGap + systemWidth / 2, system.bodyTop + tier.systemHeight / 2);
+    const system = placeSection(this.systemSectionLabel, systemBlockHeight(tier, stackCards));
+    const systemRowY = system.bodyTop + tier.systemHeight / 2;
+    if (stackCards) {
+      // Training takes the full width above the pair, so its longer label has
+      // the room it needs on a phone.
+      const pairWidth = (innerWidth - columnGap) / 2;
+      const secondRowY = systemRowY + tier.systemHeight + sectorGap(tier);
+      this.trainingButton
+        .resize({ width: innerWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+        .setPosition(innerLeft + innerWidth / 2, systemRowY);
+      this.howToPlayButton
+        .resize({ width: pairWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+        .setPosition(innerLeft + pairWidth / 2, secondRowY);
+      this.settingsButton
+        .resize({ width: pairWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+        .setPosition(innerLeft + pairWidth + columnGap + pairWidth / 2, secondRowY);
+    } else {
+      const systemWidth = Math.min(260, (innerWidth - columnGap * 2) / 3);
+      this.systemButtons.forEach((button, index) => {
+        button
+          .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+          .setPosition(innerLeft + systemWidth / 2 + index * (systemWidth + columnGap), systemRowY);
+      });
+    }
 
     const frameBottom = cursor - tier.sectionGap + framePadX;
     this.readout

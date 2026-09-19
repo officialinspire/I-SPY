@@ -110,5 +110,18 @@ export function validateReconMap(map) {
     else if (destination.x < 0 || destination.y < 0 || destination.x + nominal > map.width || destination.y + nominal > map.height) errors.push('Metadata changeDetection.destination falls outside map bounds.');
   }
 
+  // A training range scripts its own lessons in metadata. If it does, the
+  // things those lessons point at have to exist, or the tutorial teaches the
+  // console by failing to build.
+  const training = metadata.training;
+  if (training) {
+    if (training.identifyId && !entityIds.has(training.identifyId)) errors.push(`Metadata training.identifyId '${training.identifyId}' does not match an entity.`);
+    const region = training.countRegion;
+    if (region) {
+      if (![region.x, region.y, region.width, region.height].every(Number.isFinite) || region.width <= 0 || region.height <= 0) errors.push('Metadata training.countRegion has invalid bounds.');
+      else if (region.x < 0 || region.y < 0 || region.x + region.width > map.width || region.y + region.height > map.height) errors.push('Metadata training.countRegion falls outside map bounds.');
+    }
+  }
+
   return { valid: errors.length === 0, errors, warnings };
 }

@@ -5,6 +5,7 @@ import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json';
 import frostlineRelay from '../../assets/maps/frostline-relay.json';
 import riverworksSector from '../../assets/maps/riverworks-sector.json';
 import borderFarms from '../../assets/maps/border-farms.json';
+import trainingRangeAlpha from '../../assets/maps/training-range-alpha.json';
 
 /**
  * Registry of playable reconnaissance sectors.
@@ -21,6 +22,7 @@ const MAP_DATA = Object.freeze({
   'frostline-relay': frostlineRelay,
   'riverworks-sector': riverworksSector,
   'border-farms': borderFarms,
+  'training-range-alpha': trainingRangeAlpha,
 });
 
 function buildEntry(descriptor) {
@@ -36,9 +38,22 @@ function buildEntry(descriptor) {
   });
 }
 
+/** Every registered map, training ranges included. */
 export const RECON_MAPS = Object.freeze(MAP_CATALOG.map(buildEntry));
 
+/**
+ * The playable sectors: everything a mission can be set in.
+ *
+ * A training range is registered like any other map — it is built, validated
+ * and resolved by the same code — but it is not somewhere missions happen, so
+ * it is kept out of the picker and out of the generator's reach rather than
+ * being special-cased at each call site.
+ */
+export const SECTOR_MAPS = Object.freeze(RECON_MAPS.filter((entry) => !entry.training));
+
 export const DEFAULT_MAP_ID = GAME_CONFIG.recon.defaultMapId;
+
+export const TRAINING_MAP_ID = 'training-range-alpha';
 
 /** The "no preference" sector: a seed picks the map for itself. */
 export const ANY_SECTOR = 'any';
@@ -47,18 +62,18 @@ export function isAnySector(value) {
   return !value || String(value).toLowerCase() === ANY_SECTOR;
 }
 
-/** 'any', or a registered map id. Anything unrecognised falls back to 'any'. */
+/** 'any', or a playable sector id. Anything else — including a training range — falls back to 'any'. */
 export function normalizeSector(value) {
   if (isAnySector(value)) return ANY_SECTOR;
   const id = String(value);
-  return getReconMapEntry(id) ? id : ANY_SECTOR;
+  return SECTOR_MAPS.some((entry) => entry.id === id) ? id : ANY_SECTOR;
 }
 
-/** Sector choices for a picker: ANY first, then every registered sector. */
+/** Sector choices for a picker: ANY first, then every playable sector. */
 export function listSectorOptions() {
   return [
     { id: ANY_SECTOR, title: 'ANY SECTOR', environment: 'OPERATOR CHOICE', description: 'The seed selects the sector as well as the task.' },
-    ...RECON_MAPS,
+    ...SECTOR_MAPS,
   ];
 }
 
@@ -67,9 +82,11 @@ export function sectorTitle(value) {
   return getReconMapEntry(String(value))?.title ?? 'ANY SECTOR';
 }
 
+/** The sectors missions can be set in. Training ranges are not among them. */
 export function listReconMaps() {
-  return RECON_MAPS;
+  return SECTOR_MAPS;
 }
+
 
 export function getReconMapEntry(id) {
   return RECON_MAPS.find((entry) => entry.id === id) ?? null;
