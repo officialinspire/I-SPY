@@ -9,6 +9,8 @@ import { createLocateMission } from '../game/locateMission.js';
 import { createCountMission } from '../game/countMission.js';
 import { createChangeDetectionMission } from '../game/changeDetectionMission.js';
 import { createGeneratedMission, getGeneratorOptions } from '../game/missionGenerator.js';
+import { createDailyDossier, createOperationSeries, utcDateKey } from '../game/operationSeries.js';
+import { getDailyStatus, recordOperationStarted } from '../game/analystRecord.js';
 import { isAnySector, listSectorOptions, normalizeSector, sectorTitle } from '../world/mapRegistry.js';
 import { cycleHapticsLevel, cycleMasterVolume, getSettings, updateSettings } from '../settings/userSettings.js';
 import { feedback, hapticsSupported } from '../audio/feedback.js';
@@ -37,6 +39,10 @@ const FIELD_GUIDE = [
   'LOCATE   MARK THE REQUESTED TARGET, THEN CONFIRM.',
   'COUNT    INSPECT THE MARKED GRID AND SUBMIT A TOTAL.',
   'CHANGE   COMPARE PASS A / PASS B AND MARK THE CHANGE.',
+  '',
+  'OPERATION SERIES LINKS LOCATE, COUNT AND CHANGE IN ONE SECTOR.',
+  'DAILY DOSSIER IS THE UTC-DATED OPERATION FOR THIS BUILD.',
+  'ANALYST RECORD STORES LOCAL PERSONAL BESTS AND STREAKS.',
   '',
   'SECTOR PICKS THE MAP. ANY SECTOR LETS THE SEED CHOOSE.',
   '',
@@ -334,6 +340,27 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: 13,
       onHover: (hovered) => this.setReadout(hovered ? 'ANALYST FIELD GUIDE' : DEFAULT_READOUT),
     });
+    this.operationButton = createButton(this, 0, 0, 'OPERATION SERIES', () => this.startOperationSeries(), {
+      variant: 'tactical',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? 'OPERATION SERIES // THREE LINKED MISSIONS · ONE SECTOR' : DEFAULT_READOUT),
+    });
+    this.dailyButton = createButton(this, 0, 0, 'DAILY DOSSIER', () => this.startDailyDossier(), {
+      variant: 'tactical',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? this.dailyReadout() : DEFAULT_READOUT),
+    });
+    this.recordButton = createButton(this, 0, 0, 'ANALYST RECORD', () => this.scene.start('AnalystRecord'), {
+      variant: 'secondary',
+      width: 220,
+      height: 44,
+      fontSize: 13,
+      onHover: (hovered) => this.setReadout(hovered ? 'ANALYST RECORD // LOCAL PERSONAL BESTS AND STREAKS' : DEFAULT_READOUT),
+    });
     this.settingsButton = createButton(this, 0, 0, 'SETTINGS', () => this.openSettings(), {
       variant: 'secondary',
       width: 220,
@@ -341,9 +368,13 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: 13,
       onHover: (hovered) => this.setReadout(hovered ? 'SYSTEM CONFIGURATION' : DEFAULT_READOUT),
     });
-    this.systemButtons = [this.trainingButton, this.guideButton, this.howToPlayButton, this.settingsButton];
+    this.systemButtons = [
+      this.trainingButton, this.guideButton, this.howToPlayButton,
+      this.operationButton, this.dailyButton, this.recordButton, this.settingsButton,
+    ];
     this.buttons = [this.randomCard, this.sectorButton, ...this.modeCards, ...this.systemButtons];
     this.refreshTrainingLabel();
+    this.refreshDailyLabel();
   }
 
   /** What the console knows about this analyst's training, in one line. */
@@ -369,12 +400,42 @@ export default class MainMenuScene extends Phaser.Scene {
     this.scene.start('Training', { step: resumeTrainingStep() });
   }
 
+  startOperationSeries() {
+    const started = createOperationSeries({ sector: this.sector });
+    recordOperationStarted({ kind: 'series' });
+    this.scene.start('MissionBriefing', { mission: started.mission });
+  }
+
+  dailyReadout() {
+    const dateKey = utcDateKey();
+    const status = getDailyStatus(dateKey);
+    if (status.completions > 0) return `DAILY DOSSIER // ${dateKey} UTC · COMPLETE · BEST ${status.bestScore} · REPLAY AVAILABLE`;
+    if (status.attempts > 0) return `DAILY DOSSIER // ${dateKey} UTC · ATTEMPTED · REPLAY AVAILABLE`;
+    return `DAILY DOSSIER // ${dateKey} UTC · NEW DOSSIER`;
+  }
+
+  refreshDailyLabel() {
+    const status = getDailyStatus(utcDateKey());
+    this.dailyButton?.setSelected(status.completions > 0);
+  }
+
+  startDailyDossier() {
+    const dateKey = utcDateKey();
+    const status = getDailyStatus(dateKey);
+    const started = createDailyDossier({ dateKey, replay: status.attempts > 0 });
+    recordOperationStarted({ kind: 'daily', dailyDate: dateKey });
+    this.scene.start('MissionBriefing', { mission: started.mission });
+  }
+
   readoutFor(button) {
     if (!button) return DEFAULT_READOUT;
     if (button === this.howToPlayButton) return 'ANALYST FIELD GUIDE';
     if (button === this.settingsButton) return 'SYSTEM CONFIGURATION';
     if (button === this.trainingButton) return this.trainingReadout();
     if (button === this.guideButton) return GUIDE_READOUT;
+    if (button === this.operationButton) return 'OPERATION SERIES // THREE LINKED MISSIONS · ONE SECTOR';
+    if (button === this.dailyButton) return this.dailyReadout();
+    if (button === this.recordButton) return 'ANALYST RECORD // LOCAL PERSONAL BESTS AND STREAKS';
     if (button === this.sectorButton) return this.sectorReadout();
     const description = button.description?.text;
     return description ? `${button.text.text} // ${description}` : button.text.text;
