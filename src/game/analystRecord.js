@@ -1,6 +1,7 @@
-const STORAGE_KEY = 'i-spy-analyst-record-v1';
-const LEGACY_KEYS = Object.freeze(['i-spy-analyst-record']);
-export const ANALYST_RECORD_VERSION = 1;
+const STORAGE_KEY = 'i-spy-analyst-record-v2';
+const LEGACY_KEYS = Object.freeze(['i-spy-analyst-record-v1', 'i-spy-analyst-record']);
+export const ANALYST_RECORD_VERSION = 2;
+const RESULT_HISTORY_LIMIT = 160;
 const MODES = Object.freeze(['LOCATE', 'COUNT', 'CHANGE']);
 const GRADES = Object.freeze(['S', 'A', 'B', 'C']);
 
@@ -32,6 +33,10 @@ export function createEmptyAnalystRecord() {
       cleanSweeps: 0,
     },
     daily: {},
+    processed: {
+      missions: [],
+      operations: [],
+    },
   };
 }
 
@@ -40,6 +45,24 @@ const positiveTime = (value) => {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 };
+
+function sanitizeResultIds(input) {
+  const values = Array.isArray(input) ? input : [];
+  return [...new Set(values
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean))]
+    .slice(-RESULT_HISTORY_LIMIT);
+}
+
+function resultIdOf(value) {
+  const id = String(value ?? '').trim();
+  return id || null;
+}
+
+function rememberResult(list, resultId) {
+  if (!resultId) return sanitizeResultIds(list);
+  return sanitizeResultIds([...(list ?? []), resultId]);
+}
 
 function sanitizeMode(input = {}) {
   return {
@@ -99,6 +122,10 @@ export function sanitizeAnalystRecord(input = {}) {
       cleanSweeps: nonNegativeInt(operations.cleanSweeps),
     },
     daily,
+    processed: {
+      missions: sanitizeResultIds(input?.processed?.missions ?? input?.processedMissionResults),
+      operations: sanitizeResultIds(input?.processed?.operations ?? input?.processedOperationResults),
+    },
   };
 }
 
@@ -188,10 +215,22 @@ export function applyMissionResultToRecord(record, mission, result = {}) {
 }
 
 export function recordMissionResult(mission, result = {}) {
+  const resultId = resultIdOf(result.resultId);
+  if (resultId && state.processed.missions.includes(resultId)) {
+    return {
+      record: getAnalystRecord(),
+      newBestScore: false,
+      newFastestTime: false,
+      streak: state.missions.currentStreak,
+      duplicate: true,
+    };
+  }
+
   const update = applyMissionResultToRecord(state, mission, result);
+  if (resultId) update.record.processed.missions = rememberResult(update.record.processed.missions, resultId);
   state = update.record;
   persist();
-  return { ...update, record: getAnalystRecord() };
+  return { ...update, duplicate: false, record: getAnalystRecord() };
 }
 
 export function recordOperationStarted({ kind = 'series', dailyDate = null } = {}) {
@@ -206,7 +245,18 @@ export function recordOperationStarted({ kind = 'series', dailyDate = null } = {
   return getAnalystRecord();
 }
 
-export function recordOperationOutcome(context = {}, status = 'failed') {
+export function recordOperationOutcome(context = {}, status = 'failed', resultIdValue = null) {
+  const resultId = resultIdOf(resultIdValue);
+  if (resultId && state.processed.operations.includes(resultId)) {
+    return {
+      record: getAnalystRecord(),
+      newBest: false,
+      newDailyBest: false,
+      cleanSweep: false,
+      duplicate: true,
+    };
+  }
+
   const next = sanitizeAnalystRecord(state);
   const cumulative = context.cumulative ?? {};
   const score = nonNegativeInt(cumulative.score);
@@ -240,9 +290,10 @@ export function recordOperationOutcome(context = {}, status = 'failed') {
     next.daily[context.dailyDate] = daily;
   }
 
+  if (resultId) next.processed.operations = rememberResult(next.processed.operations, resultId);
   state = next;
   persist();
-  return { record: getAnalystRecord(), newBest, newDailyBest, cleanSweep };
+  return { record: getAnalystRecord(), newBest, newDailyBest, cleanSweep, duplicate: false };
 }
 
 export function getDailyStatus(date) {
