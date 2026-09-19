@@ -11,6 +11,7 @@ const music = read('src/audio/musicManager.js');
 const samples = read('src/audio/sampleFeedback.js');
 const intro = read('src/scenes/StartIntroScene.js');
 const recon = read('src/scenes/EnhancedReconScene.js');
+const briefing = read('src/scenes/MissionBriefingScene.js');
 const settings = read('src/settings/userSettings.js');
 
 check(music.includes("MENU: 'MENU'") && music.includes("GAMEPLAY: 'GAMEPLAY'") && music.includes("SILENT: 'SILENT'"), 'music state contract is complete');
@@ -24,6 +25,7 @@ check(recon.includes('this.candidate?.entity') && recon.includes('TARGET_ACQUIRE
 check(recon.includes('if (result.correct) sampleFeedback') && recon.includes("else feedback('error')"), 'secured and error feedback are mutually exclusive');
 check(intro.includes('if (this.started || this.finished) return') && intro.includes('if (this.finished) return'), 'startup and completion are idempotent');
 check(intro.includes('removeEventListener') && intro.includes('this.video = null'), 'intro media listeners and references are cleaned up');
+check(/create\(data = \{\}\) \{[\s\S]*?this\.transitioning = false;[\s\S]*?musicManager\.request/.test(briefing), 'mission briefing resets its transition guard on every scene create');
 check(settings.includes('musicEnabled: true') && settings.includes('sfxEnabled: true'), 'music and SFX persist independently');
 
 if (failures.length) {
@@ -31,5 +33,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY audio QA passed: 12 lifecycle and feedback checks.');
+  console.log('I SPY audio QA passed: 13 lifecycle and feedback checks.');
 }
