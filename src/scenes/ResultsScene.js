@@ -36,7 +36,7 @@ export default class ResultsScene extends Phaser.Scene {
     const operationOutcome = resolveOperationMissionResult(mission, { ...data, success, score, performance });
     const operationFinal = operationOutcome && operationOutcome.status !== 'continue';
     const operationRecord = operationFinal
-      ? recordOperationOutcome(operationOutcome.context, operationOutcome.status)
+      ? recordOperationOutcome(operationOutcome.context, operationOutcome.status, data.resultId)
       : null;
     const operationContext = operationOutcome?.context ?? null;
     const operationScore = operationContext?.cumulative?.score ?? score.totalScore ?? 0;
@@ -86,7 +86,10 @@ export default class ResultsScene extends Phaser.Scene {
       recordUpdate.newBestScore ? 'NEW BEST SCORE' : null,
       recordUpdate.newFastestTime ? 'NEW FASTEST TIME' : null,
     ].filter(Boolean);
-    bodyText += `\n\nANALYST RECORD\n${recordFlags.length ? recordFlags.join(' // ') : 'MISSION LOGGED'}\nCURRENT STREAK: ${recordUpdate.streak}`;
+    const recordStatus = recordUpdate.duplicate
+      ? 'MISSION ALREADY LOGGED'
+      : (recordFlags.length ? recordFlags.join(' // ') : 'MISSION LOGGED');
+    bodyText += `\n\nANALYST RECORD\n${recordStatus}\nCURRENT STREAK: ${recordUpdate.streak}`;
 
     if (operationOutcome) {
       const cumulative = operationContext.cumulative;
@@ -97,7 +100,10 @@ export default class ResultsScene extends Phaser.Scene {
       } else {
         const clean = operationCleanSweep(operationContext);
         const pb = operationRecord?.newDailyBest || operationRecord?.newBest;
-        bodyText += `\nCLEAN SWEEP: ${clean ? 'YES' : 'NO'} // ${pb ? 'NEW OPERATION BEST' : 'RECORD RETAINED'}`;
+        const operationStatus = operationRecord?.duplicate
+          ? 'RESULT ALREADY LOGGED'
+          : (pb ? 'NEW OPERATION BEST' : 'RECORD RETAINED');
+        bodyText += `\nCLEAN SWEEP: ${clean ? 'YES' : 'NO'} // ${operationStatus}`;
         if (operationContext.kind === 'daily') {
           bodyText += `\nUTC DATE: ${operationContext.dailyDate} // ${operationContext.replay ? 'REPLAY' : 'FIRST ATTEMPT'}`;
         }
