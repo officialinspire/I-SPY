@@ -65,6 +65,20 @@ and the menu gains no new modal surface. The card and its sector row are measure
 the row is part of the density tier rather than laid on top of it. The selection persists, and a
 named sector renders in the button's selected state. See `docs/PHASE-15E-SECTOR-SELECT.md`.
 
+## First-run orientation
+
+On a device's first launch — and only then — the Main Menu opens with a compact `ANALYST ORIENTATION`
+panel offering `BEGIN TRAINING`, `IDENTIFICATION GUIDE` and `SKIP`. None of the three starts a
+mission. It is dismissible by a button, by `ESC` or by a tap outside it, and whichever route is taken
+records `orientationSeen`, so it is offered once and never stands in a returning analyst's way again.
+While it is open the console behind it is disabled rather than merely covered.
+
+Once training has been completed, the menu carries a small `ANALYST CERTIFIED` standing at the right
+end of the SYSTEM rule, beside the control it refers to. It records a certification and gates nothing.
+
+Both flags live in the same local settings record as volume and haptics — on the device, no accounts,
+no login, no cloud. See `docs/PHASE-15I-ORIENTATION.md`.
+
 ## Analyst training
 
 `ANALYST TRAINING` is a six-step guided introduction: navigation (pan, zoom, reset view),
@@ -375,3 +389,4 @@ npm run build
 - Phase 15F — ANALYST TRAINING interactive tutorial ✅
 - Phase 15G — IDENTIFICATION GUIDE recognition manual ✅
 - Phase 15H — Haptics plus: patterns, strength levels, feature detection ✅
+- Phase 15I — First-run orientation and certification standing ✅

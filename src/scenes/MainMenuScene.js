@@ -18,6 +18,16 @@ import { fadeIn } from '../ui/presentation.js';
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
 const GUIDE_READOUT = 'IDENTIFICATION GUIDE // RECOGNITION MANUAL FOR EVERY OBJECT CLASS';
 
+/** Shown once, on a device's first launch. Two offers and a way past them. */
+const ORIENTATION_BODY = [
+  // Flowing sentences rather than hand-broken lines: the panel wraps them to
+  // whatever width it has, so a phone does not inherit a desktop's line ends.
+  'THIS CONSOLE READS SATELLITE IMAGERY. TWO THINGS HELP BEFORE A FIRST TASKING, AND NEITHER IS REQUIRED.',
+  '',
+  'ANALYST TRAINING WALKS THE CONSOLE, STEP BY STEP.',
+  'IDENTIFICATION GUIDE NAMES WHAT IS ON THE GROUND.',
+];
+
 const FIELD_GUIDE = [
   'PAN AND ZOOM THE IMAGERY WITH DRAG, WHEEL OR PINCH.',
   '',
@@ -118,6 +128,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.reducedMotion = prefersReducedMotion();
     this.settingsOpen = false;
     this.noticeOpen = false;
+    this.orientationOpen = false;
     // ?map= wins for this visit; otherwise the console remembers the last
     // sector the analyst selected. Either way the registry has the last word,
     // so a retired sector id degrades to ANY rather than to a broken launch.
@@ -134,10 +145,17 @@ export default class MainMenuScene extends Phaser.Scene {
     this.createSystemRow();
     this.createNoticePanel();
     this.createSettingsPanel();
+    this.createOrientationPanel();
 
-    this.focusGroup = createFocusGroup(this, [...this.buttons, ...this.settingsButtons], {
+    // Orientation first in the walk order: while it is open the console
+    // behind it is disabled, and the focus group skips anything unfocusable.
+    this.focusGroup = createFocusGroup(this, [...this.orientationButtons, ...this.buttons, ...this.settingsButtons], {
       onFocus: (button) => this.setReadout(this.readoutFor(button)),
     });
+
+    // Offered once, on the first launch this device has ever had, and never
+    // in the way of anyone who has already seen it.
+    if (!getSettings().orientationSeen) this.showOrientation();
 
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
@@ -192,6 +210,12 @@ export default class MainMenuScene extends Phaser.Scene {
     this.archiveSectionLabel = this.add.text(0, 0, 'MISSION ARCHIVE // TRAINING MODES', sectionStyle).setOrigin(0, 0.5);
     this.systemSectionLabel = this.add.text(0, 0, 'SYSTEM', sectionStyle).setOrigin(0, 0.5);
     this.sectionLabels = [this.primarySectionLabel, this.archiveSectionLabel, this.systemSectionLabel];
+    // A small standing on the SYSTEM rule, beside the control it refers to.
+    // It records a certification; it gates nothing.
+    this.certifiedMark = this.add.text(0, 0, 'ANALYST CERTIFIED', {
+      ...sectionStyle,
+      color: UI_TOKENS.text.positive,
+    }).setOrigin(1, 0.5).setVisible(false);
 
     this.readout = this.add.text(0, 0, DEFAULT_READOUT, {
       fontFamily: GAME_CONFIG.typography.family,
@@ -321,6 +345,10 @@ export default class MainMenuScene extends Phaser.Scene {
     this.trainingButton?.setSelected(getSettings().tutorialCompleted);
   }
 
+  certified() {
+    return getSettings().tutorialCompleted === true;
+  }
+
   startTraining() {
     this.scene.start('Training', { step: resumeTrainingStep() });
   }
@@ -337,7 +365,7 @@ export default class MainMenuScene extends Phaser.Scene {
   }
 
   setReadout(message) {
-    if (this.settingsOpen || this.noticeOpen) return;
+    if (this.settingsOpen || this.noticeOpen || this.orientationOpen) return;
     this.readout?.setText(message || DEFAULT_READOUT);
   }
 
@@ -367,7 +395,8 @@ export default class MainMenuScene extends Phaser.Scene {
 
     this.noticeBackdrop.on('pointerdown', () => this.hideNotice());
     this.input.keyboard?.on('keydown-ESC', () => {
-      if (this.noticeOpen) this.hideNotice();
+      if (this.orientationOpen) this.dismissOrientation();
+      else if (this.noticeOpen) this.hideNotice();
       else if (this.settingsOpen) this.closeSettings();
     });
   }
@@ -401,6 +430,150 @@ export default class MainMenuScene extends Phaser.Scene {
     this.noticeHint.setVisible(false);
     this.readout?.setText(DEFAULT_READOUT);
     this.layout(this.scale.gameSize);
+  }
+
+  /**
+   * First-launch orientation.
+   *
+   * Two offers and a way past them. It never starts a mission, it is
+   * dismissible by every route a panel can be — a button, ESC, or a tap
+   * outside it — and dismissing it by any of those routes is what records
+   * that it has been seen.
+   */
+  createOrientationPanel() {
+    this.orientationBackdrop = this.add.rectangle(0, 0, 10, 10, hexToNumber(UI_TOKENS.color.black), 0.82)
+      .setDepth(74)
+      .setVisible(false);
+    this.orientationGraphics = this.add.graphics().setDepth(75).setVisible(false);
+    this.orientationTitle = this.add.text(0, 0, 'ANALYST ORIENTATION', {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '17px',
+      color: UI_TOKENS.text.attention,
+      letterSpacing: 3,
+    }).setOrigin(0, 0).setDepth(76).setVisible(false);
+    this.orientationBody = this.add.text(0, 0, ORIENTATION_BODY.join('\n'), {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '12px',
+      color: UI_TOKENS.text.body,
+      lineSpacing: 5,
+    }).setOrigin(0, 0).setDepth(76).setVisible(false);
+    this.orientationHint = this.add.text(0, 0, 'SKIP OR PRESS ESC TO GO STRAIGHT TO THE CONSOLE', {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '9px',
+      color: UI_TOKENS.text.faint,
+      letterSpacing: 1,
+    }).setOrigin(0.5, 0.5).setDepth(76).setVisible(false);
+
+    const orientationButton = (label, variant, onPress) => createButton(this, 0, 0, label, onPress, {
+      variant,
+      width: 300,
+      height: 40,
+      fontSize: 13,
+      pressSound: 'card',
+    });
+    this.orientationTrainingButton = orientationButton('BEGIN TRAINING', 'primary',
+      () => this.dismissOrientation(() => this.startTraining()));
+    this.orientationGuideButton = orientationButton('IDENTIFICATION GUIDE', 'secondary',
+      () => this.dismissOrientation(() => this.scene.start('IdentificationGuide')));
+    this.orientationSkipButton = orientationButton('SKIP', 'secondary',
+      () => this.dismissOrientation());
+    this.orientationButtons = [this.orientationTrainingButton, this.orientationGuideButton, this.orientationSkipButton];
+    this.orientationButtons.forEach((button) => button.setDepth(77).setVisible(false));
+
+    this.orientationBackdrop.on('pointerdown', () => this.dismissOrientation());
+  }
+
+  showOrientation() {
+    this.orientationOpen = true;
+    this.hideNotice();
+    this.buttons.forEach((button) => button.setEnabled(false));
+    this.orientationBackdrop.setVisible(true).setInteractive({ useHandCursor: false });
+    this.orientationGraphics.setVisible(true);
+    this.orientationTitle.setVisible(true);
+    this.orientationBody.setVisible(true);
+    this.orientationHint.setVisible(true);
+    this.orientationButtons.forEach((button) => button.setVisible(true));
+    this.focusGroup?.refresh();
+    this.readout?.setText('ANALYST ORIENTATION // FIRST LAUNCH');
+    fadeIn(this, [this.orientationBackdrop, this.orientationGraphics, this.orientationTitle,
+      this.orientationBody, this.orientationHint]);
+    this.layout(this.scale.gameSize);
+  }
+
+  /**
+   * Close it and remember that it was offered. `next` runs afterwards, so a
+   * choice leaves for training or the manual with the panel already put away
+   * and the console behind it live again.
+   */
+  dismissOrientation(next) {
+    if (!this.orientationOpen) return;
+    this.orientationOpen = false;
+    updateSettings({ orientationSeen: true });
+    this.orientationBackdrop.disableInteractive().setVisible(false);
+    this.orientationGraphics.setVisible(false).clear();
+    this.orientationTitle.setVisible(false);
+    this.orientationBody.setVisible(false);
+    this.orientationHint.setVisible(false);
+    this.orientationButtons.forEach((button) => button.setVisible(false));
+    this.buttons.forEach((button) => button.setEnabled(true));
+    this.focusGroup?.refresh();
+    this.readout?.setText(DEFAULT_READOUT);
+    this.layout(this.scale.gameSize);
+    next?.();
+  }
+
+  layoutOrientation(gameSize) {
+    const { width, height } = gameSize;
+    this.orientationBackdrop.setSize(width, height).setPosition(width / 2, height / 2);
+    if (this.orientationBackdrop.input) this.orientationBackdrop.input.hitArea?.setTo(0, 0, width, height);
+    this.orientationGraphics.clear();
+    if (!this.orientationOpen) return;
+
+    const compact = width < 620;
+    const short = height < 520;
+    const padding = compact ? 16 : 22;
+    const panelWidth = Math.min(520, width - (compact ? 24 : 64));
+    const innerWidth = panelWidth - padding * 2;
+    const buttonHeight = short ? 34 : 40;
+    const rowGap = short ? 6 : 8;
+
+    this.orientationTitle.setFontSize(compact ? 14 : 17).setWordWrapWidth(innerWidth);
+    this.orientationBody.setFontSize(compact ? 10 : 12).setWordWrapWidth(innerWidth);
+    const showHint = height >= 420 && width >= 380;
+    this.orientationHint.setFontSize(compact ? 8 : 9).setVisible(showHint);
+
+    const hintBlock = showHint ? this.orientationHint.height + (short ? 8 : 12) : 0;
+    const panelHeight = padding + this.orientationTitle.height + (short ? 8 : 12)
+      + this.orientationBody.height + (short ? 12 : 18)
+      + this.orientationButtons.length * buttonHeight + (this.orientationButtons.length - 1) * rowGap
+      + hintBlock + padding;
+    const left = Math.round(width / 2 - panelWidth / 2);
+    const top = Math.round(Math.max(12, height / 2 - panelHeight / 2));
+
+    this.orientationGraphics
+      .fillStyle(hexToNumber(UI_TOKENS.color.panel), 0.99)
+      .fillRect(left, top, panelWidth, panelHeight);
+    this.orientationGraphics
+      .lineStyle(2, hexToNumber(UI_TOKENS.color.amber), 0.75)
+      .strokeRect(left, top, panelWidth, panelHeight);
+
+    let cursor = top + padding;
+    this.orientationTitle.setPosition(left + padding, cursor);
+    cursor += this.orientationTitle.height + (short ? 8 : 12);
+    this.orientationGraphics
+      .lineStyle(1, hexToNumber(UI_TOKENS.surface.divider), 0.34)
+      .lineBetween(left + padding, cursor - (short ? 4 : 6), left + panelWidth - padding, cursor - (short ? 4 : 6));
+    this.orientationBody.setPosition(left + padding, cursor);
+    cursor += this.orientationBody.height + (short ? 12 : 18);
+
+    // Stacked, full width: every choice is the same size and the same easy
+    // target, on a phone as much as on a desktop.
+    this.orientationButtons.forEach((button, index) => {
+      button.resize({ width: innerWidth, height: buttonHeight, fontSize: compact ? 12 : 13 })
+        .setPosition(left + panelWidth / 2, cursor + buttonHeight / 2 + index * (buttonHeight + rowGap));
+    });
+    cursor += this.orientationButtons.length * buttonHeight + (this.orientationButtons.length - 1) * rowGap;
+    if (showHint) this.orientationHint.setPosition(left + panelWidth / 2, cursor + (short ? 8 : 12) + this.orientationHint.height / 2 - 2);
   }
 
   createSettingsPanel() {
@@ -691,6 +864,13 @@ export default class MainMenuScene extends Phaser.Scene {
       .setWordWrapWidth(contentWidth)
       .setVisible(tier.showReadout && !this.settingsOpen);
     this.sectionLabels.forEach((label) => label.setVisible(!this.settingsOpen));
+    // Hidden on the narrowest consoles, where the SYSTEM rule has no room to
+    // spare, and never while a panel is over the console.
+    const showCertified = this.certified() && !this.settingsOpen && innerWidth >= 360;
+    this.certifiedMark
+      .setFontSize(tier.sectionFont)
+      .setPosition(innerRight, system.labelY)
+      .setVisible(showCertified);
 
     this.drawConsoleFrame({
       left: contentLeft,
@@ -711,6 +891,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
     this.layoutSettings(gameSize);
     this.layoutNotice(gameSize);
+    this.layoutOrientation(gameSize);
   }
 
   layoutStatus(tier, innerLeft, innerRight, y, contentWidth) {
@@ -756,14 +937,16 @@ export default class MainMenuScene extends Phaser.Scene {
       .lineBetween(innerLeft, box.statusDividerY, innerRight, box.statusDividerY);
 
     // Hairline rules trailing each section label.
-    const rule = (label, y) => {
+    const rule = (label, y, end = innerRight) => {
       const start = innerLeft + label.width + 12;
-      if (start >= innerRight - 8) return;
-      graphics.lineStyle(1, hexToNumber(surface.divider), 0.22).lineBetween(start, y, innerRight, y);
+      if (start >= end - 8) return;
+      graphics.lineStyle(1, hexToNumber(surface.divider), 0.22).lineBetween(start, y, end, y);
     };
     rule(this.primarySectionLabel, box.primaryLabelY);
     rule(this.archiveSectionLabel, box.archiveLabelY);
-    rule(this.systemSectionLabel, box.systemLabelY);
+    // The rule stops short of the certification mark rather than running under it.
+    rule(this.systemSectionLabel, box.systemLabelY,
+      this.certifiedMark.visible ? this.certifiedMark.x - this.certifiedMark.width - 12 : innerRight);
 
     // Priority band haloes the emphasised tasking card; a thin trace carries
     // the line out to the frame edge instead of leaving dead space.

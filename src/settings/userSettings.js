@@ -18,6 +18,7 @@ const DEFAULTS = Object.freeze({
   sector: 'any',
   tutorialCompleted: false,
   tutorialStep: 0,
+  orientationSeen: false,
 });
 
 let state = load();
@@ -61,6 +62,10 @@ function sanitize(input = {}) {
     // Where ANALYST TRAINING resumes. Clamped here so a hand-edited or stale
     // value can never point at a step that does not exist.
     tutorialStep: Math.min(5, Math.max(0, Math.floor(Number(input.tutorialStep)) || 0)),
+    // Whether the console has introduced itself. Set the first time the
+    // orientation panel is dismissed by any route, so it is offered once and
+    // never stands in a returning analyst's way again.
+    orientationSeen: input.orientationSeen === true,
   };
 }
 
