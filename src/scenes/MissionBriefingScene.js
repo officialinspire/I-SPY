@@ -51,8 +51,11 @@ export default class MissionBriefingScene extends Phaser.Scene {
     const changeInstruction = this.mission.mode === 'CHANGE'
       ? `\n\nIMAGE COMPARISON:\n${this.mission.passA?.label ?? 'PASS A'}: ${this.mission.passA?.time ?? 'UNKNOWN'}\n${this.mission.passB?.label ?? 'PASS B'}: ${this.mission.passB?.time ?? 'UNKNOWN'}\nTERRAIN ALIGNMENT IS IDENTICAL. MARK THE CHANGED OBJECT.`
       : '';
+    const directiveLine = this.mission.directive
+      ? `\n\nSECONDARY DIRECTIVE // ${this.mission.directive.label}\n${this.mission.directive.description}`
+      : '';
 
-    this.fullBriefing = `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${sector}\nMODE: ${this.mission.mode}${regionLine}${generatedLine}${seedLine}\n\nPRIMARY OBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}\n\nANALYSIS WINDOW: ${this.mission.timeLimitSeconds} SECONDS`;
+    this.fullBriefing = `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${sector}\nMODE: ${this.mission.mode}${regionLine}${generatedLine}${seedLine}\n\nPRIMARY OBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}${directiveLine}\n\nANALYSIS WINDOW: ${this.mission.timeLimitSeconds} SECONDS`;
 
     this.briefing = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,

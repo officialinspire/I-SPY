@@ -14,11 +14,18 @@ import {
   MIN_CHANGE_MOVE,
   MIN_GENERATED_COUNT,
   createGeneratedMission,
+  matchesCountTarget,
   simulateEntities,
   validateGeneratedMission,
 } from '../src/game/missionGenerator.js';
 import { findSelectableOverlaps, OVERLAP_LIMIT } from '../src/world/reconMapSchema.js';
 import { listReconMaps, resolveReconMap } from '../src/world/mapRegistry.js';
+import {
+  DIRECTIVE_TYPES,
+  calculatePerformanceGrade,
+  createMissionDirective,
+  evaluateDirective,
+} from '../src/game/missionPerformance.js';
 
 const MODES = ['LOCATE', 'COUNT', 'CHANGE'];
 /** Seeds per map and mode. Fixed, so a failure names a case that can be replayed. */
@@ -72,6 +79,8 @@ function operationsInBounds(operations, map) {
 
 let generatedCount = 0;
 let fallbackCount = 0;
+const countTargetLabels = new Set();
+let structureChangeCount = 0;
 
 for (const entry of listReconMaps()) {
   const map = resolveReconMap(entry.id);
@@ -95,6 +104,9 @@ for (const entry of listReconMaps()) {
       // Determinism: the same request, built twice, is the same mission.
       const repeat = createGeneratedMission({ seed, mode, map: entry.id });
       assert(JSON.stringify(repeat) === JSON.stringify(mission), 'seed reproduces identically', where);
+      assert(Boolean(mission.directive?.id && mission.directive?.label), 'directive assigned', where);
+      assert(JSON.stringify(createMissionDirective(seed)) === JSON.stringify(mission.directive),
+        'directive deterministic from seed', where);
 
       if (mission.generated) generatedCount += 1;
       else fallbackCount += 1;
@@ -113,7 +125,7 @@ for (const entry of listReconMaps()) {
 
       if (mode === 'COUNT') {
         const region = mission.region;
-        const inRegion = passA.filter((item) => item.category === mission.targetCategory
+        const inRegion = passA.filter((item) => matchesCountTarget(item, mission)
           && !item.hidden
           && item.x + item.width / 2 >= region.x && item.x + item.width / 2 <= region.x + region.width
           && item.y + item.height / 2 >= region.y && item.y + item.height / 2 <= region.y + region.height);
@@ -124,6 +136,7 @@ for (const entry of listReconMaps()) {
         assert(region.x >= 0 && region.y >= 0
           && region.x + region.width <= map.width && region.y + region.height <= map.height,
         'COUNT region is inside the sector', where);
+        if (mission.generated) countTargetLabels.add(mission.targetCategoryLabel);
       }
 
       if (mode === 'CHANGE') {
@@ -148,10 +161,48 @@ for (const entry of listReconMaps()) {
         // A disappearance is only readable if the thing was there to begin with.
         if (!visibleB) assert(visibleA, 'disappeared CHANGE target exists in PASS A', where);
         if (!visibleA) assert(visibleB, 'appeared CHANGE target exists in PASS B', where);
+        if (mission.generated && mission.changeType === 'structure_changed') structureChangeCount += 1;
       }
     }
   }
 }
+
+// Phase 17B contract tests: directive thresholds and grade boundaries.
+const directiveSeed = 'QA-DIRECTIVE-STABILITY';
+assert(JSON.stringify(createMissionDirective(directiveSeed)) === JSON.stringify(createMissionDirective(directiveSeed)),
+  'directive helper deterministic', directiveSeed);
+
+const rapidMission = {
+  directive: { id: DIRECTIVE_TYPES.RAPID_ANALYSIS, label: 'RAPID ANALYSIS', description: '' },
+  timeLimitSeconds: 100,
+};
+assert(evaluateDirective(rapidMission, { success: true, errors: 0, elapsedSeconds: 55, remainingSeconds: 45 }).completed,
+  'rapid directive includes exact threshold', 'elapsed 55/100');
+assert(!evaluateDirective(rapidMission, { success: true, errors: 0, elapsedSeconds: 56, remainingSeconds: 44 }).completed,
+  'rapid directive rejects over threshold', 'elapsed 56/100');
+
+const cleanMission = {
+  directive: { id: DIRECTIVE_TYPES.CLEAN_SWEEP, label: 'CLEAN SWEEP', description: '' },
+  timeLimitSeconds: 100,
+};
+assert(evaluateDirective(cleanMission, { success: true, errors: 0, elapsedSeconds: 80, remainingSeconds: 20 }).completed,
+  'clean sweep includes exact reserve threshold', 'remaining 20/100');
+assert(!evaluateDirective(cleanMission, { success: true, errors: 1, elapsedSeconds: 60, remainingSeconds: 40 }).completed,
+  'clean sweep rejects errors', 'one error');
+
+assert(calculatePerformanceGrade({ success: true, errors: 0, remainingSeconds: 100, timeLimitSeconds: 100 }).grade === 'S',
+  'grade S boundary works', 'perfect reserve');
+assert(calculatePerformanceGrade({ success: true, errors: 0, remainingSeconds: 50, timeLimitSeconds: 100 }).grade === 'A',
+  'grade A boundary works', 'half reserve');
+assert(calculatePerformanceGrade({ success: true, errors: 0, remainingSeconds: 20, timeLimitSeconds: 100 }).grade === 'B',
+  'grade B boundary works', 'low reserve');
+assert(calculatePerformanceGrade({ success: false, errors: 0, remainingSeconds: 100, timeLimitSeconds: 100 }).grade === 'C',
+  'failed mission grades C', 'failure');
+
+assert(countTargetLabels.size >= 3, 'COUNT target variety exercised',
+  `saw ${[...countTargetLabels].join(', ')}`);
+assert(structureChangeCount > 0, 'structure CHANGE variants exercised',
+  `saw ${structureChangeCount} generated structure changes`);
 
 const total = listReconMaps().length * MODES.length * SEED_COUNT;
 if (errors.length) {
@@ -168,3 +219,4 @@ console.log(`I SPY generator QA passed: ${checks} checks over ${total} missions.
 console.log(`Sectors: ${listReconMaps().map((entry) => entry.id).join(', ')}`);
 console.log(`Modes: ${MODES.join(', ')} x ${SEED_COUNT} seeds`);
 console.log(`Generated: ${generatedCount}; authored fallback: ${fallbackCount}; overlap limit ${Math.round(OVERLAP_LIMIT * 100)}%; min CHANGE move ${MIN_CHANGE_MOVE}; min COUNT ${MIN_GENERATED_COUNT}.`);
+console.log(`COUNT targets exercised: ${[...countTargetLabels].join(', ')}; structure CHANGE missions: ${structureChangeCount}.`);
