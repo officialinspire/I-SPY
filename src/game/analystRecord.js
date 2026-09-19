@@ -51,7 +51,6 @@ function sanitizeMode(input = {}) {
 }
 
 export function sanitizeAnalystRecord(input = {}) {
-  const defaults = createEmptyAnalystRecord();
   const missions = input?.missions ?? {};
   const operations = input?.operations ?? {};
   const grades = input?.grades ?? {};
@@ -100,7 +99,6 @@ export function sanitizeAnalystRecord(input = {}) {
       cleanSweeps: nonNegativeInt(operations.cleanSweeps),
     },
     daily,
-    ...defaults.schemaVersion && {},
   };
 }
 
@@ -126,7 +124,7 @@ function persist() {
 }
 
 export function getAnalystRecord() {
-  return structuredClone ? structuredClone(state) : JSON.parse(JSON.stringify(state));
+  return typeof structuredClone === 'function' ? structuredClone(state) : JSON.parse(JSON.stringify(state));
 }
 
 export function resetAnalystRecord() {
