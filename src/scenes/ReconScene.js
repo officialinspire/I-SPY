@@ -7,12 +7,14 @@ import { drawCandidateReticle } from '../ui/reconInteraction.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 import { validateCountAnswer, calculateCountScore } from '../game/countMission.js';
 import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
+import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 
 export default class ReconScene extends Phaser.Scene {
   /** Subclasses that are a different scene (ANALYST TRAINING) pass their own key. */
   constructor(key = 'Recon') { super(key); }
 
   create(data = {}) {
+    musicManager.request(MUSIC_STATES.GAMEPLAY);
     this.mission = data.mission ?? createLocateMission();
     this.isCountMode = this.mission.mode === 'COUNT';
     this.isChangeMode = this.mission.mode === 'CHANGE';

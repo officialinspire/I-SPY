@@ -15,6 +15,7 @@ import { feedback, hapticsSupported } from '../audio/feedback.js';
 import { TRAINING_STEP_COUNT, resumeTrainingStep } from '../game/trainingMissions.js';
 import { fadeIn } from '../ui/presentation.js';
 import { INSPIRE_LOGO_KEY } from '../assets/brandAssets.js';
+import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 
 const DEFAULT_READOUT = 'SELECT A TASKING TO BEGIN';
 const GUIDE_READOUT = 'IDENTIFICATION GUIDE // RECOGNITION MANUAL FOR EVERY OBJECT CLASS';
@@ -125,6 +126,7 @@ export default class MainMenuScene extends Phaser.Scene {
   constructor() { super('MainMenu'); }
 
   create() {
+    musicManager.request(MUSIC_STATES.MENU);
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
     this.reducedMotion = prefersReducedMotion();
     this.settingsOpen = false;
@@ -611,12 +613,13 @@ export default class MainMenuScene extends Phaser.Scene {
     // first cue so each of these rows acknowledges exactly once, in the state
     // it has just been put into.
     this.masterSettingButton = createButton(this, 0, 0, '', () => this.stepMasterVolume(), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: false });
+    this.musicSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('musicEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.sfxSettingButton = createButton(this, 0, 0, '', () => this.toggleFeedbackSetting('sfxEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: false });
     this.hapticsSettingButton = createButton(this, 0, 0, '', () => this.cycleHaptics(), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: false });
     this.scanlineSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('scanlinesEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.grainSettingButton = createButton(this, 0, 0, '', () => this.toggleSetting('imageGrainEnabled'), { width: 300, height: 40, fontSize: 13, variant: 'secondary', pressSound: 'toggle' });
     this.closeSettingsButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.closeSettings(), { width: 300, height: 40, fontSize: 13, variant: 'primary' });
-    this.settingsButtons = [this.masterSettingButton, this.sfxSettingButton, this.hapticsSettingButton, this.scanlineSettingButton, this.grainSettingButton, this.closeSettingsButton];
+    this.settingsButtons = [this.masterSettingButton, this.musicSettingButton, this.sfxSettingButton, this.hapticsSettingButton, this.scanlineSettingButton, this.grainSettingButton, this.closeSettingsButton];
     this.settingsButtons.forEach((button) => {
       button.setDepth(62);
       button.setVisible(false);
@@ -664,6 +667,8 @@ export default class MainMenuScene extends Phaser.Scene {
     const settings = getSettings();
     this.masterSettingButton?.setLabel(`MASTER LEVEL // ${Math.round(settings.masterVolume * 100)}%`);
     this.masterSettingButton?.setSelected(settings.masterVolume > 0);
+    this.musicSettingButton?.setLabel(`MUSIC // ${settings.musicEnabled ? 'ON' : 'OFF'}`);
+    this.musicSettingButton?.setSelected(settings.musicEnabled);
     this.sfxSettingButton?.setLabel(`SOUND EFFECTS // ${settings.sfxEnabled ? 'ON' : 'OFF'}`);
     this.sfxSettingButton?.setSelected(settings.sfxEnabled);
     // A device with no vibration motor is told so rather than being offered a

@@ -11,6 +11,7 @@ export const HAPTIC_LEVELS = Object.freeze(['off', 'light', 'standard', 'strong'
 
 const DEFAULTS = Object.freeze({
   masterVolume: 0.75,
+  musicEnabled: true,
   sfxEnabled: true,
   hapticsLevel: 'standard',
   scanlinesEnabled: true,
@@ -22,6 +23,7 @@ const DEFAULTS = Object.freeze({
 });
 
 let state = load();
+const listeners = new Set();
 
 /**
  * The stored level, or the old on/off switch translated into one.
@@ -47,6 +49,7 @@ function sanitize(input = {}) {
   const level = resolveHapticsLevel(input);
   return {
     masterVolume: Math.max(0, Math.min(1, Number.isFinite(Number(input.masterVolume)) ? Number(input.masterVolume) : DEFAULTS.masterVolume)),
+    musicEnabled: input.musicEnabled !== false,
     sfxEnabled: input.sfxEnabled !== false,
     hapticsLevel: level,
     // Derived, never stored as the truth: everything that only needs to know
@@ -82,6 +85,11 @@ function persist() {
   try { globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage unavailable */ }
 }
 
+export function subscribeSettings(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function getSettings() {
   return { ...state };
 }
@@ -90,6 +98,7 @@ export function updateSettings(patch = {}) {
   state = sanitize({ ...state, ...patch });
   persist();
   applyPresentationPreferences();
+  listeners.forEach((listener) => listener(getSettings()));
   return getSettings();
 }
 
@@ -98,6 +107,7 @@ export function resetSettings() {
   state = sanitize(DEFAULTS);
   persist();
   applyPresentationPreferences();
+  listeners.forEach((listener) => listener(getSettings()));
   return getSettings();
 }
 

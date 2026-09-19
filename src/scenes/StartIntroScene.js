@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { unlockAudio } from '../audio/feedback.js';
 import { inspireIntroUrl } from '../assets/brandAssets.js';
+import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
+import { unlockSamples } from '../audio/sampleFeedback.js';
 
 /**
  * The only pre-menu route. Keeping the media gate in its own scene prevents
@@ -10,6 +12,7 @@ export default class StartIntroScene extends Phaser.Scene {
   constructor() { super('StartIntro'); }
 
   create() {
+    musicManager.request(MUSIC_STATES.SILENT);
     this.started = false;
     this.finished = false;
 
@@ -57,8 +60,9 @@ export default class StartIntroScene extends Phaser.Scene {
     this.startButton.addEventListener('click', this.onStartPointer);
     this.skipButton.addEventListener('pointerdown', this.onSkip);
     document.addEventListener('keydown', this.onKey);
-    this.video.addEventListener('ended', () => this.finish(), { once: true });
-    this.video.addEventListener('error', () => this.finish(), { once: true });
+    this.onVideoFinished = () => this.finish();
+    this.video.addEventListener('ended', this.onVideoFinished, { once: true });
+    this.video.addEventListener('error', this.onVideoFinished, { once: true });
     this.startButton.focus({ preventScroll: true });
 
     this.events.once('shutdown', () => this.destroyOverlay());
@@ -69,6 +73,8 @@ export default class StartIntroScene extends Phaser.Scene {
     this.started = true;
     unlockAudio();
     this.sound.unlock();
+    musicManager.unlock();
+    unlockSamples();
     this.startPanel.hidden = true;
     this.video.classList.add('is-visible');
     this.skipButton.classList.add('is-visible');
@@ -89,13 +95,20 @@ export default class StartIntroScene extends Phaser.Scene {
   }
 
   destroyOverlay() {
+    if (!this.overlay) return;
     document.removeEventListener('keydown', this.onKey);
     this.startButton?.removeEventListener('pointerdown', this.onStartPointer);
     this.startButton?.removeEventListener('click', this.onStartPointer);
     this.skipButton?.removeEventListener('pointerdown', this.onSkip);
+    this.video?.removeEventListener('ended', this.onVideoFinished);
+    this.video?.removeEventListener('error', this.onVideoFinished);
     this.video?.removeAttribute('src');
     this.video?.load();
     this.overlay?.remove();
     this.overlay = null;
+    this.startPanel = null;
+    this.startButton = null;
+    this.skipButton = null;
+    this.video = null;
   }
 }

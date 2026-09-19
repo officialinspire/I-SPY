@@ -37,12 +37,13 @@ I SPY currently includes:
 - IDENTIFICATION GUIDE: a five-category recognition manual built from the shipped sprite frames
 - First-run ANALYST ORIENTATION panel, offered once and never forced
 - Runtime-generated terminal SFX and feature-detected haptics at four strength levels
-- Persistent master/SFX/haptics/scanline/image-grain/sector/training settings
+- User-gated local intro, centralized crossfading menu/gameplay music, and guarded target samples
+- Persistent master/music/SFX/haptics/scanline/image-grain/sector/training settings
 - Reduced-motion support
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass, `docs/PHASE-14-SPRITE-ART.md` for the complete high-fidelity 80-frame sprite-art overhaul and consistency audit, and `docs/PHASE-15-RELEASE-AUDIT.md` for the Phase 15 release-candidate audit. The Phase 15 feature passes are documented in `docs/PHASE-15A-MAP-REGISTRY.md`, `docs/PHASE-15B-FROSTLINE-RELAY.md`, `docs/PHASE-15C-RIVERWORKS-SECTOR.md`, `docs/PHASE-15D-BORDER-FARMS.md`, `docs/PHASE-15E-SECTOR-SELECT.md`, `docs/PHASE-15F-ANALYST-TRAINING.md`, `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`, `docs/PHASE-15H-HAPTICS.md` and `docs/PHASE-15I-ORIENTATION.md`.
+See `docs/PHASE-16-AUDIO.md` for the startup/audio lifecycle and final Phase 16 audit. See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass, `docs/PHASE-14-SPRITE-ART.md` for the complete high-fidelity 80-frame sprite-art overhaul and consistency audit, and `docs/PHASE-15-RELEASE-AUDIT.md` for the Phase 15 release-candidate audit. The Phase 15 feature passes are documented in `docs/PHASE-15A-MAP-REGISTRY.md`, `docs/PHASE-15B-FROSTLINE-RELAY.md`, `docs/PHASE-15C-RIVERWORKS-SECTOR.md`, `docs/PHASE-15D-BORDER-FARMS.md`, `docs/PHASE-15E-SECTOR-SELECT.md`, `docs/PHASE-15F-ANALYST-TRAINING.md`, `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`, `docs/PHASE-15H-HAPTICS.md` and `docs/PHASE-15I-ORIENTATION.md`.
 
 ## Interaction design system
 
