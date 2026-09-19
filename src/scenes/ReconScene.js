@@ -25,6 +25,11 @@ export default class ReconScene extends Phaser.Scene {
     this.answerValue = 0;
     this.remainingSeconds = this.mission.timeLimitSeconds;
     this.missionStartedAt = this.time.now;
+    // Phaser reuses this Scene instance. Pause accounting belongs to one
+    // mission attempt only; carrying it forward makes the next timer start
+    // above its configured limit and inflates its time bonus.
+    this.totalPausedMs = 0;
+    this.pauseStartedAt = null;
     this.missionEnded = false;
     // Scene instances are reused by Phaser. These guards must reset for every
     // mission or a successful identification from the previous run can make
@@ -801,6 +806,12 @@ export default class ReconScene extends Phaser.Scene {
     if (this.missionEnded) return;
     this.missionEnded = true;
     this.timerEvent?.remove(false);
+    // One id follows this completed attempt into Results. If Results is ever
+    // recreated with the same payload, persistence can recognize the replayed
+    // debrief and refuse to count it twice.
+    const randomPart = globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const resultId = `${this.mission.id ?? this.mission.seed ?? 'mission'}:${randomPart}`;
     const remainingSeconds = Math.max(0, Math.floor(this.remainingSeconds));
     const elapsedSeconds = Math.max(0, Math.ceil(this.mission.timeLimitSeconds - remainingSeconds));
     const errors = this.isCountMode ? this.incorrectSubmissions : this.falseIdentifications;
@@ -817,7 +828,7 @@ export default class ReconScene extends Phaser.Scene {
         performance,
       );
       this.scene.start('Results', {
-        success, mission: this.mission, elapsedSeconds, score, performance,
+        success, mission: this.mission, elapsedSeconds, score, performance, resultId,
         submittedAnswer: this.answerValue,
         correctAnswer: this.mission.expectedCount,
         incorrectSubmissions: this.incorrectSubmissions,
@@ -831,7 +842,7 @@ export default class ReconScene extends Phaser.Scene {
         performance,
       );
       this.scene.start('Results', {
-        success, mission: this.mission, elapsedSeconds, score, performance,
+        success, mission: this.mission, elapsedSeconds, score, performance, resultId,
         falseIdentifications: this.falseIdentifications,
         markedPass: this.candidate?.passId ?? this.activePass,
       });
@@ -844,7 +855,7 @@ export default class ReconScene extends Phaser.Scene {
     );
     this.scene.start('Results', {
       success, mission: this.mission, targetLabel: this.mission.targetLabel, elapsedSeconds,
-      falseIdentifications: this.falseIdentifications, score, performance,
+      falseIdentifications: this.falseIdentifications, score, performance, resultId,
     });
   }
 

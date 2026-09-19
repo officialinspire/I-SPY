@@ -29,8 +29,8 @@ import {
 
 const MODES = ['LOCATE', 'COUNT', 'CHANGE'];
 /** Seeds per map and mode. Fixed, so a failure names a case that can be replayed. */
-const SEED_COUNT = 64;
-const seedFor = (index) => `QA-15J-${String(index).padStart(3, '0')}`;
+const SEED_COUNT = 96;
+const seedFor = (index) => `QA-17E-${String(index).padStart(3, '0')}`;
 
 const errors = [];
 let checks = 0;
@@ -107,6 +107,14 @@ for (const entry of listReconMaps()) {
       assert(Boolean(mission.directive?.id && mission.directive?.label), 'directive assigned', where);
       assert(JSON.stringify(createMissionDirective(seed)) === JSON.stringify(mission.directive),
         'directive deterministic from seed', where);
+      assert(Object.keys(mission.directive).sort().join(',') === 'description,id,label',
+        'directive carries no target or answer fields', where);
+      assert(!/\d/.test(mission.directive.description),
+        'directive description cannot disclose a numeric COUNT answer', where);
+      if (mission.targetId) {
+        assert(!mission.directive.description.includes(mission.targetId),
+          'directive description cannot disclose a target id', where);
+      }
 
       if (mission.generated) generatedCount += 1;
       else fallbackCount += 1;
