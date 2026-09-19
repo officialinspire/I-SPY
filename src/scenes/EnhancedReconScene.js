@@ -17,6 +17,9 @@ export default class EnhancedReconScene extends ReconScene {
   createHud() {
     super.createHud();
     this.reducedMotion = prefersReducedMotion();
+    // Countdown state is per mission. Scene reuse must not suppress a second
+    // mission's T-10 cue because the previous mission happened to end there.
+    this.lastCountdownSecond = null;
     // Same reason as the base scene: a tally rejected in a previous mission
     // must not colour the readout this one just built.
     this.countRejected = false;
