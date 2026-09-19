@@ -10,6 +10,7 @@ import {
   applyMissionResultToRecord,
   createEmptyAnalystRecord,
   getAnalystRecord,
+  recordMissionResult,
   recordOperationOutcome,
   recordOperationStarted,
   resetAnalystRecord,
@@ -46,6 +47,8 @@ assert(sanitized.schemaVersion === ANALYST_RECORD_VERSION, 'record migration pin
 assert(sanitized.missions.played === 0 && sanitized.missions.wins === 7, 'record migration clamps counters safely');
 assert(sanitized.grades.S === 2 && sanitized.grades.A === 0, 'record migration sanitizes grade counts');
 assert(!sanitized.daily['bad-date'] && sanitized.daily['2026-09-19']?.attempts === 2, 'record migration drops invalid daily keys');
+assert(Array.isArray(sanitized.processed.missions) && Array.isArray(sanitized.processed.operations),
+  'v1-shaped records migrate into the v2 processed-result ledger');
 
 let record = createEmptyAnalystRecord();
 const mission = { mode: 'LOCATE', mapId: 'woodland-corridor-7' };
@@ -82,6 +85,22 @@ assert(record.missions.failures === 1 && record.missions.currentStreak === 0, 'f
 assert(record.missions.bestStreak === 2, 'failure preserves best streak');
 
 resetAnalystRecord();
+const onceResult = {
+  resultId: 'QA-RESULT-ONCE',
+  success: true,
+  score: { totalScore: 2100 },
+  elapsedSeconds: 31,
+  performance: { grade: 'S', errors: 0, directive: { completed: true } },
+};
+const onceFirst = recordMissionResult(mission, onceResult);
+const onceSecond = recordMissionResult(mission, onceResult);
+persisted = getAnalystRecord();
+assert(!onceFirst.duplicate && onceSecond.duplicate, 'same result id is accepted once and flagged on replay');
+assert(persisted.missions.played === 1 && persisted.missions.wins === 1 && persisted.missions.directives === 1,
+  'duplicate debrief cannot increment mission totals directives or streaks');
+assert(persisted.processed.missions.includes('QA-RESULT-ONCE'), 'processed mission result id is retained for dedupe');
+
+resetAnalystRecord();
 recordOperationStarted({ kind: 'daily', dailyDate: '2026-09-19' });
 recordOperationOutcome({
   kind: 'daily',
@@ -95,16 +114,24 @@ assert(persisted.daily['2026-09-19'].attempts === 1 && persisted.daily['2026-09-
   'failed daily attempt is retained without replacing the daily best');
 
 recordOperationStarted({ kind: 'daily', dailyDate: '2026-09-19' });
-const completedRecord = recordOperationOutcome({
+const completedContext = {
   kind: 'daily',
   dailyDate: '2026-09-19',
   cumulative: { score: 3200, wins: 3, directives: 2, errors: 0 },
-}, 'complete');
+};
+const completedRecord = recordOperationOutcome(completedContext, 'complete', 'QA-OP-FINAL');
+const duplicateCompletedRecord = recordOperationOutcome(completedContext, 'complete', 'QA-OP-FINAL');
 persisted = completedRecord.record;
 assert(completedRecord.newBest && completedRecord.newDailyBest
   && persisted.operations.bestScore === 3200
   && persisted.daily['2026-09-19'].bestScore === 3200,
 'completed daily operation establishes operation and daily PBs');
+persisted = duplicateCompletedRecord.record;
+assert(duplicateCompletedRecord.duplicate
+  && persisted.operations.completed === 1
+  && persisted.daily['2026-09-19'].completions === 1,
+'duplicate final debrief cannot increment operation or daily completion totals');
+assert(persisted.processed.operations.includes('QA-OP-FINAL'), 'processed final operation result id is retained for dedupe');
 
 // --- Operation Series -----------------------------------------------------
 const rootSeed = 'QA-17D-ROOT';
