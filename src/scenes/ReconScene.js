@@ -25,6 +25,10 @@ export default class ReconScene extends Phaser.Scene {
     this.remainingSeconds = this.mission.timeLimitSeconds;
     this.missionStartedAt = this.time.now;
     this.missionEnded = false;
+    // Scene instances are reused by Phaser. These guards must reset for every
+    // mission or a successful identification from the previous run can make
+    // CONFIRM a permanent no-op on the next one.
+    this.resolvingIdentification = false;
     this.marking = false;
     this.candidate = null;
     this.activePass = 'A';
@@ -353,6 +357,9 @@ export default class ReconScene extends Phaser.Scene {
     this.paused = false;
     this.pinchDistance = null;
     this.dragCamera = null;
+    this.controlPressed = false;
+    this.controlReleased = false;
+    this.tapPointer = null;
 
     // A press that lands on a HUD control belongs to that control, not to the
     // map: Phaser emits the game-object events before the scene-level ones.
