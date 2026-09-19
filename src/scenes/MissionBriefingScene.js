@@ -6,6 +6,7 @@ import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
+import { resolveReconMapEntry } from '../world/mapRegistry.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
@@ -33,6 +34,9 @@ export default class MissionBriefingScene extends Phaser.Scene {
     }).setOrigin(1, 0.5);
 
     const generatorOptions = getGeneratorOptions();
+    // The sector line names the map the recon scene will build, so a mission
+    // that carries only a mapId still reads correctly on the tasking order.
+    const sector = this.mission.sector ?? resolveReconMapEntry(this.mission).title;
     const regionLine = this.mission.region ? `\nREGION: ${this.mission.region.label}` : '';
     const generatedLine = this.mission.generated ? '\nSOURCE: PROCEDURAL RECON TASKING' : '';
     const seedLine = generatorOptions.debugMission && this.mission.seed ? `\nGENERATOR SEED: ${this.mission.seed}\nGENERATION ATTEMPT: ${this.mission.generationAttempt ?? 'FALLBACK'}` : '';
@@ -43,7 +47,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
       ? `\n\nIMAGE COMPARISON:\n${this.mission.passA?.label ?? 'PASS A'}: ${this.mission.passA?.time ?? 'UNKNOWN'}\n${this.mission.passB?.label ?? 'PASS B'}: ${this.mission.passB?.time ?? 'UNKNOWN'}\nTERRAIN ALIGNMENT IS IDENTICAL. MARK THE CHANGED OBJECT.`
       : '';
 
-    this.fullBriefing = `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${this.mission.sector}\nMODE: ${this.mission.mode}${regionLine}${generatedLine}${seedLine}\n\nPRIMARY OBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}\n\nANALYSIS WINDOW: ${this.mission.timeLimitSeconds} SECONDS`;
+    this.fullBriefing = `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${sector}\nMODE: ${this.mission.mode}${regionLine}${generatedLine}${seedLine}\n\nPRIMARY OBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}\n\nANALYSIS WINDOW: ${this.mission.timeLimitSeconds} SECONDS`;
 
     this.briefing = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,

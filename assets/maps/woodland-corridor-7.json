@@ -1175,7 +1175,19 @@
           "y": 900,
           "zoom": 0.75
         },
-        "authoringNotes": "Targets and decoys share the same four-tone palette. Spawn zones are invisible during normal play."
+        "authoringNotes": "Targets and decoys share the same four-tone palette. Spawn zones are invisible during normal play.",
+        "changeDetection": {
+          "destination": {
+            "x": 1515,
+            "y": 870
+          },
+          "focus": {
+            "x": 1730,
+            "y": 760,
+            "zoom": 0.75
+          },
+          "summary": "UTILITY JEEP moved from its original compound position to the eastern road approach."
+        }
       }
     }
   ]

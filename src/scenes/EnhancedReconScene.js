@@ -7,8 +7,8 @@ import { prefersReducedMotion } from '../ui/presentation.js';
 import { getSettings } from '../settings/userSettings.js';
 
 export default class EnhancedReconScene extends ReconScene {
-  constructor() {
-    super();
+  constructor(key = 'Recon') {
+    super(key);
     this.lastCountdownSecond = null;
     this.analysisMode = 'analysis';
   }
@@ -16,6 +16,9 @@ export default class EnhancedReconScene extends ReconScene {
   createHud() {
     super.createHud();
     this.reducedMotion = prefersReducedMotion();
+    // Same reason as the base scene: a tally rejected in a previous mission
+    // must not colour the readout this one just built.
+    this.countRejected = false;
 
     // Reticle that tracks the pointer while marking is armed. It never reacts
     // to what is underneath it, so sweeping it cannot reveal objects.

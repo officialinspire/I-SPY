@@ -1,5 +1,6 @@
 import { GAME_CONFIG } from '../runtime-config.js';
-import { DEFAULT_RECON_MAP, getMapLayer } from '../world/authoredReconMap.js';
+import { getMapEntities, getMapLayer, getMapSpawnZones } from '../world/reconMapSchema.js';
+import { isAnySector, listReconMaps, resolveReconMap } from '../world/mapRegistry.js';
 import { createLocateMission } from './locateMission.js';
 import { createCountMission } from './countMission.js';
 import { createChangeDetectionMission, CHANGE_TYPES } from './changeDetectionMission.js';
@@ -57,13 +58,8 @@ function cloneEntity(entity) {
   return { ...entity, clueTags: [...(entity.clueTags ?? [])] };
 }
 
-function authoredEntities(map) {
-  return (getMapLayer(map, 'objects')?.items ?? []).map(cloneEntity);
-}
-
-function authoredZones(map) {
-  return (getMapLayer(map, 'spawn-zones')?.zones ?? []).map((zone) => ({ ...zone, accepts: [...(zone.accepts ?? [])] }));
-}
+const authoredEntities = getMapEntities;
+const authoredZones = getMapSpawnZones;
 
 function compatibleZones(entity, zones) {
   return zones.filter((zone) => zone.accepts?.includes(entity.type) || zone.accepts?.includes(entity.sprite));
@@ -180,7 +176,7 @@ function createLocateGenerated(rng, seed, map) {
     id: `GEN-LOCATE-${hashSeed(seed).toString(16).toUpperCase()}`,
     operation: pick(rng, ['OPERATION COLD LENS', 'OPERATION WATCHTOWER', 'OPERATION SILENT ORBIT']),
     satellitePass: `${String(integer(rng, 0, 23)).padStart(2, '0')}:${String(integer(rng, 0, 59)).padStart(2, '0')} ZULU`,
-    sector: map.title ?? 'WOODLAND CORRIDOR 7',
+    sector: map.title,
     mapId: map.id,
     mode: 'LOCATE',
     objective,
@@ -229,7 +225,7 @@ function createCountGenerated(rng, seed, map) {
     id: `GEN-COUNT-${hashSeed(seed).toString(16).toUpperCase()}`,
     operation: pick(rng, ['OPERATION ROAD COUNT', 'OPERATION GREY COLUMN', 'OPERATION MOTOR POOL']),
     satellitePass: `${String(integer(rng, 0, 23)).padStart(2, '0')}:${String(integer(rng, 0, 59)).padStart(2, '0')} ZULU`,
-    sector: map.title ?? 'WOODLAND CORRIDOR 7',
+    sector: map.title,
     mapId: map.id,
     mode: 'COUNT',
     objective: `COUNT ALL MILITARY VEHICLES INSIDE ${region.label}.`,
@@ -310,7 +306,7 @@ function createChangeGenerated(rng, seed, map) {
     id: `GEN-CHANGE-${hashSeed(seed).toString(16).toUpperCase()}`,
     operation: pick(rng, ['OPERATION SECOND FRAME', 'OPERATION TIME SLICE', 'OPERATION GREY ECHO']),
     satellitePass: `PASS A ${passATime} // PASS B ${passBTime}`,
-    sector: map.title ?? 'WOODLAND CORRIDOR 7',
+    sector: map.title,
     mapId: map.id,
     mode: 'CHANGE',
     objective: eventType === 'appeared'
@@ -334,7 +330,13 @@ function createChangeGenerated(rng, seed, map) {
   };
 }
 
-export function validateGeneratedMission(mission, map = DEFAULT_RECON_MAP) {
+/**
+ * Validates against the mission's own sector unless a map is passed
+ * explicitly, so a mission generated for one map can never be checked
+ * against another.
+ */
+export function validateGeneratedMission(mission, mapSource) {
+  const map = resolveReconMap(isAnySector(mapSource) ? mission?.mapId : mapSource);
   const errors = [];
   if (!mission || !MODES.includes(mission.mode)) return { valid: false, errors: ['Generated mission mode is invalid.'] };
   if (!mission.seed) errors.push('Generated mission is missing a seed.');
@@ -371,12 +373,31 @@ export function validateGeneratedMission(mission, map = DEFAULT_RECON_MAP) {
   return { valid: errors.length === 0, errors };
 }
 
-function fallbackMission(mode, seed) {
-  const fallback = mode === 'COUNT' ? createCountMission() : mode === 'CHANGE' ? createChangeDetectionMission() : createLocateMission();
+function fallbackMission(mode, seed, map) {
+  const fallback = mode === 'COUNT' ? createCountMission(map) : mode === 'CHANGE' ? createChangeDetectionMission(map) : createLocateMission(map);
   return { ...fallback, generated: false, seed, generationWarning: 'Generator exhausted validation attempts; using authored fallback.' };
 }
 
-export function createGeneratedMission({ seed = randomSeed(), mode = null, map = DEFAULT_RECON_MAP } = {}) {
+/**
+ * Picks the sector for a seed when none is named.
+ *
+ * The draw runs on its own RNG stream, keyed `<seed>:sector`, so choosing a
+ * sector never shifts the mission stream: a seed produces the same mission on
+ * a given map whether that map was chosen by the seed or named explicitly.
+ */
+function selectReconMap(seed, mapSource) {
+  if (!isAnySector(mapSource)) return resolveReconMap(mapSource);
+  const entries = listReconMaps();
+  const rng = mulberry32(hashSeed(`${seed}:sector`));
+  return (entries[Math.floor(rng() * entries.length)] ?? entries[0]).map;
+}
+
+/**
+ * `map` may be a registry id, a registry entry or raw map data. Omitting it,
+ * or passing 'any', lets the seed choose the sector as well as the task.
+ */
+export function createGeneratedMission({ seed = randomSeed(), mode = null, map: mapSource = null } = {}) {
+  const map = selectReconMap(seed, mapSource);
   const normalizedMode = MODES.includes(String(mode).toUpperCase()) ? String(mode).toUpperCase() : null;
   for (let attempt = 0; attempt < GAME_CONFIG.generator.maxAttempts; attempt += 1) {
     const rng = mulberry32(hashSeed(`${seed}:${attempt}`));
@@ -395,7 +416,7 @@ export function createGeneratedMission({ seed = randomSeed(), mode = null, map =
     const validation = validateGeneratedMission(mission, map);
     if (validation.valid) return mission;
   }
-  return fallbackMission(normalizedMode ?? 'LOCATE', seed);
+  return fallbackMission(normalizedMode ?? 'LOCATE', seed, map);
 }
 
 export function getGeneratorOptions(search = globalThis.location?.search ?? '') {
@@ -403,6 +424,7 @@ export function getGeneratorOptions(search = globalThis.location?.search ?? '') 
   return {
     seed: params.get('seed') || undefined,
     mode: params.get('mode') || undefined,
+    map: params.get('map') || undefined,
     debugMission: params.get('debugMission') === '1',
   };
 }

@@ -13,7 +13,7 @@ export const GAME_CONFIG=Object.freeze({
   presentation:{bootDurationMs:1250,acquisitionDelayMs:520,typewriterCharsPerSecond:130,classification:'RESTRICTED // TRAINING USE'},
   rendering:{maxDevicePixelRatio:2,spriteRasterScale:2},
   sprites:{frameSize:64,authoredPalette:['#0b0b0b','#333333','#bdbdbd','#f6f6ee']},
-  recon:{defaultMapId:'woodland-corridor-7',worldWidth:2400,worldHeight:1800,minZoom:0.45,maxZoom:2.4,zoomStep:0.12,dragThreshold:4,hudHeight:78,defaultZoom:0.75,cautionSeconds:20,criticalSeconds:10},
+  recon:{defaultMapId:'woodland-corridor-7',minZoom:0.45,maxZoom:2.4,zoomStep:0.12,dragThreshold:4,hudHeight:78,defaultZoom:0.75,cautionSeconds:20,criticalSeconds:10},
   locate:{timeLimitSeconds:90,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:5,perfectBonus:500}},
   count:{timeLimitSeconds:90,maxAnswer:99,scoring:{correctAnswer:1000,incorrectSubmissionPenalty:300,timeBonusPerSecond:5,perfectBonus:500}},
   change:{timeLimitSeconds:90,splitViewMinWidth:980,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:5,perfectBonus:500}},

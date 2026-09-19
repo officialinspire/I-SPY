@@ -103,7 +103,7 @@ function click(durationMs, gainValue, offsetMs = 0, centre = 1800) {
 }
 
 /** Named cues. Keep them short, dry and few. */
-const VOICES = Object.freeze({
+export const VOICES = Object.freeze({
   hover: () => tone(880, 14, 0.008),
   focus: () => tone(520, 22, 0.014),
   press: () => { tone(620, 32, 0.03); click(14, 0.02, 0, 2600); },
@@ -130,27 +130,84 @@ const VOICES = Object.freeze({
   fail: () => { tone(260, 96, 0.042, 0, 'sawtooth'); tone(195, 124, 0.042, 100, 'sawtooth'); },
 });
 
-/** Haptics stay sparing: a selection tick, and patterns only for outcomes. */
-const HAPTICS = Object.freeze({
-  press: 8,
-  card: 8,
-  toggle: 8,
-  arm: 10,
-  select: 12,
-  cancel: 8,
-  confirm: [12, 18, 20],
-  error: [18, 26, 18],
-  relay: 8,
-  tickUp: 6,
-  tickDown: 6,
-  submit: 12,
-  hold: 8,
-  resume: 8,
-  acquire: [10, 18, 10],
-  countdown: 6,
-  complete: [12, 20, 24],
-  fail: [24, 35, 24],
+/**
+ * Haptic vocabulary, in milliseconds at STANDARD strength.
+ *
+ * An entry is either a single pulse or a pattern, where the Vibration API
+ * reads a pattern as vibrate / pause / vibrate. Incidental acknowledgements
+ * are a single short pulse; only an outcome — a call confirmed or refused, an
+ * acquisition, a debrief — earns a pattern.
+ *
+ * `hover` and `focus` are deliberately absent. Sweeping a pointer across a
+ * console or walking it with Tab must never buzz, and nothing here fires while
+ * the analyst is panning, zooming, holding a control or simply looking at
+ * imagery: those paths ask for no cue at all.
+ */
+export const HAPTICS = Object.freeze({
+  press: 10,
+  card: 12,
+  toggle: 10,
+  arm: 14,
+  select: 16,
+  cancel: 10,
+  confirm: [16, 20, 26],
+  error: [24, 30, 24],
+  relay: 12,
+  tickUp: 8,
+  tickDown: 8,
+  submit: 16,
+  hold: 12,
+  resume: 12,
+  acquire: [12, 18, 14],
+  countdown: 8,
+  complete: [18, 26, 32],
+  fail: [30, 38, 30],
 });
+
+/**
+ * Strength is duration, because duration is all the platform offers.
+ *
+ * Within a pattern only the pulses are scaled; the pauses keep their length,
+ * so LIGHT and STRONG are the same rhythm at a different weight rather than
+ * two different rhythms.
+ */
+export const LEVEL_SCALE = Object.freeze({ off: 0, light: 0.6, standard: 1, strong: 1.45 });
+export const MAX_PULSE_MS = 60;
+/** Events that must never carry a haptic, however they are voiced. */
+export const SILENT_HAPTIC_EVENTS = Object.freeze(['hover', 'focus']);
+
+function scalePulse(milliseconds, scale) {
+  return Math.max(1, Math.min(MAX_PULSE_MS, Math.round(milliseconds * scale)));
+}
+
+export function scaleHapticPattern(pattern, level) {
+  const scale = LEVEL_SCALE[level] ?? LEVEL_SCALE.standard;
+  if (!pattern || scale <= 0) return null;
+  if (Array.isArray(pattern)) {
+    const scaled = pattern.map((value, index) => (index % 2 === 0 ? scalePulse(value, scale) : Math.round(value)));
+    return scaled.some((value, index) => index % 2 === 0 && value > 0) ? scaled : null;
+  }
+  return scalePulse(pattern, scale);
+}
+
+/** The pattern an event would fire at a given level, for tests and tooling. */
+export function hapticPatternFor(eventName, level) {
+  return scaleHapticPattern(HAPTICS[eventName], level);
+}
+
+/**
+ * Feature detection, once, and never a user-agent string.
+ *
+ * A browser without the Vibration API simply has no haptic channel; every
+ * call becomes a no-op rather than an error or a substitute effect.
+ */
+let vibrateSupport = null;
+export function hapticsSupported() {
+  if (vibrateSupport === null) {
+    vibrateSupport = typeof globalThis.navigator?.vibrate === 'function';
+  }
+  return vibrateSupport;
+}
 
 /**
  * Per-event repeat guard. Rapid navigation (double clicks, a held key, two
@@ -159,12 +216,16 @@ const HAPTICS = Object.freeze({
 const REPEAT_GUARD_MS = Object.freeze({ hover: 90, focus: 60, countdown: 400, default: 45 });
 const lastPlayed = new Map();
 
+function timestamp() {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
 function throttled(eventName) {
-  const now = globalThis.performance?.now?.() ?? Date.now();
+  const moment = timestamp();
   const window = REPEAT_GUARD_MS[eventName] ?? REPEAT_GUARD_MS.default;
   const previous = lastPlayed.get(eventName);
-  if (previous !== undefined && now - previous < window) return true;
-  lastPlayed.set(eventName, now);
+  if (previous !== undefined && moment - previous < window) return true;
+  lastPlayed.set(eventName, moment);
   return false;
 }
 
@@ -175,12 +236,33 @@ export function playFeedback(eventName) {
   voice();
 }
 
-export function haptic(pattern = 10) {
-  const settings = getSettings();
-  if (!settings.hapticsEnabled || !pattern) return;
+/**
+ * When the pattern currently running is expected to end.
+ *
+ * `navigator.vibrate` replaces whatever is playing, so a press arriving while
+ * a debrief pattern is still running would cut it short. An outcome pattern is
+ * therefore left alone: incidental single pulses are dropped until it
+ * finishes, while another pattern is allowed to take over.
+ */
+let patternBusyUntil = 0;
+
+export function haptic(pattern = 10, level) {
+  if (!hapticsSupported()) return false;
+  const scaled = scaleHapticPattern(pattern, level ?? getSettings().hapticsLevel);
+  if (!scaled) return false;
+
+  const moment = timestamp();
+  const isPattern = Array.isArray(scaled);
+  if (!isPattern && moment < patternBusyUntil) return false;
+
   try {
-    if (typeof globalThis.navigator?.vibrate === 'function') globalThis.navigator.vibrate(pattern);
-  } catch { /* unsupported haptics */ }
+    globalThis.navigator.vibrate(scaled);
+  } catch {
+    return false; // unsupported haptics
+  }
+  const total = isPattern ? scaled.reduce((sum, value) => sum + value, 0) : scaled;
+  patternBusyUntil = isPattern ? moment + total : 0;
+  return true;
 }
 
 /**

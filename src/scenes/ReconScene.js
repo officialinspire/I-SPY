@@ -9,7 +9,8 @@ import { validateCountAnswer, calculateCountScore } from '../game/countMission.j
 import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
 
 export default class ReconScene extends Phaser.Scene {
-  constructor() { super('Recon'); }
+  /** Subclasses that are a different scene (ANALYST TRAINING) pass their own key. */
+  constructor(key = 'Recon') { super(key); }
 
   create(data = {}) {
     this.mission = data.mission ?? createLocateMission();
@@ -48,9 +49,11 @@ export default class ReconScene extends Phaser.Scene {
 
   createWorldState() {
     const commonOperations = this.mission.worldOperations ?? [];
+    // The mission names its sector; the scene builds that one, not a default.
+    const mapSource = this.mission.mapId;
     if (this.isChangeMode) {
-      this.worldA = createAuthoredReconMap(this);
-      this.worldB = createAuthoredReconMap(this);
+      this.worldA = createAuthoredReconMap(this, mapSource);
+      this.worldB = createAuthoredReconMap(this, mapSource);
       applyReconOperations(this, this.worldA, commonOperations);
       applyReconOperations(this, this.worldB, commonOperations);
       applyReconOperations(this, this.worldB, this.mission.passBOperations ?? []);
@@ -65,7 +68,7 @@ export default class ReconScene extends Phaser.Scene {
       return;
     }
 
-    const world = createAuthoredReconMap(this);
+    const world = createAuthoredReconMap(this, mapSource);
     applyReconOperations(this, world, commonOperations);
     this.worldLayer = world.root;
     this.map = world.map;
@@ -81,6 +84,21 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   createHud() {
+    // The scene instance is reused from one mission to the next, so anything
+    // a previous mode built has to be forgotten before this one builds its
+    // own. Its game objects went with the previous run, and every list that
+    // walks all three modes — setMissionControlsEnabled, getUiObjects — would
+    // otherwise still be holding them.
+    this.locateButtons = null;
+    this.countButtons = null;
+    this.changeButtons = null;
+    this.tallyFrame = null;
+    this.answerText = null;
+    this.adjustCaption = null;
+    this.submitCaption = null;
+    this.passCaption = null;
+    this.passStatusText = null;
+
     const hudHeight = GAME_CONFIG.recon.hudHeight;
     this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(1000);
     this.hudBackground = this.add.rectangle(0, 0, 10, hudHeight, 0x0b0b0b, 0.96).setOrigin(0);

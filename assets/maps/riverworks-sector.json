@@ -1,0 +1,3576 @@
+{
+  "schemaVersion": 1,
+  "id": "riverworks-sector",
+  "title": "RIVERWORKS SECTOR",
+  "description": "Fictional Cold War-era industrial river crossing: a canalised channel cut on the diagonal, with a rail and warehouse district on one bank and a fenced fuel depot on the other.",
+  "width": 2400,
+  "height": 1800,
+  "tileSize": 64,
+  "layers": [
+    {
+      "id": "terrain",
+      "type": "areas",
+      "areas": [
+        {
+          "sprite": "dirt",
+          "x": 0,
+          "y": 0,
+          "width": 2400,
+          "height": 1800
+        },
+        {
+          "sprite": "ground",
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 300
+        },
+        {
+          "sprite": "ground",
+          "x": 1900,
+          "y": 0,
+          "width": 500,
+          "height": 300
+        },
+        {
+          "sprite": "ground",
+          "x": 0,
+          "y": 1380,
+          "width": 380,
+          "height": 420
+        },
+        {
+          "sprite": "ground",
+          "x": 2060,
+          "y": 1500,
+          "width": 340,
+          "height": 300
+        },
+        {
+          "sprite": "water",
+          "x": 146.5,
+          "y": 0,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 159.5,
+          "y": 30,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 172.5,
+          "y": 60,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 185.5,
+          "y": 90,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 198.5,
+          "y": 120,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 211.5,
+          "y": 150,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 224.5,
+          "y": 180,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 237.5,
+          "y": 210,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 250.5,
+          "y": 240,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 263.5,
+          "y": 270,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 280.5,
+          "y": 300,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 301.5,
+          "y": 330,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 322.5,
+          "y": 360,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 343.5,
+          "y": 390,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 364.5,
+          "y": 420,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 385.5,
+          "y": 450,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 406.5,
+          "y": 480,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 427.5,
+          "y": 510,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 448.5,
+          "y": 540,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 469.5,
+          "y": 570,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 493,
+          "y": 600,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 519,
+          "y": 630,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 545,
+          "y": 660,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 571,
+          "y": 690,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 597,
+          "y": 720,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 623,
+          "y": 750,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 649,
+          "y": 780,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 675,
+          "y": 810,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 701,
+          "y": 840,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 727,
+          "y": 870,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 752.5,
+          "y": 900,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 777.5,
+          "y": 930,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 802.5,
+          "y": 960,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 827.5,
+          "y": 990,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 852.5,
+          "y": 1020,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 877.5,
+          "y": 1050,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 902.5,
+          "y": 1080,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 927.5,
+          "y": 1110,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 952.5,
+          "y": 1140,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 977.5,
+          "y": 1170,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1004,
+          "y": 1200,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1032,
+          "y": 1230,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1060,
+          "y": 1260,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1088,
+          "y": 1290,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1116,
+          "y": 1320,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1144,
+          "y": 1350,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1172,
+          "y": 1380,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1200,
+          "y": 1410,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1228,
+          "y": 1440,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1256,
+          "y": 1470,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1284.5,
+          "y": 1500,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1313.5,
+          "y": 1530,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1342.5,
+          "y": 1560,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1371.5,
+          "y": 1590,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1400.5,
+          "y": 1620,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1429.5,
+          "y": 1650,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1458.5,
+          "y": 1680,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1487.5,
+          "y": 1710,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1516.5,
+          "y": 1740,
+          "width": 320,
+          "height": 36
+        },
+        {
+          "sprite": "water",
+          "x": 1545.5,
+          "y": 1770,
+          "width": 320,
+          "height": 30
+        },
+        {
+          "sprite": "rocky",
+          "x": 120.5,
+          "y": 0,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 462.5,
+          "y": 0,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 133.5,
+          "y": 30,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 475.5,
+          "y": 30,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 146.5,
+          "y": 60,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 488.5,
+          "y": 60,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 159.5,
+          "y": 90,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 501.5,
+          "y": 90,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 172.5,
+          "y": 120,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 514.5,
+          "y": 120,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 185.5,
+          "y": 150,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 527.5,
+          "y": 150,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 198.5,
+          "y": 180,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 540.5,
+          "y": 180,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 211.5,
+          "y": 210,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 553.5,
+          "y": 210,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 224.5,
+          "y": 240,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 566.5,
+          "y": 240,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 237.5,
+          "y": 270,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 579.5,
+          "y": 270,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 254.5,
+          "y": 300,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 596.5,
+          "y": 300,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 275.5,
+          "y": 330,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 617.5,
+          "y": 330,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 296.5,
+          "y": 360,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 638.5,
+          "y": 360,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 317.5,
+          "y": 390,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 659.5,
+          "y": 390,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 338.5,
+          "y": 420,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 680.5,
+          "y": 420,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 359.5,
+          "y": 450,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 701.5,
+          "y": 450,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 380.5,
+          "y": 480,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 722.5,
+          "y": 480,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 401.5,
+          "y": 510,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 743.5,
+          "y": 510,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 422.5,
+          "y": 540,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 764.5,
+          "y": 540,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 443.5,
+          "y": 570,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 785.5,
+          "y": 570,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 467,
+          "y": 600,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 809,
+          "y": 600,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 493,
+          "y": 630,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 835,
+          "y": 630,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 519,
+          "y": 660,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 861,
+          "y": 660,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 545,
+          "y": 690,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 887,
+          "y": 690,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 571,
+          "y": 720,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 913,
+          "y": 720,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 597,
+          "y": 750,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 939,
+          "y": 750,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 623,
+          "y": 780,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 965,
+          "y": 780,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 649,
+          "y": 810,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 991,
+          "y": 810,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 675,
+          "y": 840,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1017,
+          "y": 840,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 701,
+          "y": 870,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1043,
+          "y": 870,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 726.5,
+          "y": 900,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1068.5,
+          "y": 900,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 751.5,
+          "y": 930,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1093.5,
+          "y": 930,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 776.5,
+          "y": 960,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1118.5,
+          "y": 960,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 801.5,
+          "y": 990,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1143.5,
+          "y": 990,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 826.5,
+          "y": 1020,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1168.5,
+          "y": 1020,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 851.5,
+          "y": 1050,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1193.5,
+          "y": 1050,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 876.5,
+          "y": 1080,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1218.5,
+          "y": 1080,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 901.5,
+          "y": 1110,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1243.5,
+          "y": 1110,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 926.5,
+          "y": 1140,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1268.5,
+          "y": 1140,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 951.5,
+          "y": 1170,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1293.5,
+          "y": 1170,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 978,
+          "y": 1200,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1320,
+          "y": 1200,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1006,
+          "y": 1230,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1348,
+          "y": 1230,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1034,
+          "y": 1260,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1376,
+          "y": 1260,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1062,
+          "y": 1290,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1404,
+          "y": 1290,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1090,
+          "y": 1320,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1432,
+          "y": 1320,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1118,
+          "y": 1350,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1460,
+          "y": 1350,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1146,
+          "y": 1380,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1488,
+          "y": 1380,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1174,
+          "y": 1410,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1516,
+          "y": 1410,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1202,
+          "y": 1440,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1544,
+          "y": 1440,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1230,
+          "y": 1470,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1572,
+          "y": 1470,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1258.5,
+          "y": 1500,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1600.5,
+          "y": 1500,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1287.5,
+          "y": 1530,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1629.5,
+          "y": 1530,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1316.5,
+          "y": 1560,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1658.5,
+          "y": 1560,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1345.5,
+          "y": 1590,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1687.5,
+          "y": 1590,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1374.5,
+          "y": 1620,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1716.5,
+          "y": 1620,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1403.5,
+          "y": 1650,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1745.5,
+          "y": 1650,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1432.5,
+          "y": 1680,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1774.5,
+          "y": 1680,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1461.5,
+          "y": 1710,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1803.5,
+          "y": 1710,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1490.5,
+          "y": 1740,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1832.5,
+          "y": 1740,
+          "width": 30,
+          "height": 36
+        },
+        {
+          "sprite": "rocky",
+          "x": 1519.5,
+          "y": 1770,
+          "width": 30,
+          "height": 30
+        },
+        {
+          "sprite": "rocky",
+          "x": 1861.5,
+          "y": 1770,
+          "width": 30,
+          "height": 30
+        },
+        {
+          "sprite": "mud",
+          "x": 120,
+          "y": 880,
+          "width": 520,
+          "height": 200
+        },
+        {
+          "sprite": "mud",
+          "x": 300,
+          "y": 1080,
+          "width": 320,
+          "height": 300
+        },
+        {
+          "sprite": "mud",
+          "x": 620,
+          "y": 1180,
+          "width": 420,
+          "height": 260
+        },
+        {
+          "sprite": "mud",
+          "x": 1300,
+          "y": 900,
+          "width": 320,
+          "height": 150
+        },
+        {
+          "sprite": "mud",
+          "x": 1700,
+          "y": 1020,
+          "width": 280,
+          "height": 170
+        },
+        {
+          "sprite": "dirt",
+          "x": 1300,
+          "y": 180,
+          "width": 900,
+          "height": 480
+        },
+        {
+          "sprite": "dirt",
+          "x": 1700,
+          "y": 1140,
+          "width": 640,
+          "height": 440
+        },
+        {
+          "sprite": "dirt",
+          "x": 240,
+          "y": 1160,
+          "width": 700,
+          "height": 420
+        },
+        {
+          "sprite": "field",
+          "x": 140,
+          "y": 900,
+          "width": 380,
+          "height": 260
+        },
+        {
+          "sprite": "rocky",
+          "x": 1240,
+          "y": 1120,
+          "width": 200,
+          "height": 120
+        },
+        {
+          "sprite": "rocky",
+          "x": 380,
+          "y": 1560,
+          "width": 200,
+          "height": 120
+        },
+        {
+          "sprite": "rocky",
+          "x": 2060,
+          "y": 700,
+          "width": 240,
+          "height": 150
+        }
+      ]
+    },
+    {
+      "id": "vegetation",
+      "type": "sprites",
+      "items": [
+        {
+          "sprite": "forest_cluster",
+          "x": 20,
+          "y": 40,
+          "width": 180,
+          "height": 145
+        },
+        {
+          "sprite": "forest_cluster",
+          "x": 40,
+          "y": 1420,
+          "width": 185,
+          "height": 145
+        },
+        {
+          "sprite": "forest_cluster",
+          "x": 210,
+          "y": 1560,
+          "width": 180,
+          "height": 140,
+          "flipY": true
+        },
+        {
+          "sprite": "forest_cluster",
+          "x": 2140,
+          "y": 40,
+          "width": 180,
+          "height": 145,
+          "flipX": true
+        },
+        {
+          "sprite": "forest_cluster",
+          "x": 2160,
+          "y": 1580,
+          "width": 180,
+          "height": 140
+        },
+        {
+          "sprite": "deciduous",
+          "x": 60,
+          "y": 380,
+          "width": 72,
+          "height": 84
+        },
+        {
+          "sprite": "deciduous",
+          "x": 1960,
+          "y": 320,
+          "width": 72,
+          "height": 84,
+          "flipX": true
+        },
+        {
+          "sprite": "deciduous",
+          "x": 2240,
+          "y": 900,
+          "width": 72,
+          "height": 84
+        },
+        {
+          "sprite": "deciduous",
+          "x": 520,
+          "y": 1620,
+          "width": 72,
+          "height": 84,
+          "flipX": true
+        },
+        {
+          "sprite": "deciduous",
+          "x": 900,
+          "y": 1620,
+          "width": 72,
+          "height": 84
+        },
+        {
+          "sprite": "deciduous",
+          "x": 1500,
+          "y": 1640,
+          "width": 72,
+          "height": 84,
+          "flipX": true
+        },
+        {
+          "sprite": "conifer",
+          "x": 120,
+          "y": 620,
+          "width": 70,
+          "height": 82
+        },
+        {
+          "sprite": "conifer",
+          "x": 300,
+          "y": 1400,
+          "width": 70,
+          "height": 82
+        },
+        {
+          "sprite": "conifer",
+          "x": 1840,
+          "y": 1640,
+          "width": 70,
+          "height": 82
+        },
+        {
+          "sprite": "conifer",
+          "x": 2280,
+          "y": 1200,
+          "width": 70,
+          "height": 82
+        },
+        {
+          "sprite": "bush",
+          "x": 560,
+          "y": 1100,
+          "width": 58,
+          "height": 54
+        },
+        {
+          "sprite": "bush",
+          "x": 860,
+          "y": 1500,
+          "width": 58,
+          "height": 54,
+          "flipX": true
+        },
+        {
+          "sprite": "bush",
+          "x": 1420,
+          "y": 1180,
+          "width": 58,
+          "height": 54
+        },
+        {
+          "sprite": "bush",
+          "x": 2000,
+          "y": 1020,
+          "width": 58,
+          "height": 54,
+          "flipX": true
+        },
+        {
+          "sprite": "hedge",
+          "x": 160,
+          "y": 1120,
+          "width": 130,
+          "height": 56
+        },
+        {
+          "sprite": "hedge",
+          "x": 420,
+          "y": 1120,
+          "width": 130,
+          "height": 56
+        },
+        {
+          "sprite": "stump",
+          "x": 700,
+          "y": 1500,
+          "width": 52,
+          "height": 52
+        },
+        {
+          "sprite": "stump",
+          "x": 2020,
+          "y": 1120,
+          "width": 52,
+          "height": 52
+        },
+        {
+          "sprite": "fallen_tree",
+          "x": 240,
+          "y": 1300,
+          "width": 116,
+          "height": 58
+        },
+        {
+          "sprite": "dead_tree",
+          "x": 1080,
+          "y": 1440,
+          "width": 60,
+          "height": 72
+        },
+        {
+          "sprite": "dead_tree",
+          "x": 1900,
+          "y": 980,
+          "width": 60,
+          "height": 72,
+          "flipX": true
+        },
+        {
+          "sprite": "bush",
+          "x": 180,
+          "y": 480,
+          "width": 56,
+          "height": 52
+        },
+        {
+          "sprite": "bush",
+          "x": 420,
+          "y": 260,
+          "width": 56,
+          "height": 52,
+          "flipX": true
+        },
+        {
+          "sprite": "bush",
+          "x": 1020,
+          "y": 220,
+          "width": 56,
+          "height": 52
+        },
+        {
+          "sprite": "bush",
+          "x": 2260,
+          "y": 1340,
+          "width": 56,
+          "height": 52,
+          "flipX": true
+        },
+        {
+          "sprite": "bush",
+          "x": 1600,
+          "y": 1720,
+          "width": 56,
+          "height": 52
+        },
+        {
+          "sprite": "bush",
+          "x": 980,
+          "y": 1700,
+          "width": 56,
+          "height": 52,
+          "flipX": true
+        },
+        {
+          "sprite": "stump",
+          "x": 1120,
+          "y": 380,
+          "width": 52,
+          "height": 52
+        },
+        {
+          "sprite": "stump",
+          "x": 620,
+          "y": 820,
+          "width": 52,
+          "height": 52
+        },
+        {
+          "sprite": "hedge",
+          "x": 1980,
+          "y": 1600,
+          "width": 130,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "type": "sprites",
+      "items": [
+        {
+          "sprite": "road_straight",
+          "x": 0,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 192,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 384,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 576,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "bridge",
+          "x": 700,
+          "y": 882,
+          "width": 200,
+          "height": 108
+        },
+        {
+          "sprite": "bridge",
+          "x": 900,
+          "y": 882,
+          "width": 200,
+          "height": 108
+        },
+        {
+          "sprite": "road_straight",
+          "x": 1088,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 1280,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 1472,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 1664,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 1856,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 2048,
+          "y": 900,
+          "width": 192,
+          "height": 72
+        },
+        {
+          "sprite": "road_straight",
+          "x": 2240,
+          "y": 900,
+          "width": 160,
+          "height": 72
+        },
+        {
+          "sprite": "road_intersection",
+          "x": 1500,
+          "y": 876,
+          "width": 96,
+          "height": 96
+        },
+        {
+          "sprite": "dirt_track",
+          "x": 230,
+          "y": 1118,
+          "width": 380,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "dirt_track",
+          "x": 290,
+          "y": 1418,
+          "width": 260,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "dirt_track",
+          "x": 440,
+          "y": 1180,
+          "width": 240,
+          "height": 64
+        },
+        {
+          "sprite": "dirt_track",
+          "x": 680,
+          "y": 1180,
+          "width": 240,
+          "height": 64
+        },
+        {
+          "sprite": "dirt_track",
+          "x": 440,
+          "y": 1420,
+          "width": 240,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1320,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1383.33,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1446.66,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1509.99,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1573.32,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1636.65,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1699.98,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1763.31,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1826.64,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1889.97,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1953.3,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2016.63,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2079.96,
+          "y": 260,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1320,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1383.33,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1446.66,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1509.99,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1573.32,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1636.65,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1699.98,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1763.31,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1826.64,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1889.97,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1953.3,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2016.63,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2079.96,
+          "y": 340,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1320,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1383.33,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1446.66,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1509.99,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1573.32,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1636.65,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1699.98,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1763.31,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1826.64,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1889.97,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1953.3,
+          "y": 420,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 1980,
+          "y": 500,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2043.33,
+          "y": 500,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2106.66,
+          "y": 500,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2169.99,
+          "y": 500,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2233.32,
+          "y": 500,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "rail",
+          "x": 2296.65,
+          "y": 500,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1760,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1823.33,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1886.66,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1949.99,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 2013.32,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 2076.65,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 2139.98,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 2203.31,
+          "y": 1220,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1720.34,
+          "y": 1259.67,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1720.34,
+          "y": 1323,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1720.34,
+          "y": 1386.33,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1720.34,
+          "y": 1449.66,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1360,
+          "y": 700,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1423.33,
+          "y": 700,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1486.66,
+          "y": 700,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1549.99,
+          "y": 700,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "pipeline",
+          "x": 1613.32,
+          "y": 700,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1700,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1763.33,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1826.66,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1889.99,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1953.32,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2016.65,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2079.98,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2143.31,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2206.64,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2269.97,
+          "y": 1116,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1700,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1763.33,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1826.66,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1889.99,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1953.32,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2016.65,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2079.98,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2143.31,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2206.64,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2269.97,
+          "y": 1556,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1129.67,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1192.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1256.33,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1319.66,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1382.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1446.32,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1664.34,
+          "y": 1509.65,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1129.67,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1192.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1256.33,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1319.66,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1382.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1446.32,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 2298.34,
+          "y": 1509.65,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "gate",
+          "x": 1818,
+          "y": 1092,
+          "width": 55,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1300,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1363.33,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1426.66,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1489.99,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1553.32,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1616.65,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1679.98,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1743.31,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1806.64,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1869.97,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1933.3,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1996.63,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2059.96,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 2123.29,
+          "y": 156,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 169.67,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 233,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 296.33,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 359.66,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 422.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 486.31,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 1264.34,
+          "y": 549.65,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "gate",
+          "x": 1296,
+          "y": 620,
+          "width": 55,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 250,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 313.33,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 376.66,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 439.99,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 503.32,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 566.65,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 629.98,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 693.31,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 756.64,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 819.97,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 883.3,
+          "y": 1146,
+          "width": 63.33,
+          "height": 64
+        },
+        {
+          "sprite": "fence",
+          "x": 214.34,
+          "y": 1159.67,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 214.34,
+          "y": 1222.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 214.34,
+          "y": 1286.33,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 214.34,
+          "y": 1349.66,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 214.34,
+          "y": 1412.99,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "fence",
+          "x": 214.34,
+          "y": 1476.32,
+          "width": 63.33,
+          "height": 64,
+          "rotation": 90
+        },
+        {
+          "sprite": "pole",
+          "x": 120,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 340,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 560,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 1180,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 1400,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 1620,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 1840,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 2080,
+          "y": 880
+        },
+        {
+          "sprite": "pole",
+          "x": 1340,
+          "y": 700
+        },
+        {
+          "sprite": "pole",
+          "x": 1840,
+          "y": 1080
+        },
+        {
+          "sprite": "pole",
+          "x": 2160,
+          "y": 1080
+        },
+        {
+          "sprite": "pole",
+          "x": 320,
+          "y": 1240
+        },
+        {
+          "sprite": "pole",
+          "x": 320,
+          "y": 1460
+        }
+      ]
+    },
+    {
+      "id": "structures",
+      "type": "sprites",
+      "items": [
+        {
+          "sprite": "warehouse",
+          "x": 1360,
+          "y": 470,
+          "width": 150,
+          "height": 100
+        },
+        {
+          "sprite": "warehouse",
+          "x": 1560,
+          "y": 470,
+          "width": 150,
+          "height": 100
+        },
+        {
+          "sprite": "warehouse",
+          "x": 1760,
+          "y": 470,
+          "width": 150,
+          "height": 100
+        },
+        {
+          "sprite": "hangar",
+          "x": 1980,
+          "y": 250,
+          "width": 150,
+          "height": 105
+        },
+        {
+          "sprite": "barracks",
+          "x": 1980,
+          "y": 600,
+          "width": 125,
+          "height": 90
+        },
+        {
+          "sprite": "warehouse",
+          "x": 560,
+          "y": 1240,
+          "width": 150,
+          "height": 100
+        },
+        {
+          "sprite": "bunker",
+          "x": 1320,
+          "y": 1240,
+          "width": 100,
+          "height": 90
+        },
+        {
+          "sprite": "bunker_entrance",
+          "x": 1440,
+          "y": 1260,
+          "width": 78,
+          "height": 70
+        },
+        {
+          "sprite": "watchtower",
+          "x": 1740,
+          "y": 1160,
+          "width": 72,
+          "height": 72
+        },
+        {
+          "sprite": "watchtower",
+          "x": 1320,
+          "y": 190,
+          "width": 72,
+          "height": 72
+        }
+      ]
+    },
+    {
+      "id": "objects",
+      "type": "entities",
+      "items": [
+        {
+          "id": "radar-01",
+          "sprite": "radar_dish",
+          "type": "radar_structure",
+          "label": "RIVER SURVEILLANCE RADAR",
+          "category": "strategic_installation",
+          "target": true,
+          "selectable": true,
+          "x": 2100,
+          "y": 760,
+          "width": 104,
+          "height": 104,
+          "difficulty": 2,
+          "clueTags": [
+            "wharf",
+            "antenna"
+          ]
+        },
+        {
+          "id": "antenna-01",
+          "sprite": "antenna_array",
+          "type": "antenna_array",
+          "label": "ANTENNA ARRAY",
+          "category": "strategic_installation",
+          "target": false,
+          "selectable": true,
+          "x": 1880,
+          "y": 600,
+          "width": 96,
+          "height": 96,
+          "difficulty": 3,
+          "clueTags": [
+            "yard",
+            "antenna"
+          ]
+        },
+        {
+          "id": "mast-01",
+          "sprite": "radio_tower",
+          "type": "radio_tower",
+          "label": "RADIO MAST",
+          "category": "strategic_installation",
+          "target": false,
+          "selectable": true,
+          "x": 1420,
+          "y": 600,
+          "width": 84,
+          "height": 96,
+          "difficulty": 3,
+          "clueTags": [
+            "yard",
+            "relay"
+          ]
+        },
+        {
+          "id": "mil-truck-01",
+          "sprite": "military_truck",
+          "type": "military_truck",
+          "label": "MILITARY TRUCK",
+          "category": "military_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 1620,
+          "y": 300,
+          "width": 78,
+          "height": 48,
+          "difficulty": 2,
+          "clueTags": [
+            "rail-yard",
+            "convoy"
+          ]
+        },
+        {
+          "id": "mil-truck-02",
+          "sprite": "military_truck",
+          "type": "military_truck",
+          "label": "MILITARY TRUCK",
+          "category": "military_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 1860,
+          "y": 1280,
+          "width": 78,
+          "height": 48,
+          "difficulty": 2,
+          "clueTags": [
+            "depot",
+            "convoy"
+          ]
+        },
+        {
+          "id": "fuel-truck-01",
+          "sprite": "fuel_truck",
+          "type": "fuel_truck",
+          "label": "FUEL TRUCK",
+          "category": "military_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 2020,
+          "y": 1300,
+          "width": 80,
+          "height": 48,
+          "difficulty": 2,
+          "clueTags": [
+            "depot",
+            "fuel"
+          ]
+        },
+        {
+          "id": "jeep-01",
+          "sprite": "jeep",
+          "type": "jeep",
+          "label": "UTILITY JEEP",
+          "category": "military_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 1300,
+          "y": 916,
+          "width": 64,
+          "height": 44,
+          "difficulty": 2,
+          "clueTags": [
+            "crossing",
+            "vehicle"
+          ]
+        },
+        {
+          "id": "apc-01",
+          "sprite": "apc",
+          "type": "apc",
+          "label": "ARMOURED PERSONNEL CARRIER",
+          "category": "military_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 200,
+          "y": 1480,
+          "width": 78,
+          "height": 52,
+          "difficulty": 3,
+          "clueTags": [
+            "scrub",
+            "tracked"
+          ]
+        },
+        {
+          "id": "transporter-01",
+          "sprite": "missile_transporter",
+          "type": "missile_transporter",
+          "label": "HEAVY TRANSPORTER",
+          "category": "military_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 1480,
+          "y": 300,
+          "width": 96,
+          "height": 50,
+          "difficulty": 3,
+          "clueTags": [
+            "rail-yard",
+            "concealed"
+          ]
+        },
+        {
+          "id": "fuel-tanks-01",
+          "sprite": "fuel_tanks",
+          "type": "fuel_storage",
+          "label": "FUEL STORAGE TANKS",
+          "category": "industrial_structure",
+          "target": false,
+          "selectable": true,
+          "x": 1800,
+          "y": 1200,
+          "width": 102,
+          "height": 78,
+          "difficulty": 1,
+          "clueTags": [
+            "depot",
+            "storage"
+          ]
+        },
+        {
+          "id": "fuel-tanks-02",
+          "sprite": "fuel_tanks",
+          "type": "fuel_storage",
+          "label": "FUEL STORAGE TANKS",
+          "category": "industrial_structure",
+          "target": false,
+          "selectable": true,
+          "x": 2100,
+          "y": 1200,
+          "width": 102,
+          "height": 78,
+          "difficulty": 1,
+          "clueTags": [
+            "depot",
+            "storage"
+          ]
+        },
+        {
+          "id": "generator-01",
+          "sprite": "generator",
+          "type": "generator",
+          "label": "GENERATOR HOUSE",
+          "category": "industrial_structure",
+          "target": false,
+          "selectable": true,
+          "x": 1260,
+          "y": 480,
+          "width": 72,
+          "height": 68,
+          "difficulty": 2,
+          "clueTags": [
+            "yard",
+            "power"
+          ]
+        },
+        {
+          "id": "civil-truck-01",
+          "sprite": "civilian_truck",
+          "type": "civilian_truck",
+          "label": "CIVILIAN TRUCK",
+          "category": "civilian_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 1400,
+          "y": 916,
+          "width": 72,
+          "height": 46,
+          "difficulty": 2,
+          "clueTags": [
+            "crossing",
+            "decoy"
+          ]
+        },
+        {
+          "id": "civil-truck-02",
+          "sprite": "civilian_truck",
+          "type": "civilian_truck",
+          "label": "CIVILIAN TRUCK",
+          "category": "civilian_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 760,
+          "y": 1260,
+          "width": 72,
+          "height": 46,
+          "difficulty": 2,
+          "clueTags": [
+            "works",
+            "decoy"
+          ]
+        },
+        {
+          "id": "tractor-01",
+          "sprite": "tractor",
+          "type": "tractor",
+          "label": "TRACTOR",
+          "category": "civilian_vehicle",
+          "target": false,
+          "selectable": true,
+          "x": 220,
+          "y": 980,
+          "width": 66,
+          "height": 52,
+          "difficulty": 2,
+          "clueTags": [
+            "plot",
+            "decoy"
+          ]
+        },
+        {
+          "id": "farmhouse-01",
+          "sprite": "farmhouse",
+          "type": "farmhouse",
+          "label": "WORKS OFFICE",
+          "category": "civilian_structure",
+          "target": false,
+          "selectable": true,
+          "x": 300,
+          "y": 1240,
+          "width": 112,
+          "height": 92,
+          "difficulty": 1,
+          "clueTags": [
+            "works"
+          ]
+        },
+        {
+          "id": "barn-01",
+          "sprite": "barn",
+          "type": "barn",
+          "label": "STORAGE SHED",
+          "category": "civilian_structure",
+          "target": false,
+          "selectable": true,
+          "x": 760,
+          "y": 1360,
+          "width": 130,
+          "height": 104,
+          "difficulty": 1,
+          "clueTags": [
+            "works"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "recon-clues",
+      "type": "sprites",
+      "items": [
+        {
+          "sprite": "camouflage_net",
+          "x": 1460,
+          "y": 250,
+          "width": 92,
+          "height": 68
+        },
+        {
+          "sprite": "crates",
+          "x": 1560,
+          "y": 250
+        },
+        {
+          "sprite": "barrels",
+          "x": 1640,
+          "y": 250
+        },
+        {
+          "sprite": "tire_tracks",
+          "x": 1420,
+          "y": 960,
+          "width": 120,
+          "height": 64
+        },
+        {
+          "sprite": "track_marks",
+          "x": 1500,
+          "y": 340,
+          "width": 110,
+          "height": 64
+        },
+        {
+          "sprite": "disturbed_soil",
+          "x": 1940,
+          "y": 1380,
+          "width": 90,
+          "height": 64
+        },
+        {
+          "sprite": "footprints",
+          "x": 480,
+          "y": 1200,
+          "width": 100,
+          "height": 64
+        },
+        {
+          "sprite": "cut_vegetation",
+          "x": 300,
+          "y": 1400,
+          "width": 96,
+          "height": 64
+        },
+        {
+          "sprite": "smoke",
+          "x": 1700,
+          "y": 560,
+          "width": 84,
+          "height": 84
+        },
+        {
+          "sprite": "smoke",
+          "x": 620,
+          "y": 1200,
+          "width": 80,
+          "height": 80
+        },
+        {
+          "sprite": "trench",
+          "x": 1240,
+          "y": 1360,
+          "width": 120,
+          "height": 64
+        },
+        {
+          "sprite": "abandoned_equipment",
+          "x": 900,
+          "y": 1240,
+          "width": 84,
+          "height": 64
+        },
+        {
+          "sprite": "crates",
+          "x": 2000,
+          "y": 1420
+        },
+        {
+          "sprite": "barrels",
+          "x": 2080,
+          "y": 1420
+        },
+        {
+          "sprite": "crates",
+          "x": 240,
+          "y": 700
+        },
+        {
+          "sprite": "barrels",
+          "x": 330,
+          "y": 720
+        },
+        {
+          "sprite": "abandoned_equipment",
+          "x": 1760,
+          "y": 820,
+          "width": 84,
+          "height": 64
+        },
+        {
+          "sprite": "tire_tracks",
+          "x": 1700,
+          "y": 960,
+          "width": 120,
+          "height": 64
+        },
+        {
+          "sprite": "disturbed_soil",
+          "x": 560,
+          "y": 620,
+          "width": 90,
+          "height": 64
+        },
+        {
+          "sprite": "track_marks",
+          "x": 2140,
+          "y": 500,
+          "width": 110,
+          "height": 64
+        },
+        {
+          "sprite": "footprints",
+          "x": 1240,
+          "y": 200,
+          "width": 100,
+          "height": 64
+        },
+        {
+          "sprite": "crates",
+          "x": 1180,
+          "y": 640
+        },
+        {
+          "sprite": "barrels",
+          "x": 1180,
+          "y": 720
+        }
+      ]
+    },
+    {
+      "id": "spawn-zones",
+      "type": "zones",
+      "zones": [
+        {
+          "id": "road-east",
+          "tag": "road_vehicle",
+          "x": 1260,
+          "y": 880,
+          "width": 900,
+          "height": 140,
+          "accepts": [
+            "military_truck",
+            "civilian_truck",
+            "fuel_truck",
+            "jeep"
+          ]
+        },
+        {
+          "id": "road-west",
+          "tag": "road_vehicle",
+          "x": 60,
+          "y": 880,
+          "width": 500,
+          "height": 140,
+          "accepts": [
+            "military_truck",
+            "civilian_truck",
+            "fuel_truck",
+            "jeep"
+          ]
+        },
+        {
+          "id": "rail-yard",
+          "tag": "compound_vehicle",
+          "x": 1320,
+          "y": 200,
+          "width": 840,
+          "height": 420,
+          "accepts": [
+            "military_truck",
+            "jeep",
+            "fuel_truck",
+            "radar_vehicle",
+            "missile_transporter"
+          ]
+        },
+        {
+          "id": "depot-pad",
+          "tag": "compound_vehicle",
+          "x": 1740,
+          "y": 1160,
+          "width": 580,
+          "height": 380,
+          "accepts": [
+            "military_truck",
+            "fuel_truck",
+            "jeep",
+            "missile_transporter"
+          ]
+        },
+        {
+          "id": "scrub-west",
+          "tag": "forest_concealment",
+          "x": 40,
+          "y": 1400,
+          "width": 420,
+          "height": 360,
+          "accepts": [
+            "tank",
+            "apc",
+            "artillery",
+            "camouflage_net"
+          ]
+        },
+        {
+          "id": "scrub-east",
+          "tag": "forest_concealment",
+          "x": 2020,
+          "y": 980,
+          "width": 340,
+          "height": 300,
+          "accepts": [
+            "tank",
+            "apc",
+            "artillery",
+            "camouflage_net"
+          ]
+        },
+        {
+          "id": "laydown-yard",
+          "tag": "open_field",
+          "x": 600,
+          "y": 1220,
+          "width": 360,
+          "height": 220,
+          "accepts": [
+            "tractor",
+            "hay_bale",
+            "abandoned_equipment"
+          ]
+        },
+        {
+          "id": "river-plot",
+          "tag": "open_field",
+          "x": 130,
+          "y": 900,
+          "width": 380,
+          "height": 250,
+          "accepts": [
+            "tractor",
+            "civilian_truck",
+            "hay_bale"
+          ]
+        },
+        {
+          "id": "works-civilian",
+          "tag": "civilian",
+          "x": 250,
+          "y": 1180,
+          "width": 460,
+          "height": 340,
+          "accepts": [
+            "farmhouse",
+            "barn",
+            "tractor",
+            "civilian_truck"
+          ]
+        },
+        {
+          "id": "wharf-mast",
+          "tag": "radar_site",
+          "x": 2020,
+          "y": 700,
+          "width": 340,
+          "height": 280,
+          "accepts": [
+            "radar_structure",
+            "radar_dish",
+            "antenna_array",
+            "radio_tower"
+          ]
+        },
+        {
+          "id": "warehouse-block",
+          "tag": "structure",
+          "x": 1330,
+          "y": 440,
+          "width": 800,
+          "height": 260,
+          "accepts": [
+            "warehouse",
+            "barracks",
+            "bunker",
+            "hangar"
+          ]
+        },
+        {
+          "id": "clue-crossing",
+          "tag": "clue_zone",
+          "x": 1380,
+          "y": 1020,
+          "width": 560,
+          "height": 200,
+          "accepts": [
+            "tire_tracks",
+            "track_marks",
+            "disturbed_soil",
+            "cut_vegetation",
+            "camouflage_net"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "metadata",
+      "type": "metadata",
+      "data": {
+        "fictional": true,
+        "era": "Cold War-inspired training fiction",
+        "gridSize": 300,
+        "missionTargetId": "radar-01",
+        "recommendedView": {
+          "x": 1240,
+          "y": 820,
+          "zoom": 0.75
+        },
+        "authoringNotes": "Military logistics are mixed into working industry rather than fenced off from it: military and civilian trucks share the crossing and the yards, the heavy transporter sits under a camouflage net among ordinary crates and barrels, and fuel vehicles stand beside civilian fuel storage. No spawn zone overlaps the channel.",
+        "changeDetection": {
+          "destination": {
+            "x": 2000,
+            "y": 1330
+          },
+          "summary": "UTILITY JEEP moved from the east bank road into the fenced fuel depot."
+        },
+        "countRegion": {
+          "id": "echo-4",
+          "label": "GRID ECHO-4",
+          "x": 1200,
+          "y": 300,
+          "width": 900,
+          "height": 750
+        }
+      }
+    }
+  ]
+}
