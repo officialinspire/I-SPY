@@ -7,6 +7,7 @@ import { drawCandidateReticle } from '../ui/reconInteraction.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 import { validateCountAnswer, calculateCountScore } from '../game/countMission.js';
 import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
+import { assessMissionPerformance, applyPerformanceBonus } from '../game/missionPerformance.js';
 import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 
 export default class ReconScene extends Phaser.Scene {
@@ -802,11 +803,21 @@ export default class ReconScene extends Phaser.Scene {
     this.timerEvent?.remove(false);
     const remainingSeconds = Math.max(0, Math.floor(this.remainingSeconds));
     const elapsedSeconds = Math.max(0, Math.ceil(this.mission.timeLimitSeconds - remainingSeconds));
+    const errors = this.isCountMode ? this.incorrectSubmissions : this.falseIdentifications;
+    const performance = assessMissionPerformance(this.mission, {
+      success,
+      errors,
+      elapsedSeconds,
+      remainingSeconds,
+    });
 
     if (this.isCountMode) {
-      const score = calculateCountScore({ success, incorrectSubmissions: this.incorrectSubmissions, remainingSeconds });
+      const score = applyPerformanceBonus(
+        calculateCountScore({ success, incorrectSubmissions: this.incorrectSubmissions, remainingSeconds }),
+        performance,
+      );
       this.scene.start('Results', {
-        success, mission: this.mission, elapsedSeconds, score,
+        success, mission: this.mission, elapsedSeconds, score, performance,
         submittedAnswer: this.answerValue,
         correctAnswer: this.mission.expectedCount,
         incorrectSubmissions: this.incorrectSubmissions,
@@ -815,19 +826,25 @@ export default class ReconScene extends Phaser.Scene {
     }
 
     if (this.isChangeMode) {
-      const score = calculateChangeScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds });
+      const score = applyPerformanceBonus(
+        calculateChangeScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds }),
+        performance,
+      );
       this.scene.start('Results', {
-        success, mission: this.mission, elapsedSeconds, score,
+        success, mission: this.mission, elapsedSeconds, score, performance,
         falseIdentifications: this.falseIdentifications,
         markedPass: this.candidate?.passId ?? this.activePass,
       });
       return;
     }
 
-    const score = calculateLocateScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds });
+    const score = applyPerformanceBonus(
+      calculateLocateScore({ success, falseIdentifications: this.falseIdentifications, remainingSeconds }),
+      performance,
+    );
     this.scene.start('Results', {
       success, mission: this.mission, targetLabel: this.mission.targetLabel, elapsedSeconds,
-      falseIdentifications: this.falseIdentifications, score,
+      falseIdentifications: this.falseIdentifications, score, performance,
     });
   }
 
