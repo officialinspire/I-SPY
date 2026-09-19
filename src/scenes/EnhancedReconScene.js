@@ -5,6 +5,7 @@ import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createPointerReticle, drawCandidateReticle } from '../ui/reconInteraction.js';
 import { prefersReducedMotion } from '../ui/presentation.js';
 import { getSettings } from '../settings/userSettings.js';
+import { sampleFeedback, SAMPLE_EVENTS } from '../audio/sampleFeedback.js';
 
 export default class EnhancedReconScene extends ReconScene {
   constructor(key = 'Recon') {
@@ -118,8 +119,11 @@ export default class EnhancedReconScene extends ReconScene {
 
   placeCandidate(pointer) {
     super.placeCandidate(pointer);
-    if (this.candidate) {
-      feedback('select');
+    if (this.candidate?.entity) {
+      sampleFeedback(SAMPLE_EVENTS.TARGET_ACQUIRED);
+      this.settleMarker();
+    } else if (this.candidate) {
+      // Empty ground still receives a visual mark, but never a target voice.
       this.settleMarker();
     }
     this.refreshAnalysisMode();
@@ -244,7 +248,8 @@ export default class EnhancedReconScene extends ReconScene {
    * wrong call never points at the objects around it.
    */
   onIdentificationResolved(result, mark) {
-    feedback(result.correct ? 'confirm' : 'error');
+    if (result.correct) sampleFeedback(SAMPLE_EVENTS.TARGET_SECURED);
+    else feedback('error');
     this.setAnalysisMode('analysis');
     if (!mark || !this.selectionGraphics) {
       super.onIdentificationResolved(result, mark);

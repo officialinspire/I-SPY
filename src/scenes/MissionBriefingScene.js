@@ -7,11 +7,13 @@ import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
 import { resolveReconMapEntry } from '../world/mapRegistry.js';
+import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 
 export default class MissionBriefingScene extends Phaser.Scene {
   constructor() { super('MissionBriefing'); }
 
   create(data = {}) {
+    musicManager.request(MUSIC_STATES.MENU);
     this.mission = data.mission ?? createLocateMission();
     this.reducedMotion = prefersReducedMotion();
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);

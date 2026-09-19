@@ -6,6 +6,7 @@ import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { findSprite } from '../assets/spriteManifest.js';
 import { GUIDE_CATEGORIES } from '../game/identificationGuide.js';
+import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 
 /**
  * IDENTIFICATION GUIDE — the recognition manual.
@@ -32,6 +33,7 @@ export default class IdentificationGuideScene extends Phaser.Scene {
   constructor() { super('IdentificationGuide'); }
 
   create() {
+    musicManager.request(MUSIC_STATES.MENU);
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
     this.chrome = createTerminalChrome(this, {
       station: 'INTELLIGENCE DIRECTORATE // RECOGNITION MANUAL',
