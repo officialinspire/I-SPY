@@ -332,16 +332,29 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     applyVisual();
     options.onHover?.(false);
   });
+  /**
+   * An optional veto the owner of the button can hold.
+   *
+   * A masked grid is the case this exists for: the cell's hit area is a
+   * rectangle Phaser knows nothing about being clipped, so the scene that owns
+   * the mask says whether this pointer is somewhere the button can be pressed.
+   * Keyboard activation never asks, so a control stays reachable by keyboard
+   * whatever the pointer is doing.
+   */
+  const pointerAllowed = (pointer) => options.pointerGuard?.(pointer) !== false;
+
   background.on('pointerdown', (pointer) => {
     unlockAudio();
-    if (!status.enabled) return;
+    if (!status.enabled || !pointerAllowed(pointer)) return;
     armedPointerId = pointer?.id ?? 0;
     status.focused = false;
     status.pressed = true;
     applyVisual();
   });
   background.on('pointerup', (pointer) => {
-    const armed = armedPointerId !== null && armedPointerId === (pointer?.id ?? 0);
+    // Asked again on release: a press that began legitimately and turned into
+    // a drag (scrolling a grid) must not activate when the finger lifts.
+    const armed = armedPointerId !== null && armedPointerId === (pointer?.id ?? 0) && pointerAllowed(pointer);
     armedPointerId = null;
     status.pressed = false;
     if (pointer?.wasTouch) status.hovered = false;

@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A–12D, Phase 13A–13F, the complete Phase 14A–14F sprite-art overhaul, and Phase 15A–15I multi-sector, training and onboarding work implemented, with Phase 13, Phase 14 and Phase 15 release audits.** Runtime/package version: **`1.2.2-demo`**.
+**Original Phases 0–11 plus Phase 12A–12D, Phase 13A–13F, the complete Phase 14A–14F sprite-art overhaul, and Phase 15A–15I multi-sector, training and onboarding work implemented, with Phase 13, Phase 14 and Phase 15 release audits and a Phase 15J bug-fix pass.** Runtime/package version: **`1.2.2-demo`**.
 
 I SPY currently includes:
 
@@ -174,6 +174,19 @@ tally each sector would actually be asked for and fails under two. Woodland keep
 byte-identically and the 303-mission generator fingerprint is unchanged. See
 `docs/PHASE-15-RELEASE-AUDIT.md`.
 
+Phase 15J followed as a bug-fix pass over the shipped build, adding nothing. Eleven defects were
+reproduced against the deployed build and fixed: generated objects could land materially on top of
+each other (236 of 768 seeded missions), a generated COUNT could ask for a tally of one (68 of 256),
+a generated CHANGE could "move" an object eight pixels, an exact overlap was marked back to front
+because the hit test walked the draw order forwards, BORDER FARMS parked a truck 64% inside a barn,
+the identification guide's masked grid took clicks it could not show and put its lower rows beyond
+the keyboard, a category was laid out against the category just left, the settings rows for sound,
+volume and haptics acknowledged the state you had just left (turning sound on was silent; stepping
+haptics pulsed twice), and HOW TO PLAY closed itself after nine seconds. The release gate grew an
+authored-overlap check, selectable `radar-01` / `jeep-01` requirements, and a generator QA suite of
+7861 assertions over 768 seeded missions that CI runs before the build. See
+`docs/PHASE-15-RELEASE-AUDIT.md`.
+
 The Phase 13 build was audited end to end before release: menu and panel layout at four viewports,
 the full mission flow, all three analysis modes, the seeded generator, artwork, input and
 accessibility, feedback, and responsive behaviour. Eight defects were reproduced and fixed, the
@@ -217,7 +230,7 @@ Run the static release validator with:
 npm run validate
 ```
 
-It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, the haptic vocabulary — nothing on hover or focus, every pulse inside its bounds, and every pattern keeping its rhythm across strength levels — and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. It also checks every sector's count region: inside the map, and holding a tally worth taking rather than a single object. GitHub Pages runs this validator automatically before the production Vite build.
+It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, the haptic vocabulary — nothing on hover or focus, every pulse inside its bounds, and every pattern keeping its rhythm across strength levels — and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. It also checks every sector's count region: inside the map, and holding a tally worth taking rather than a single object. It checks that no two authored selectable objects overlap by a quarter of the smaller one, and that every map carries a selectable `radar-01` and `jeep-01`. `npm run validate` then runs `scripts/generator-qa.mjs`, which plays the real generator over every sector and mode for 64 fixed seeds and holds each of the 768 missions to the rules that make one solvable and fair — a visible target, a tally of at least two that matches the plate, a CHANGE move big enough to see, no object buried under another, no out-of-bounds operation, and the same seed reproducing the same mission. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Deployment
 
@@ -422,3 +435,4 @@ npm run build
 - Phase 15H — Haptics plus: patterns, strength levels, feature detection ✅
 - Phase 15I — First-run orientation and certification standing ✅
 - Phase 15 RC — Release-candidate audit and fixes ✅
+- Phase 15J — Bug-fix and regression pass ✅

@@ -76,6 +76,50 @@ export function countEntitiesInRegion(entities, region, targetCategory) {
   return (entities ?? []).filter((entity) => entity.category === targetCategory && entityCenterInRegion(entity, region)).length;
 }
 
+/**
+ * How much two selectable objects may share before the pair is unreadable.
+ *
+ * Analysts read these sprites by silhouette and then tap one of them. A
+ * clipped corner is ordinary aerial crowding and stays allowed; once a quarter
+ * of the smaller object is underneath another, its outline is broken and a tap
+ * can only be resolved by guessing which one the console will pick.
+ */
+export const OVERLAP_LIMIT = 0.25;
+
+/** Shared area as a fraction of the SMALLER footprint: 0 when they are apart. */
+export function entityOverlapRatio(a, b) {
+  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  if (width <= 0 || height <= 0) return 0;
+  const smaller = Math.min(a.width * a.height, b.width * b.height);
+  return smaller > 0 ? (width * height) / smaller : 0;
+}
+
+/**
+ * Selectable pairs that overlap past the limit, in a final entity state.
+ *
+ * Hidden objects are not on the plate, and objects nobody can mark cannot be
+ * mismarked, so both are skipped. `only` narrows the report to pairs that
+ * involve a given set of ids — how the generator asks "did anything I placed
+ * land on top of something?" without being made to answer for the map it was
+ * handed.
+ */
+export function findSelectableOverlaps(entities, options = {}) {
+  const { limit = OVERLAP_LIMIT, only = null } = options;
+  const items = (entities ?? []).filter((entity) => entity?.selectable && !entity.hidden);
+  const found = [];
+  for (let index = 0; index < items.length; index += 1) {
+    for (let other = index + 1; other < items.length; other += 1) {
+      const a = items[index];
+      const b = items[other];
+      if (only && !only.has(a.id) && !only.has(b.id)) continue;
+      const ratio = entityOverlapRatio(a, b);
+      if (ratio >= limit) found.push({ a: a.id, b: b.id, ratio });
+    }
+  }
+  return found;
+}
+
 export function getMapMetadata(map) {
   return { ...(getMapLayer(map, 'metadata')?.data ?? {}) };
 }

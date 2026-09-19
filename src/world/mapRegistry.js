@@ -1,11 +1,11 @@
 import { GAME_CONFIG } from '../runtime-config.js';
 import { MAP_CATALOG } from './mapCatalog.js';
 import { validateReconMap } from './reconMapSchema.js';
-import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json';
-import frostlineRelay from '../../assets/maps/frostline-relay.json';
-import riverworksSector from '../../assets/maps/riverworks-sector.json';
-import borderFarms from '../../assets/maps/border-farms.json';
-import trainingRangeAlpha from '../../assets/maps/training-range-alpha.json';
+import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json' with { type: 'json' };
+import frostlineRelay from '../../assets/maps/frostline-relay.json' with { type: 'json' };
+import riverworksSector from '../../assets/maps/riverworks-sector.json' with { type: 'json' };
+import borderFarms from '../../assets/maps/border-farms.json' with { type: 'json' };
+import trainingRangeAlpha from '../../assets/maps/training-range-alpha.json' with { type: 'json' };
 
 /**
  * Registry of playable reconnaissance sectors.

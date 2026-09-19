@@ -140,8 +140,31 @@ export function applyReconOperations(scene, world, operations = []) {
   return world;
 }
 
+function markable(entity) {
+  return Boolean(entity) && entity.selectable !== false && !entity.hidden;
+}
+
+function containsPoint(entity, x, y) {
+  return x >= entity.x && x <= entity.x + entity.width
+    && y >= entity.y && y <= entity.y + entity.height;
+}
+
+/**
+ * The selectable object under a point, searched back to front.
+ *
+ * Entities are drawn in array order and an added contact is appended, so the
+ * last match in the array is the one painted on top. Walking forwards handed
+ * an exact overlap to whichever object was drawn *underneath* — the analyst
+ * clicked the sprite they could see and marked the one they could not. The
+ * search runs in reverse so the object on top, the one that was clicked, wins.
+ */
 export function entityAtPoint(x, y, entities) {
-  return (entities ?? []).find((entity) => !entity.hidden && x >= entity.x && x <= entity.x + entity.width && y >= entity.y && y <= entity.y + entity.height) ?? null;
+  const list = entities ?? [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const entity = list[index];
+    if (markable(entity) && containsPoint(entity, x, y)) return entity;
+  }
+  return null;
 }
 
 function distanceToBounds(x, y, entity) {
@@ -162,12 +185,14 @@ export function entityNearPoint(x, y, entities, tolerance = 0) {
   const exact = entityAtPoint(x, y, entities);
   if (exact || tolerance <= 0) return exact;
 
+  // Nearest wins, and ties go to the object drawn later for the same reason
+  // the exact search runs in reverse.
   let best = null;
   let bestDistance = Infinity;
   for (const entity of entities ?? []) {
-    if (entity.hidden) continue;
+    if (!markable(entity)) continue;
     const distance = distanceToBounds(x, y, entity);
-    if (distance > tolerance || distance >= bestDistance) continue;
+    if (distance > tolerance || distance > bestDistance) continue;
     best = entity;
     bestDistance = distance;
   }
