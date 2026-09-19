@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { GAME_CONFIG } from '../src/runtime-config.js';
 import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
 import { MAP_CATALOG } from '../src/world/mapCatalog.js';
-import { validateReconMap } from '../src/world/reconMapSchema.js';
+import { validateReconMap, getCountRegion, countEntitiesInRegion } from '../src/world/reconMapSchema.js';
 import { GUIDE_CATEGORIES, validateIdentificationGuide } from '../src/game/identificationGuide.js';
 import { HAPTICS, LEVEL_SCALE, MAX_PULSE_MS, SILENT_HAPTIC_EVENTS, VOICES, scaleHapticPattern } from '../src/audio/feedback.js';
 import { HAPTIC_LEVELS } from '../src/settings/userSettings.js';
@@ -103,6 +103,14 @@ for (const entry of MAP_CATALOG) {
     assert(Math.hypot(destination.x - changeSubject.x, destination.y - changeSubject.y) >= 200,
       `[${entry.id}] change-detection destination is a visible move`);
   }
+
+  // The authored tally has to be worth taking: a grid square that happens to
+  // hold one vehicle is the shape this bug took the first time.
+  const region = getCountRegion(map);
+  const tally = countEntitiesInRegion(objectLayer?.items ?? [], region, 'military_vehicle');
+  assert(region.x >= 0 && region.y >= 0 && region.x + region.width <= map.width && region.y + region.height <= map.height,
+    `[${entry.id}] count region sits inside the sector`);
+  assert(tally >= 2, `[${entry.id}] count region holds a tally worth taking (${tally})`);
 
   // A camera is clamped to the map, so a focus that asks for ground past the
   // edge quietly becomes a different focus. An authored training framing has

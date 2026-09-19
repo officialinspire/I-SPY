@@ -8,7 +8,7 @@ https://officialinspire.github.io/I-SPY/
 
 ## Demo status
 
-**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented, with a Phase 13 release-candidate audit.** Runtime/package version: **`1.2.2-demo`**.
+**Original Phases 0–11 plus Phase 12A/12B/12C/12D and Phase 13A–13F polish work implemented, with a Phase 13 release-candidate audit, and Phase 15A–15I multi-sector, training and onboarding work, with a Phase 15 release-candidate audit.** Runtime/package version: **`1.2.2-demo`**.
 
 I SPY currently includes:
 
@@ -31,13 +31,18 @@ I SPY currently includes:
 - Spawn-zone-aware target/decoy placement and solvability validation
 - 80-frame production sprite library
 - Authored map/state system built around `WOODLAND CORRIDOR 7`
-- Runtime-generated terminal SFX and optional haptics
-- Persistent master/SFX/haptics/scanline/image-grain settings
+- Registry of four playable sectors plus a training range, with a SECTOR control and `?map=`
+- Per-sector authored CHANGE second passes and COUNT regions
+- ANALYST TRAINING: a six-step scripted tutorial on its own range, untimed and unscored
+- IDENTIFICATION GUIDE: a five-category recognition manual built from the shipped sprite frames
+- First-run ANALYST ORIENTATION panel, offered once and never forced
+- Runtime-generated terminal SFX and feature-detected haptics at four strength levels
+- Persistent master/SFX/haptics/scanline/image-grain/sector/training settings
 - Reduced-motion support
 - Automated release validation before every Pages build
 - GitHub Actions production build and Pages deployment
 
-See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, and `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass.
+See `docs/PHASE-11-RELEASE-AUDIT.md` for the original release audit, `docs/PHASE-12-GRAPHICS.md` for the graphics-resolution pass, `docs/PHASE-12-LAYOUT.md` for the layout/presentation pass, `docs/PHASE-12-FINAL-QA.md` for the final Phase 12 QA gate, `docs/PHASE-13A-INTERACTION.md` for the interaction design system, `docs/PHASE-13B-MAIN-MENU.md` for the main-menu redesign, `docs/PHASE-13-GRAPHICS.md` for the reconnaissance art pass, `docs/PHASE-13D-RECON-INTERACTION.md` for the recon interaction pass, `docs/PHASE-13E-MODE-UX.md` for the mode-specific UX pass, and `docs/PHASE-15-RELEASE-AUDIT.md` for the Phase 15 release-candidate audit. The Phase 15 feature passes are documented in `docs/PHASE-15A-MAP-REGISTRY.md`, `docs/PHASE-15B-FROSTLINE-RELAY.md`, `docs/PHASE-15C-RIVERWORKS-SECTOR.md`, `docs/PHASE-15D-BORDER-FARMS.md`, `docs/PHASE-15E-SECTOR-SELECT.md`, `docs/PHASE-15F-ANALYST-TRAINING.md`, `docs/PHASE-15G-IDENTIFICATION-GUIDE.md`, `docs/PHASE-15H-HAPTICS.md` and `docs/PHASE-15I-ORIENTATION.md`.
 
 ## Interaction design system
 
@@ -149,7 +154,19 @@ Phase 13E gives the workspace one information hierarchy — objective, timer, mo
 
 COUNT defines its area by dimming everything outside it with phosphor corner brackets, and separates a captioned ADJUST group (larger steppers, a bordered tally readout) from a captioned SUBMIT action; a refused total turns the readout muted red until the number changes, without interrupting inspection. CHANGE replaces the VIEW PASS toggle with a PASS A | PASS B segmented control whose live segment is lit, and switching passes plays a brief opaque wipe that never shows both passes at once. Split view labels each pane with its own pass and time and keeps the two cameras exactly synchronised.
 
-## Release-candidate audit
+## Release-candidate audits
+
+The Phase 15 branch was audited before release: the map registry, all four sectors in all three
+analysis modes, the seeded generator and its URL options, ANALYST TRAINING, the IDENTIFICATION
+GUIDE, the haptics rework, and responsive layout at 1440x900, 1024x700, 800x420, 390x844 and
+360x640. One defect was found and fixed: COUNT asked every sector to tally `GRID DELTA-3`, the
+rectangle drawn by hand for WOODLAND CORRIDOR 7 when it was the only map. In RIVERWORKS SECTOR that
+rectangle lands across the canalised channel and held one military vehicle while five sat outside
+it, which is a puzzle that is not a puzzle. A sector now authors its own count region in map
+metadata, the same way it already authors its CHANGE second pass; the release validator counts the
+tally each sector would actually be asked for and fails under two. Woodland keeps `GRID DELTA-3`
+byte-identically and the 303-mission generator fingerprint is unchanged. See
+`docs/PHASE-15-RELEASE-AUDIT.md`.
 
 The Phase 13 build was audited end to end before release: menu and panel layout at four viewports,
 the full mission flow, all three analysis modes, the seeded generator, artwork, input and
@@ -194,7 +211,7 @@ Run the static release validator with:
 npm run validate
 ```
 
-It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, the haptic vocabulary — nothing on hover or focus, every pulse inside its bounds, and every pattern keeping its rhythm across strength levels — and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. GitHub Pages runs this validator automatically before the production Vite build.
+It checks version alignment, viewport/safe-area configuration, the 80-frame sprite manifest, core scene registration, the haptic vocabulary — nothing on hover or focus, every pulse inside its bounds, and every pattern keeping its rhythm across strength levels — and the identification guide's own rules — every entry naming a registered frame, no frame appearing twice, and every note staying a short figure-free description — then walks the map registry: every registered sector is loaded from disk, matched against its catalog entry, and put through `validateReconMap()` — the same schema the game uses — covering layers, spawn tags, sprite resolution and bounds, unique entity IDs and mission-target integrity. It also requires each map to carry the change-detection subject `jeep-01` and, where a sector authors a second-pass destination, that the destination is inside bounds and far enough from the start to be a visible move. It also checks every sector's count region: inside the map, and holding a tally worth taking rather than a single object. GitHub Pages runs this validator automatically before the production Vite build.
 
 ## Deployment
 
@@ -280,6 +297,8 @@ Scoring:
 ### COUNT
 
 Inspect the highlighted reconnaissance region and submit the number of objects matching the requested category. Civilian and unrelated objects can act as visual decoys.
+
+Each sector names the grid square its tally is taken over in map metadata — `GRID DELTA-3` in WOODLAND CORRIDOR 7, `GRID ECHO-4` in RIVERWORKS SECTOR — so the region is drawn for the ground it covers rather than reused from another sector. A generated COUNT mission draws its own region instead.
 
 Controls:
 

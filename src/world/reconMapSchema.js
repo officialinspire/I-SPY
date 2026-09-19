@@ -44,6 +44,38 @@ export function getMapSpawnZones(map) {
   return (getMapLayer(map, 'spawn-zones')?.zones ?? []).map((zone) => ({ ...zone, accepts: [...(zone.accepts ?? [])] }));
 }
 
+/**
+ * The grid square a sector is tallied over when it does not name its own.
+ *
+ * Drawn for WOODLAND CORRIDOR 7 when there was only one map. It lives here,
+ * with the other map-reading helpers and no map data of its own, so the game
+ * and the release validator read the same rectangle.
+ */
+export const DEFAULT_COUNT_REGION = Object.freeze({
+  id: 'delta-3',
+  label: 'GRID DELTA-3',
+  x: 500,
+  y: 500,
+  width: 1550,
+  height: 500,
+});
+
+/** A sector's own grid square if it authors one, otherwise the default. */
+export function getCountRegion(map) {
+  const authored = getMapMetadata(map).countRegion;
+  return authored ? { ...authored } : { ...DEFAULT_COUNT_REGION };
+}
+
+export function entityCenterInRegion(entity, region) {
+  const x = entity.x + entity.width / 2;
+  const y = entity.y + entity.height / 2;
+  return x >= region.x && x <= region.x + region.width && y >= region.y && y <= region.y + region.height;
+}
+
+export function countEntitiesInRegion(entities, region, targetCategory) {
+  return (entities ?? []).filter((entity) => entity.category === targetCategory && entityCenterInRegion(entity, region)).length;
+}
+
 export function getMapMetadata(map) {
   return { ...(getMapLayer(map, 'metadata')?.data ?? {}) };
 }
@@ -108,6 +140,18 @@ export function validateReconMap(map) {
     const nominal = 64;
     if (![destination.x, destination.y].every(Number.isFinite)) errors.push('Metadata changeDetection.destination needs numeric x and y.');
     else if (destination.x < 0 || destination.y < 0 || destination.x + nominal > map.width || destination.y + nominal > map.height) errors.push('Metadata changeDetection.destination falls outside map bounds.');
+  }
+
+  // A sector may name the grid square its tally is taken over. If it does,
+  // that square has to be somewhere the analyst can actually be shown.
+  const countRegion = metadata.countRegion;
+  if (countRegion) {
+    if (!countRegion.label) errors.push('Metadata countRegion needs a label.');
+    if (![countRegion.x, countRegion.y, countRegion.width, countRegion.height].every(Number.isFinite)
+      || countRegion.width <= 0 || countRegion.height <= 0) errors.push('Metadata countRegion has invalid bounds.');
+    else if (countRegion.x < 0 || countRegion.y < 0
+      || countRegion.x + countRegion.width > map.width
+      || countRegion.y + countRegion.height > map.height) errors.push('Metadata countRegion falls outside map bounds.');
   }
 
   // A training range scripts its own lessons in metadata. If it does, the

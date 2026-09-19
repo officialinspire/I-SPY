@@ -3561,6 +3561,14 @@
             "y": 1330
           },
           "summary": "UTILITY JEEP moved from the east bank road into the fenced fuel depot."
+        },
+        "countRegion": {
+          "id": "echo-4",
+          "label": "GRID ECHO-4",
+          "x": 1200,
+          "y": 300,
+          "width": 900,
+          "height": 750
         }
       }
     }

@@ -2014,7 +2014,15 @@
             "zoom": 1
           }
         },
-        "authoringNotes": "Every bay is isolated and the ground between them is empty: a trainee is learning the console, not reading a sector. Bay A holds one object with no similar silhouette near it, bay B holds three military vehicles and one civilian so the tally has a wrong answer available, and bay C holds the object that moves between passes."
+        "authoringNotes": "Every bay is isolated and the ground between them is empty: a trainee is learning the console, not reading a sector. Bay A holds one object with no similar silhouette near it, bay B holds three military vehicles and one civilian so the tally has a wrong answer available, and bay C holds the object that moves between passes.",
+        "countRegion": {
+          "id": "range-bay-b",
+          "label": "RANGE BAY B",
+          "x": 880,
+          "y": 1160,
+          "width": 660,
+          "height": 440
+        }
       }
     }
   ]
