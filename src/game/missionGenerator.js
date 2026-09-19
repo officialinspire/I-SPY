@@ -1,9 +1,10 @@
 import { GAME_CONFIG } from '../runtime-config.js';
 import { findSelectableOverlaps, getMapEntities, getMapLayer, getMapSpawnZones } from '../world/reconMapSchema.js';
-import { isAnySector, listReconMaps, resolveReconMap } from '../world/mapRegistry.js';
+import { isAnySector, listReconMaps, resolveReconMap, resolveReconMapEntry } from '../world/mapRegistry.js';
 import { createLocateMission } from './locateMission.js';
 import { createCountMission } from './countMission.js';
 import { createChangeDetectionMission, CHANGE_TYPES } from './changeDetectionMission.js';
+import { createMissionDirective } from './missionPerformance.js';
 
 const MODES = Object.freeze(['LOCATE', 'COUNT', 'CHANGE']);
 const CLUE_SPRITES = Object.freeze(['tire_tracks', 'track_marks', 'disturbed_soil', 'cut_vegetation', 'crates', 'barrels', 'camouflage_net']);
@@ -11,6 +12,16 @@ const LOCATE_OBJECTIVES = Object.freeze([
   (label) => `LOCATE AND IDENTIFY THE ${label}.`,
   (label) => `FIND THE ${label} BEFORE THE SATELLITE WINDOW CLOSES.`,
   (label) => `CONFIRM THE POSITION OF THE ${label}.`,
+]);
+
+const COUNT_TARGETS = Object.freeze([
+  Object.freeze({ field: 'category', value: 'military_vehicle', label: 'MILITARY VEHICLES' }),
+  Object.freeze({ field: 'category', value: 'civilian_vehicle', label: 'CIVILIAN VEHICLES' }),
+  Object.freeze({ field: 'category', value: 'strategic_installation', label: 'STRATEGIC INSTALLATIONS' }),
+  Object.freeze({ field: 'category', value: 'industrial_structure', label: 'INDUSTRIAL STRUCTURES' }),
+  Object.freeze({ field: 'type', value: 'military_truck', label: 'MILITARY TRUCKS' }),
+  Object.freeze({ field: 'type', value: 'civilian_truck', label: 'CIVILIAN TRUCKS' }),
+  Object.freeze({ field: 'type', value: 'tractor', label: 'TRACTORS' }),
 ]);
 
 function hashSeed(value) {
@@ -93,16 +104,38 @@ function addClues(rng, map, anchor, count) {
   return operations;
 }
 
-function visualModifiers(rng) {
+function difficultyProfile(map) {
+  const level = Math.max(1, Math.min(4, Math.floor(resolveReconMapEntry(map).difficulty ?? 1)));
+  return { level, ...(GAME_CONFIG.generator.difficulty[level] ?? {}) };
+}
+
+function visualModifiers(rng, map) {
+  const profile = difficultyProfile(map);
   return {
-    grain: range(rng, GAME_CONFIG.generator.visual.grainMin, GAME_CONFIG.generator.visual.grainMax, 2),
-    haze: range(rng, GAME_CONFIG.generator.visual.hazeMin, GAME_CONFIG.generator.visual.hazeMax, 2),
+    grain: Math.min(GAME_CONFIG.generator.visual.grainMax,
+      range(rng, GAME_CONFIG.generator.visual.grainMin, GAME_CONFIG.generator.visual.grainMax, 2) + (profile.grainBonus ?? 0)),
+    haze: Math.min(GAME_CONFIG.generator.visual.hazeMax,
+      range(rng, GAME_CONFIG.generator.visual.hazeMin, GAME_CONFIG.generator.visual.hazeMax, 3) + (profile.hazeBonus ?? 0)),
     contrast: range(rng, GAME_CONFIG.generator.visual.contrastMin, GAME_CONFIG.generator.visual.contrastMax, 2),
   };
 }
 
-function generatedTimeLimit(rng) {
-  return pick(rng, GAME_CONFIG.generator.timeLimits) ?? 90;
+function generatedTimeLimit(rng, map) {
+  const profile = difficultyProfile(map);
+  return pick(rng, profile.timeLimits ?? GAME_CONFIG.generator.timeLimits) ?? 90;
+}
+
+function generatedDecoyCount(rng, map, available) {
+  const profile = difficultyProfile(map);
+  const min = Math.min(available, GAME_CONFIG.generator.decoysMin + Math.min(1, profile.decoyBonus ?? 0));
+  const max = Math.min(available, GAME_CONFIG.generator.decoysMax + (profile.decoyBonus ?? 0));
+  return max > 0 ? integer(rng, Math.min(min, max), max) : 0;
+}
+
+export function matchesCountTarget(entity, mission) {
+  if (!entity || entity.hidden) return false;
+  if (mission?.targetType) return entity.type === mission.targetType;
+  return entity.category === mission?.targetCategory;
 }
 
 /**
@@ -197,7 +230,9 @@ function overlapErrors(entities, operations, passLabel) {
 function createLocateGenerated(rng, seed, map) {
   const entities = authoredEntities(map);
   const zones = authoredZones(map);
-  const candidates = entities.filter((entity) => entity.selectable && ['military_vehicle', 'strategic_installation'].includes(entity.category) && compatibleZones(entity, zones).length > 0);
+  const candidates = entities.filter((entity) => entity.selectable
+    && ['military_vehicle', 'strategic_installation'].includes(entity.category)
+    && compatibleZones(entity, zones).length > 0);
   const target = pick(rng, candidates);
   if (!target) throw new Error('No valid LOCATE target candidates are available.');
 
@@ -205,15 +240,17 @@ function createLocateGenerated(rng, seed, map) {
   const targetPosition = placementInZone(rng, targetZone, target);
   const operations = [{ type: 'move_entity', entityId: target.id, ...targetPosition }];
 
-  const decoyCandidates = entities.filter((entity) => entity.id !== target.id && entity.selectable && compatibleZones(entity, zones).length > 0);
-  const decoyCount = Math.min(decoyCandidates.length, integer(rng, GAME_CONFIG.generator.decoysMin, GAME_CONFIG.generator.decoysMax));
+  const decoyCandidates = entities.filter((entity) => entity.id !== target.id
+    && entity.selectable && compatibleZones(entity, zones).length > 0);
+  const decoyCount = generatedDecoyCount(rng, map, decoyCandidates.length);
   for (let index = 0; index < decoyCount; index += 1) {
     const decoy = decoyCandidates.splice(Math.floor(rng() * decoyCandidates.length), 1)[0];
     const zone = pick(rng, compatibleZones(decoy, zones));
     operations.push({ type: 'move_entity', entityId: decoy.id, ...placementInZone(rng, zone, decoy) });
   }
 
-  operations.push(...addClues(rng, map, targetPosition, integer(rng, GAME_CONFIG.generator.cluesMin, GAME_CONFIG.generator.cluesMax)));
+  operations.push(...addClues(rng, map, targetPosition,
+    integer(rng, GAME_CONFIG.generator.cluesMin, GAME_CONFIG.generator.cluesMax)));
   const objective = pick(rng, LOCATE_OBJECTIVES)(target.label);
   return {
     id: `GEN-LOCATE-${hashSeed(seed).toString(16).toUpperCase()}`,
@@ -226,8 +263,8 @@ function createLocateGenerated(rng, seed, map) {
     targetId: target.id,
     targetLabel: target.label,
     worldOperations: operations,
-    timeLimitSeconds: generatedTimeLimit(rng),
-    visualModifiers: visualModifiers(rng),
+    timeLimitSeconds: generatedTimeLimit(rng, map),
+    visualModifiers: visualModifiers(rng, map),
     generated: true,
     seed,
   };
@@ -236,49 +273,84 @@ function createLocateGenerated(rng, seed, map) {
 function createCountGenerated(rng, seed, map) {
   const entities = authoredEntities(map);
   const zones = authoredZones(map);
-  const roadZones = zones.filter((zone) => zone.tag === 'road_vehicle');
-  const zone = pick(rng, roadZones);
-  if (!zone) throw new Error('No road vehicle zone is available for generated COUNT missions.');
 
-  const military = entities.filter((entity) => entity.category === 'military_vehicle' && zone.accepts.includes(entity.type));
-  if (!military.length) throw new Error('No military vehicle entities are compatible with the COUNT region.');
-  const selectedTargets = military.slice(0, Math.min(military.length, integer(rng, 1, Math.min(3, military.length))));
+  const plans = [];
+  for (const target of COUNT_TARGETS) {
+    for (const zone of zones) {
+      const matching = entities.filter((entity) => entity.selectable
+        && entity[target.field] === target.value
+        && (zone.accepts?.includes(entity.type) || zone.accepts?.includes(entity.sprite)));
+      if (matching.length >= MIN_GENERATED_COUNT) plans.push({ target, zone, matching });
+    }
+  }
+
+  const plan = pick(rng, plans);
+  if (!plan) throw new Error('No COUNT target/zone combination has at least two compatible objects.');
+
+  const pool = [...plan.matching];
+  const selectedCount = integer(rng, MIN_GENERATED_COUNT, Math.min(4, pool.length));
+  const selectedTargets = [];
+  while (selectedTargets.length < selectedCount && pool.length) {
+    selectedTargets.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  }
+
+  const decoyPool = entities.filter((entity) => entity.selectable
+    && entity[plan.target.field] !== plan.target.value
+    && (plan.zone.accepts?.includes(entity.type) || plan.zone.accepts?.includes(entity.sprite)));
+  const decoyCount = decoyPool.length ? Math.min(decoyPool.length, difficultyProfile(map).level >= 3 ? 2 : 1) : 0;
+  const totalSlots = selectedTargets.length + decoyCount;
   const operations = [];
-  const totalSlots = selectedTargets.length + 1;
+
   selectedTargets.forEach((entity, index) => {
-    operations.push({ type: 'move_entity', entityId: entity.id, ...placementInZone(rng, zone, entity, index, totalSlots) });
+    operations.push({
+      type: 'move_entity',
+      entityId: entity.id,
+      ...placementInZone(rng, plan.zone, entity, index, Math.max(1, totalSlots)),
+    });
   });
 
-  const civilianTruck = entities.find((entity) => entity.type === 'civilian_truck' && zone.accepts.includes(entity.type));
-  if (civilianTruck) operations.push({ type: 'move_entity', entityId: civilianTruck.id, ...placementInZone(rng, zone, civilianTruck, totalSlots - 1, totalSlots) });
+  for (let index = 0; index < decoyCount; index += 1) {
+    const decoy = decoyPool.splice(Math.floor(rng() * decoyPool.length), 1)[0];
+    operations.push({
+      type: 'move_entity',
+      entityId: decoy.id,
+      ...placementInZone(rng, plan.zone, decoy, selectedTargets.length + index, Math.max(1, totalSlots)),
+    });
+  }
 
   const padding = 36;
   const region = {
-    x: Math.max(0, zone.x - padding),
-    y: Math.max(0, zone.y - padding),
-    width: Math.min(map.width - Math.max(0, zone.x - padding), zone.width + padding * 2),
-    height: Math.min(map.height - Math.max(0, zone.y - padding), zone.height + padding * 2),
+    x: Math.max(0, plan.zone.x - padding),
+    y: Math.max(0, plan.zone.y - padding),
+    width: Math.min(map.width - Math.max(0, plan.zone.x - padding), plan.zone.width + padding * 2),
+    height: Math.min(map.height - Math.max(0, plan.zone.y - padding), plan.zone.height + padding * 2),
   };
-  region.id = `generated-${zone.id}`;
+  region.id = `generated-${plan.zone.id}`;
   region.label = gridLabel(map, region);
 
+  const targetFields = plan.target.field === 'type'
+    ? { targetType: plan.target.value, targetCategory: null }
+    : { targetCategory: plan.target.value, targetType: null };
+  const provisionalMission = { ...targetFields };
   const simulated = simulateEntities(map, operations);
-  const expectedCount = simulated.filter((entity) => entity.category === 'military_vehicle' && entityCenterInRegion(entity, region)).length;
+  const expectedCount = simulated.filter((entity) => matchesCountTarget(entity, provisionalMission)
+    && entityCenterInRegion(entity, region)).length;
+
   return {
     id: `GEN-COUNT-${hashSeed(seed).toString(16).toUpperCase()}`,
-    operation: pick(rng, ['OPERATION ROAD COUNT', 'OPERATION GREY COLUMN', 'OPERATION MOTOR POOL']),
+    operation: pick(rng, ['OPERATION ROAD COUNT', 'OPERATION GREY COLUMN', 'OPERATION MOTOR POOL', 'OPERATION LEDGER GLASS']),
     satellitePass: `${String(integer(rng, 0, 23)).padStart(2, '0')}:${String(integer(rng, 0, 59)).padStart(2, '0')} ZULU`,
     sector: map.title,
     mapId: map.id,
     mode: 'COUNT',
-    objective: `COUNT ALL MILITARY VEHICLES INSIDE ${region.label}.`,
-    targetCategory: 'military_vehicle',
-    targetCategoryLabel: 'MILITARY VEHICLES',
+    objective: `COUNT ALL ${plan.target.label} INSIDE ${region.label}.`,
+    ...targetFields,
+    targetCategoryLabel: plan.target.label,
     region,
     expectedCount,
     worldOperations: operations,
-    timeLimitSeconds: generatedTimeLimit(rng),
-    visualModifiers: visualModifiers(rng),
+    timeLimitSeconds: generatedTimeLimit(rng, map),
+    visualModifiers: visualModifiers(rng, map),
     generated: true,
     seed,
   };
@@ -287,8 +359,18 @@ function createCountGenerated(rng, seed, map) {
 function createChangeGenerated(rng, seed, map) {
   const entities = authoredEntities(map);
   const zones = authoredZones(map);
-  const movable = entities.filter((entity) => entity.selectable && compatibleZones(entity, zones).length > 0 && ['military_vehicle', 'strategic_installation'].includes(entity.category));
-  const eventType = pick(rng, ['moved', 'disappeared', 'appeared']);
+  const vehicles = entities.filter((entity) => entity.selectable
+    && entity.category === 'military_vehicle' && compatibleZones(entity, zones).length > 0);
+  const structures = entities.filter((entity) => entity.selectable
+    && ['strategic_installation', 'industrial_structure'].includes(entity.category)
+    && compatibleZones(entity, zones).length > 0);
+
+  const eventPool = [];
+  if (vehicles.length) eventPool.push('vehicle_moved', 'vehicle_disappeared', 'vehicle_appeared');
+  if (structures.length) eventPool.push('structure_disappeared', 'structure_appeared');
+  const eventType = pick(rng, eventPool);
+  if (!eventType) throw new Error('No compatible CHANGE event can be generated.');
+
   const worldOperations = [];
   const passBOperations = [];
   let target;
@@ -298,21 +380,25 @@ function createChangeGenerated(rng, seed, map) {
   let changeSummary;
   let focus;
 
-  if (eventType === 'appeared') {
-    const template = pick(rng, movable.filter((entity) => entity.category === 'military_vehicle'));
-    if (!template) throw new Error('No compatible template exists for an appeared CHANGE event.');
+  const appeared = eventType.endsWith('_appeared');
+  const disappeared = eventType.endsWith('_disappeared');
+  const structureEvent = eventType.startsWith('structure_');
+  const sourcePool = structureEvent ? structures : vehicles;
+
+  if (appeared) {
+    const template = pick(rng, sourcePool);
     const zone = pick(rng, compatibleZones(template, zones));
     const position = placementInZone(rng, zone, template);
-    targetId = `generated-contact-${hashSeed(`${seed}-contact`).toString(16)}`;
+    targetId = `generated-contact-${hashSeed(`${seed}:${eventType}:contact`).toString(16)}`;
     targetLabel = template.label;
     target = { ...cloneEntity(template), id: targetId, ...position, target: true, selectable: true };
     passBOperations.push({ type: 'add_entity', entity: target });
-    passBOperations.push(...addClues(rng, map, position, 1));
-    changeType = CHANGE_TYPES.VEHICLE_APPEARED;
-    changeSummary = `${targetLabel} appeared between the two reconnaissance passes.`;
+    if (!structureEvent) passBOperations.push(...addClues(rng, map, position, 1));
+    changeType = structureEvent ? CHANGE_TYPES.STRUCTURE_CHANGED : CHANGE_TYPES.VEHICLE_APPEARED;
+    changeSummary = `${targetLabel} appeared between PASS A and PASS B.`;
     focus = { x: position.x + target.width / 2, y: position.y + target.height / 2, zoom: 0.66 };
   } else {
-    target = pick(rng, movable);
+    target = pick(rng, sourcePool);
     if (!target) throw new Error('No compatible target exists for a CHANGE event.');
     targetId = target.id;
     targetLabel = target.label;
@@ -321,20 +407,25 @@ function createChangeGenerated(rng, seed, map) {
     const start = placementInZone(rng, startZone, target, 0, 2);
     worldOperations.push({ type: 'move_entity', entityId: target.id, ...start });
 
-    if (eventType === 'disappeared') {
+    if (disappeared) {
       passBOperations.push({ type: 'hide_entity', entityId: target.id });
-      passBOperations.push(...addClues(rng, map, start, 1));
-      changeType = CHANGE_TYPES.VEHICLE_DISAPPEARED;
+      if (!structureEvent) passBOperations.push(...addClues(rng, map, start, 1));
+      changeType = structureEvent ? CHANGE_TYPES.STRUCTURE_CHANGED : CHANGE_TYPES.VEHICLE_DISAPPEARED;
       changeSummary = `${targetLabel} disappeared between PASS A and PASS B.`;
       focus = { x: start.x + target.width / 2, y: start.y + target.height / 2, zoom: 0.66 };
     } else {
-      const destinationZone = zonesForTarget.length > 1 ? pick(rng, zonesForTarget.filter((zone) => zone.id !== startZone.id)) : startZone;
+      const destinationZone = zonesForTarget.length > 1
+        ? pick(rng, zonesForTarget.filter((zone) => zone.id !== startZone.id)) : startZone;
       const destination = placementInZone(rng, destinationZone ?? startZone, target, 1, 2);
       passBOperations.push({ type: 'move_entity', entityId: target.id, ...destination });
       passBOperations.push(...addClues(rng, map, destination, 1));
       changeType = CHANGE_TYPES.VEHICLE_MOVED;
       changeSummary = `${targetLabel} changed position between the two reconnaissance passes.`;
-      focus = { x: Math.round((start.x + destination.x) / 2), y: Math.round((start.y + destination.y) / 2), zoom: 0.62 };
+      focus = {
+        x: Math.round((start.x + destination.x) / 2),
+        y: Math.round((start.y + destination.y) / 2),
+        zoom: 0.62,
+      };
     }
   }
 
@@ -345,6 +436,14 @@ function createChangeGenerated(rng, seed, map) {
   const passATime = `${String(firstHour).padStart(2, '0')}:${String(firstMinute).padStart(2, '0')} ZULU`;
   const passBTime = `${String(Math.floor(secondMinuteTotal / 60) % 24).padStart(2, '0')}:${String(secondMinuteTotal % 60).padStart(2, '0')} ZULU`;
 
+  const objective = structureEvent
+    ? `IDENTIFY THE STRUCTURE THAT ${appeared ? 'APPEARED' : 'DISAPPEARED'} BETWEEN PASS A AND PASS B.`
+    : appeared
+      ? 'IDENTIFY THE OBJECT THAT APPEARED BETWEEN PASS A AND PASS B.'
+      : disappeared
+        ? 'IDENTIFY THE OBJECT THAT DISAPPEARED BETWEEN PASS A AND PASS B.'
+        : 'IDENTIFY THE OBJECT THAT CHANGED POSITION BETWEEN PASS A AND PASS B.';
+
   return {
     id: `GEN-CHANGE-${hashSeed(seed).toString(16).toUpperCase()}`,
     operation: pick(rng, ['OPERATION SECOND FRAME', 'OPERATION TIME SLICE', 'OPERATION GREY ECHO']),
@@ -352,22 +451,19 @@ function createChangeGenerated(rng, seed, map) {
     sector: map.title,
     mapId: map.id,
     mode: 'CHANGE',
-    objective: eventType === 'appeared'
-      ? 'IDENTIFY THE OBJECT THAT APPEARED BETWEEN PASS A AND PASS B.'
-      : eventType === 'disappeared'
-        ? 'IDENTIFY THE OBJECT THAT DISAPPEARED BETWEEN PASS A AND PASS B.'
-        : 'IDENTIFY THE OBJECT THAT CHANGED POSITION BETWEEN PASS A AND PASS B.',
+    objective,
     targetId,
     targetLabel,
     changeType,
+    changeEvent: eventType,
     passA: { id: 'A', label: 'PASS A', time: passATime },
     passB: { id: 'B', label: 'PASS B', time: passBTime },
     worldOperations,
     passBOperations,
     changeSummary,
     focus,
-    timeLimitSeconds: generatedTimeLimit(rng),
-    visualModifiers: visualModifiers(rng),
+    timeLimitSeconds: generatedTimeLimit(rng, map),
+    visualModifiers: visualModifiers(rng, map),
     generated: true,
     seed,
   };
@@ -403,7 +499,7 @@ export function validateGeneratedMission(mission, mapSource) {
   if (mission.mode === 'COUNT') {
     const region = mission.region;
     if (!region || region.x < 0 || region.y < 0 || region.x + region.width > map.width || region.y + region.height > map.height) errors.push('COUNT region is outside map bounds.');
-    const count = passA.filter((entity) => entity.category === mission.targetCategory && entityCenterInRegion(entity, region)).length;
+    const count = passA.filter((entity) => matchesCountTarget(entity, mission) && entityCenterInRegion(entity, region)).length;
     if (count < MIN_GENERATED_COUNT) errors.push(`COUNT mission generated ${count} target object(s); a tally needs at least ${MIN_GENERATED_COUNT}.`);
     if (count !== mission.expectedCount) errors.push('COUNT expected answer does not match generated entity state.');
   }
@@ -426,7 +522,13 @@ export function validateGeneratedMission(mission, mapSource) {
 
 function fallbackMission(mode, seed, map) {
   const fallback = mode === 'COUNT' ? createCountMission(map) : mode === 'CHANGE' ? createChangeDetectionMission(map) : createLocateMission(map);
-  return { ...fallback, generated: false, seed, generationWarning: 'Generator exhausted validation attempts; using authored fallback.' };
+  return {
+    ...fallback,
+    generated: false,
+    seed,
+    directive: createMissionDirective(seed),
+    generationWarning: 'Generator exhausted validation attempts; using authored fallback.',
+  };
 }
 
 /**
@@ -465,7 +567,7 @@ export function createGeneratedMission({ seed = randomSeed(), mode = null, map: 
     }
     mission.generationAttempt = attempt + 1;
     const validation = validateGeneratedMission(mission, map);
-    if (validation.valid) return mission;
+    if (validation.valid) return { ...mission, directive: createMissionDirective(seed) };
   }
   return fallbackMission(normalizedMode ?? 'LOCATE', seed, map);
 }
