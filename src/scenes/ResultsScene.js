@@ -5,6 +5,7 @@ import { createTerminalChrome } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
+import { createGeneratedMission } from '../game/missionGenerator.js';
 import { feedback } from '../audio/feedback.js';
 
 export default class ResultsScene extends Phaser.Scene {
@@ -67,7 +68,15 @@ export default class ResultsScene extends Phaser.Scene {
       color: success ? UI_TOKENS.text.positive : UI_TOKENS.text.negative,
     }).setOrigin(0, 0.5);
 
-    this.retry = createButton(this, 0, 0, 'RESTART MISSION', () => this.scene.start('MissionBriefing', { mission }), { width: 250, fontSize: 16, variant: 'primary' });
+    const nextAction = () => {
+      if (!success) {
+        this.scene.start('MissionBriefing', { mission });
+        return;
+      }
+      const nextMission = createGeneratedMission({ mode: mission.mode, map: mission.mapId });
+      this.scene.start('MissionBriefing', { mission: nextMission });
+    };
+    this.retry = createButton(this, 0, 0, success ? 'NEXT MISSION' : 'RETRY MISSION', nextAction, { width: 250, fontSize: 16, variant: 'primary' });
     this.menu = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), { width: 250, fontSize: 16, variant: 'secondary' });
     this.focusGroup = createFocusGroup(this, [this.retry, this.menu]);
     this.scale.on('resize', this.layout, this);
