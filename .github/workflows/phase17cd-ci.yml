@@ -1,0 +1,21 @@
+name: Phase 17C 17D branch validation
+
+on:
+  push:
+    branches: [phase-17c-17d-analyst-operations]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run build
