@@ -218,21 +218,25 @@ export function recordOperationOutcome(context = {}, status = 'failed') {
   if (status === 'complete') next.operations.completed += 1;
   else next.operations.failed += 1;
 
-  const newBest = score > next.operations.bestScore;
-  next.operations.bestScore = Math.max(next.operations.bestScore, score);
-  next.operations.bestDirectives = Math.max(next.operations.bestDirectives, directives);
-  if (cleanSweep) next.operations.cleanSweeps += 1;
+  const newBest = status === 'complete' && score > next.operations.bestScore;
+  if (status === 'complete') {
+    next.operations.bestScore = Math.max(next.operations.bestScore, score);
+    next.operations.bestDirectives = Math.max(next.operations.bestDirectives, directives);
+    if (cleanSweep) next.operations.cleanSweeps += 1;
+  }
 
   let newDailyBest = false;
   if (context.kind === 'daily' && context.dailyDate) {
     const daily = next.daily[context.dailyDate] ?? { attempts: 0, completions: 0, bestScore: 0, bestDirectives: 0, cleanSweeps: 0 };
-    if (status === 'complete') daily.completions += 1;
-    if (score > daily.bestScore) {
-      daily.bestScore = score;
-      newDailyBest = true;
+    if (status === 'complete') {
+      daily.completions += 1;
+      if (score > daily.bestScore) {
+        daily.bestScore = score;
+        newDailyBest = true;
+      }
+      daily.bestDirectives = Math.max(daily.bestDirectives, directives);
+      if (cleanSweep) daily.cleanSweeps += 1;
     }
-    daily.bestDirectives = Math.max(daily.bestDirectives, directives);
-    if (cleanSweep) daily.cleanSweeps += 1;
     next.daily[context.dailyDate] = daily;
   }
 
