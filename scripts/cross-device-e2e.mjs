@@ -898,14 +898,18 @@ async function exerciseAndroidTouchNavigation(page, context, label) {
 
     const movePair = async (nextFirst, nextSecond, step) => {
       const before = await read();
+      const previousFirst = first;
+      const previousSecond = second;
+      const firstChanged = nextFirst.x !== previousFirst.x || nextFirst.y !== previousFirst.y;
+      const secondChanged = nextSecond.x !== previousSecond.x || nextSecond.y !== previousSecond.y;
       first = nextFirst;
       second = nextSecond;
 
-      // Deliver each finger as a separate event with the other finger held at
-      // its previous coordinate. This reproduces Android's alternating event
-      // cadence rather than Playwright's unrealistically atomic two-finger move.
-      await touch('touchMove', [first, { ...second, x: before.__unused ?? second.x }]);
-      await touch('touchMove', [first, second]);
+      // Deliver each changed finger separately while the other contact stays
+      // at its previous coordinate. This is the real Android cadence that made
+      // the old event-by-event camera transform saw back and forth.
+      if (firstChanged) await touch('touchMove', [first, previousSecond]);
+      if (secondChanged) await touch('touchMove', [first, second]);
       const immediate = await read();
       if (immediate.pinchDirty) {
         const rawScroll = Math.hypot(immediate.scrollX - before.scrollX, immediate.scrollY - before.scrollY);
