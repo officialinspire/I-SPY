@@ -415,31 +415,37 @@ export default class ReconScene extends Phaser.Scene {
     this.paused = false;
     this.dragCamera = null;
     this.dragPointerId = null;
+    this.panGestureDirty = false;
     this.pinchGesture = null;
     this.controlPointerIds = new Set();
     this.controlReleasedPointerIds = new Set();
     this.tapPointer = null;
 
     // A press that lands on a HUD control belongs to that control, not to the
-    // map: Phaser emits the game-object events before the scene-level ones.
-    this.input.on('gameobjectdown', (pointer) => {
-      this.controlPointerIds.add(pointer.id);
-    });
-    this.input.on('gameobjectup', (pointer) => {
-      this.controlReleasedPointerIds.add(pointer.id);
-    });
+    // map, and it belongs to that one finger: Phaser emits the game-object
+    // events before the scene-level ones, and a single shared flag let one
+    // finger's press on a button swallow a different finger's press on the
+    // imagery — which is how a pinch collapsed into a pan on a real phone.
+    this.input.on('gameobjectdown', (pointer) => { this.controlPointerIds.add(pointer.id); });
+    this.input.on('gameobjectup', (pointer) => { this.controlReleasedPointerIds.add(pointer.id); });
 
     this.input.on('pointerdown', (pointer) => {
-      const onControl = this.controlPointerIds.has(pointer.id);
-      if (onControl || this.paused || this.missionEnded || this.isGestureBlockedPointer(pointer)) {
-        this.tapPointer = null;
+      if (this.paused || this.missionEnded || this.isGestureBlockedPointer(pointer)) {
+        if (this.tapPointer?.id === pointer.id) this.tapPointer = null;
         return;
       }
+
+      // A pinch already under way keeps the two contacts it captured. A third
+      // finger — which Android reports readily, from a palm or a stray thumb —
+      // is ignored rather than allowed to swap itself in for one of them.
+      if (this.pinchGesture) return;
 
       const active = this.mapPointersDown();
       if (active.length >= 2) {
         // Two fingers own the gesture exclusively. Any pending tap/pan is
         // cancelled before zoom begins, so a pinch cannot accidentally mark.
+        // A pair that straddles the CHANGE split is refused outright rather
+        // than dragging one pane's camera with the other pane's finger.
         this.beginPinch(active);
         return;
       }
@@ -449,6 +455,7 @@ export default class ReconScene extends Phaser.Scene {
       this.dragPointerId = pointer.id;
       this.dragCamera = context.camera;
       this.lastPointer = { x: pointer.x, y: pointer.y };
+      this.panGestureDirty = false;
       this.tapPointer = { id: pointer.id, x: pointer.x, y: pointer.y, travel: 0 };
     });
 
@@ -458,12 +465,11 @@ export default class ReconScene extends Phaser.Scene {
 
       const active = this.mapPointersDown();
       if (this.pinchGesture) {
-        this.updatePinch(active);
+        this.pinchGesture.dirty = true;
         return;
       }
       if (active.length >= 2) {
         this.beginPinch(active);
-        this.updatePinch(active);
         return;
       }
 
@@ -484,41 +490,60 @@ export default class ReconScene extends Phaser.Scene {
         this.lastPointer = { x: pointer.x, y: pointer.y };
         return;
       }
-
-      const camera = this.dragCamera ?? this.cameras.main;
-      this.panCameraByScreenDelta(
-        camera,
-        pointer.x - this.lastPointer.x,
-        pointer.y - this.lastPointer.y,
-      );
-      this.lastPointer = { x: pointer.x, y: pointer.y };
-      if (this.candidate) this.drawCandidateMarker();
+      // Past the tap window the press is a pan, but the transform waits for
+      // the frame: see update().
+      this.panGestureDirty = true;
     });
 
-    const releasePointer = (pointer) => {
+    // One release path for every way a contact can end. Android drops fingers
+    // through all three, and a release the scene never sees leaves a pan or a
+    // pinch owning the camera for the rest of the mission.
+    const releasePointer = (pointer, allowTap) => {
       const onControl = this.controlReleasedPointerIds.has(pointer.id)
         || this.controlPointerIds.has(pointer.id);
       this.controlReleasedPointerIds.delete(pointer.id);
       this.controlPointerIds.delete(pointer.id);
 
       if (this.pinchGesture) {
+        // A finger that was never part of this pinch cannot end it.
+        if (!this.pinchGesture.pointerIds.includes(pointer.id)) return;
         const remaining = this.mapPointersDown().filter((item) => item.id !== pointer.id);
+        // A quick pinch can move and release between two rendered frames.
+        // The release already marked this contact as up, so sample it here
+        // explicitly before the gesture state is thrown away.
+        if (this.pinchGesture.dirty) this.stepPinchGesture([pointer, ...remaining]);
         this.finishPinch(remaining);
         return;
       }
 
-      const tap = this.tapPointer
+      // Flush the final pan sample before deciding whether this was a tap.
+      if (this.panGestureDirty && pointer.id === this.dragPointerId) this.stepPanGesture(pointer);
+
+      const tap = allowTap
+        && this.tapPointer
         && pointer.id === this.tapPointer.id
         && this.tapPointer.travel <= this.dragThreshold(pointer);
       this.tapPointer = null;
       this.dragging = false;
       this.dragCamera = null;
       this.dragPointerId = null;
+      this.panGestureDirty = false;
       if (tap && !onControl) this.handleMapTap(pointer);
     };
-    this.input.on('pointerup', releasePointer);
-    this.input.on('pointerupoutside', releasePointer);
-    this.input.on('pointercancel', releasePointer);
+
+    // Phaser routes a cancelled touch through its ordinary up path with
+    // wasCanceled set; a cancelled contact must never be read as a mark.
+    this.input.on('pointerup', (pointer) => releasePointer(pointer, !pointer.wasCanceled));
+    this.input.on('pointerupoutside', (pointer) => releasePointer(pointer, false));
+    this.input.on('pointercancel', (pointer) => releasePointer(pointer, false));
+    this.input.on('gameout', () => this.cancelActiveMapGesture());
+
+    // Android/Chrome can also cancel a contact at the DOM layer without any
+    // matching scene release when the browser or the OS claims the gesture.
+    // Stale touch ownership must never survive into the next interaction.
+    this.nativeGestureCancel = () => this.cancelActiveMapGesture();
+    this.game.canvas?.addEventListener('touchcancel', this.nativeGestureCancel, { passive: true });
+    this.game.canvas?.addEventListener('pointercancel', this.nativeGestureCancel, { passive: true });
 
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
@@ -535,6 +560,85 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   /**
+   * Camera movement is sampled once per Phaser step, never per pointer event.
+   *
+   * Android delivers the two contacts of a pinch on separate pointer events.
+   * Transforming the camera from each event means the first event computes
+   * against a stale coordinate for the second finger and the second event
+   * corrects it the other way — an alternating sawtooth that reads as the map
+   * "jumping" on a real phone even while a synthetic test that moves both
+   * contacts in one event looks perfect. Marking the gesture dirty and
+   * applying one transform per rendered frame removes the sawtooth at source.
+   */
+  update() {
+    if (this.paused || this.missionEnded) return;
+    if (this.pinchGesture) {
+      if (this.pinchGesture.dirty) this.stepPinchGesture();
+      return;
+    }
+    if (this.panGestureDirty) this.stepPanGesture();
+  }
+
+  /** Drop every claim this scene has on the current touches. */
+  cancelActiveMapGesture() {
+    this.dragging = false;
+    this.dragCamera = null;
+    this.dragPointerId = null;
+    this.panGestureDirty = false;
+    this.pinchGesture = null;
+    this.tapPointer = null;
+    this.controlPointerIds?.clear();
+    this.controlReleasedPointerIds?.clear();
+  }
+
+  /**
+   * One-finger pan for the frame.
+   *
+   * `pointerOverride` lets a release flush its own final coordinate: by the
+   * time the release handler runs the contact is already marked up, so it can
+   * no longer be found among the live pointers.
+   */
+  stepPanGesture(pointerOverride = null) {
+    if (!this.dragging || this.pinchGesture || this.paused || this.missionEnded) {
+      this.panGestureDirty = false;
+      return false;
+    }
+    const pointer = pointerOverride
+      ?? this.input.manager.pointers.find((item) => item.id === this.dragPointerId);
+    if (!pointer || (!pointerOverride && !pointer.isDown) || !this.lastPointer) {
+      this.panGestureDirty = false;
+      return false;
+    }
+
+    let dx = pointer.x - this.lastPointer.x;
+    let dy = pointer.y - this.lastPointer.y;
+    const distance = Math.hypot(dx, dy);
+    if (!Number.isFinite(distance)) {
+      this.panGestureDirty = false;
+      return false;
+    }
+    // A malformed sample must not fling the imagery. The cap discards only the
+    // excess; genuine fast drags catch up over the following frames.
+    const maxStep = pointer.wasTouch ? GAME_CONFIG.recon.touchPanStepMax : GAME_CONFIG.recon.panStepMax;
+    if (distance > maxStep) {
+      const factor = maxStep / distance;
+      dx *= factor;
+      dy *= factor;
+    }
+
+    const camera = this.dragCamera ?? this.cameras.main;
+    const zoom = Math.max(0.05, camera.zoom);
+    camera.scrollX -= dx / zoom;
+    camera.scrollY -= dy / zoom;
+    this.clampCameraScroll(camera);
+    this.lastPointer = { x: pointer.x, y: pointer.y };
+    this.panGestureDirty = false;
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
+    if (this.candidate) this.drawCandidateMarker();
+    return true;
+  }
+
+  /**
    * How far a press may wander and still count as a tap rather than a pan.
    *
    * A mouse sits where it is put. A finger does not: its contact patch shifts
@@ -546,10 +650,20 @@ export default class ReconScene extends Phaser.Scene {
     return pointer?.wasTouch ? GAME_CONFIG.recon.touchDragThreshold : GAME_CONFIG.recon.dragThreshold;
   }
 
+  /** The top strip is chrome for every mode and never navigates the map. */
   isTopHudPoint(pointer) {
     return pointer.y < GAME_CONFIG.recon.hudHeight;
   }
 
+  /**
+   * Whether a finger is barred from driving the camera.
+   *
+   * Only two things bar it: the top HUD, and a press that actually landed on
+   * an interactive control. The COUNT and CHANGE bottom rails reserve up to a
+   * fifth of a small phone's screen, and rejecting that whole band meant a
+   * second finger landing in blank rail space was invisible to the gesture —
+   * the pinch it was supposed to start collapsed back into a one-finger pan.
+   */
   isGestureBlockedPointer(pointer) {
     return this.isTopHudPoint(pointer) || this.controlPointerIds.has(pointer.id);
   }
@@ -568,11 +682,15 @@ export default class ReconScene extends Phaser.Scene {
   beginPinch(pointers = this.mapPointersDown()) {
     if (pointers.length < 2 || this.paused || this.missionEnded) return false;
     const [first, second] = pointers.slice(0, 2);
+    // In CHANGE split view each pane is its own camera. A midpoint on the seam
+    // resolves to whichever pane it happens to land in, so one finger per pane
+    // used to drag a camera with a finger that was never over it. Both contacts
+    // must belong to the same imagery camera or there is no pinch at all.
     const firstContext = this.getPointerContext(first);
     const secondContext = this.getPointerContext(second);
     if (firstContext.camera !== secondContext.camera) return false;
-    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
     const camera = firstContext.camera;
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
     const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
 
     this.pinchGesture = {
@@ -580,32 +698,34 @@ export default class ReconScene extends Phaser.Scene {
       lastDistance: distance,
       lastMidpoint: midpoint,
       camera,
+      dirty: false,
     };
     this.tapPointer = null;
     this.dragging = false;
     this.dragCamera = null;
     this.dragPointerId = null;
+    this.panGestureDirty = false;
     return true;
   }
 
-  updatePinch(pointers = this.mapPointersDown()) {
-    if (this.paused || this.missionEnded) return false;
-    if (!this.pinchGesture) {
-      if (!this.beginPinch(pointers)) return false;
-    }
+  stepPinchGesture(pointers = this.mapPointersDown()) {
+    if (!this.pinchGesture || this.paused || this.missionEnded) return false;
+    this.pinchGesture.dirty = false;
 
+    // Only the two contacts captured at the start drive this gesture. A third
+    // finger, or Android reordering its pointer list, cannot take one over.
     const pair = this.pinchPointers(pointers);
     if (pair.length < 2) return false;
     const [first, second] = pair;
     const camera = this.pinchGesture.camera;
+    if (!camera) return false;
     const rawMidpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
     const rawDistance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
     const previousMidpoint = this.pinchGesture.lastMidpoint;
     const previousDistance = Math.max(1, this.pinchGesture.lastDistance);
 
-    // Android can report the two fingers on alternating pointer events. Apply
-    // only a bounded frame-to-frame transform so one noisy event cannot throw
-    // the camera across the map or jump several zoom levels.
+    // Apply only a bounded frame-to-frame transform, so one noisy sample
+    // cannot throw the camera across the map or jump several zoom levels.
     const distanceDelta = rawDistance - previousDistance;
     let scaleRatio = 1;
     if (Math.abs(distanceDelta) >= GAME_CONFIG.recon.pinchDistanceDeadZone) {
@@ -642,15 +762,17 @@ export default class ReconScene extends Phaser.Scene {
     const after = camera.getWorldPoint(appliedMidpoint.x, appliedMidpoint.y);
     camera.scrollX += anchorWorld.x - after.x;
     camera.scrollY += anchorWorld.y - after.y;
+    // Settle inside the map in the same operation. Phaser would otherwise
+    // correct the camera at render time and the next frame would compute its
+    // delta from a position the player never actually saw.
+    this.clampCameraScroll(camera);
+
+    // Raw coordinates become the next frame's baseline. Excess motion the cap
+    // discarded stays discarded instead of springing back a frame later.
+    this.pinchGesture.lastDistance = rawDistance;
+    this.pinchGesture.lastMidpoint = rawMidpoint;
+
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
-
-    // Keep our virtual gesture state aligned with the transform we actually
-    // applied, not with a possibly-spurious raw Android sample. Large real
-    // movements catch up over subsequent events smoothly instead of snapping.
-    if (scaleRatio === 1) this.pinchGesture.lastDistance = rawDistance;
-    else this.pinchGesture.lastDistance = previousDistance * scaleRatio;
-    this.pinchGesture.lastMidpoint = appliedMidpoint;
-
     if (this.candidate) this.drawCandidateMarker();
     return true;
   }
@@ -661,9 +783,11 @@ export default class ReconScene extends Phaser.Scene {
     this.dragging = false;
     this.dragCamera = null;
     this.dragPointerId = null;
+    this.panGestureDirty = false;
 
-    // Continuing with one finger after lifting the other should feel like one
-    // continuous gesture, not a camera jump.
+    // Continuing with one finger after lifting the other resumes panning from
+    // where that finger is now, not from either pinch coordinate: rebasing is
+    // what stops the map leaping the width of the old finger separation.
     if (remaining.length === 1 && !this.paused && !this.missionEnded) {
       const pointer = remaining[0];
       const context = this.getPointerContext(pointer);
@@ -1091,6 +1215,9 @@ export default class ReconScene extends Phaser.Scene {
     target.setZoom(sourceCamera.zoom);
     target.scrollX = sourceCamera.scrollX;
     target.scrollY = sourceCamera.scrollY;
+    // The panes can differ in width by a pixel, so the follower gets its own
+    // bounds check rather than inheriting a scroll its viewport cannot hold.
+    this.clampCameraScroll(target);
   }
 
   startMissionTimer() {
@@ -1172,21 +1299,6 @@ export default class ReconScene extends Phaser.Scene {
    * the imagery covering the viewport instead; it never restricts a window the
    * map already covers.
    */
-  panCameraByScreenDelta(camera, dx, dy) {
-    const distance = Math.hypot(dx, dy);
-    if (!Number.isFinite(distance) || distance === 0) return;
-    let appliedX = dx;
-    let appliedY = dy;
-    if (distance > GAME_CONFIG.recon.panStepMax) {
-      const factor = GAME_CONFIG.recon.panStepMax / distance;
-      appliedX *= factor;
-      appliedY *= factor;
-    }
-    camera.scrollX -= appliedX / Math.max(camera.zoom, 0.001);
-    camera.scrollY -= appliedY / Math.max(camera.zoom, 0.001);
-    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
-  }
-
   minZoomForViewport(width = this.scale.gameSize.width, height = this.scale.gameSize.height) {
     const cover = Math.max(width / this.map.width, height / this.map.height);
     return Phaser.Math.Clamp(Math.max(GAME_CONFIG.recon.minZoom, cover),
@@ -1200,6 +1312,42 @@ export default class ReconScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * The scroll window this camera's map bounds actually allow.
+   *
+   * Phaser owns the map edges — every imagery camera is given `setBounds` over
+   * the map — and it enforces them once per rendered frame. Asking Phaser's own
+   * clamp for its limits, rather than recomputing them here, means the gesture
+   * code and the renderer can never disagree about where the edge is. A second,
+   * hand-rolled idea of the edge is what made the camera stick against it.
+   */
+  cameraScrollLimits(camera = this.cameras.main) {
+    if (!camera?.useBounds) {
+      return { minX: -Infinity, maxX: Infinity, minY: -Infinity, maxY: Infinity };
+    }
+    return {
+      minX: camera.clampX(Number.NEGATIVE_INFINITY),
+      maxX: camera.clampX(Number.POSITIVE_INFINITY),
+      minY: camera.clampY(Number.NEGATIVE_INFINITY),
+      maxY: camera.clampY(Number.POSITIVE_INFINITY),
+    };
+  }
+
+  /**
+   * Settle a camera inside its bounds now instead of at render time.
+   *
+   * This is exactly the correction Phaser applies in `preRender`, so running
+   * it early is idempotent — but it means the next gesture frame measures its
+   * delta from the position the player is actually looking at, rather than
+   * from an out-of-bounds value that is about to be silently pulled back.
+   */
+  clampCameraScroll(camera = this.cameras.main) {
+    if (!camera?.useBounds) return camera;
+    camera.scrollX = camera.clampX(camera.scrollX);
+    camera.scrollY = camera.clampY(camera.scrollY);
+    return camera;
+  }
+
   zoomAt(screenPoint, delta) {
     const context = this.getPointerContext(screenPoint);
     const camera = context.camera;
@@ -1208,6 +1356,7 @@ export default class ReconScene extends Phaser.Scene {
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
+    this.clampCameraScroll(camera);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
     if (this.candidate) this.drawCandidateMarker();
   }
@@ -1228,8 +1377,11 @@ export default class ReconScene extends Phaser.Scene {
     } else if (this.isChangeMode && this.mission.focus) {
       view = this.mission.focus;
     }
+    // In split view the imagery camera is half the width of the game, so the
+    // zoom floor has to come from the camera, not from the window.
     this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, this.minZoomForCamera(this.cameras.main), GAME_CONFIG.recon.maxZoom));
     this.cameras.main.centerOn(view.x ?? this.map.width / 2, view.y ?? this.map.height / 2);
+    this.clampCameraScroll(this.cameras.main);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (showMessage) this.flashStatus('VIEW RECENTERED');
   }
@@ -1239,13 +1391,7 @@ export default class ReconScene extends Phaser.Scene {
   togglePause() {
     if (this.missionEnded) return;
     this.paused = !this.paused;
-    this.dragging = false;
-    this.dragPointerId = null;
-    this.dragCamera = null;
-    this.tapPointer = null;
-    this.pinchGesture = null;
-    this.controlPointerIds?.clear();
-    this.controlReleasedPointerIds?.clear();
+    this.cancelActiveMapGesture();
     if (this.paused) this.pauseStartedAt = this.time.now;
     else if (this.pauseStartedAt) {
       this.totalPausedMs = (this.totalPausedMs ?? 0) + (this.time.now - this.pauseStartedAt);
@@ -1310,8 +1456,13 @@ export default class ReconScene extends Phaser.Scene {
       this.cameras.main.setViewport(0, 0, width, height);
     }
 
+    // The zoom floor is a property of the viewport the imagery is drawn into,
+    // so the viewport has to be applied first. Computing it from the old
+    // viewport is how entering or leaving split view left black gutters
+    // beside the photograph.
     const floor = this.minZoomForCamera(this.cameras.main);
     if (this.cameras.main.zoom < floor) this.cameras.main.setZoom(floor);
+    this.clampCameraScroll(this.cameras.main);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (this.candidate) this.drawCandidateMarker();
 
@@ -1469,6 +1620,12 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   cleanup() {
+    if (this.nativeGestureCancel) {
+      this.game.canvas?.removeEventListener('touchcancel', this.nativeGestureCancel);
+      this.game.canvas?.removeEventListener('pointercancel', this.nativeGestureCancel);
+      this.nativeGestureCancel = null;
+    }
+    this.cancelActiveMapGesture();
     this.timerEvent?.remove(false);
     this.statusTimer?.remove(false);
     this.weatherOverlay?.destroy();
@@ -1481,8 +1638,6 @@ export default class ReconScene extends Phaser.Scene {
     this.splitView = false;
     this.compareCamera = null;
     this.scale.off('resize', this.onResize, this);
-    this.controlPointerIds?.clear();
-    this.controlReleasedPointerIds?.clear();
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
   }
