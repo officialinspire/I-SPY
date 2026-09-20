@@ -1,0 +1,17 @@
+name: Phase 18E release candidate audit
+on:
+  push:
+    branches: [phase-18e-environment-rc-audit]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run build
