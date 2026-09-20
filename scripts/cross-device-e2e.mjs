@@ -74,6 +74,20 @@ const ALL_PROFILES = [
     deviceScaleFactor: 2.625,
     mode: 'LOCATE',
     map: 'dustline-sector',
+    androidGestureStress: true,
+  },
+  {
+    name: 'android-change-chromium',
+    engine: chromium,
+    launchOptions: { args: CHROMIUM_ARGS },
+    viewport: { width: 412, height: 915 },
+    rotateTo: { width: 915, height: 412 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2.625,
+    mode: 'CHANGE',
+    map: 'greywall-district',
+    androidGestureStress: true,
   },
   {
     // The narrow end of the Android range, still common, and the width at
@@ -88,6 +102,7 @@ const ALL_PROFILES = [
     deviceScaleFactor: 3,
     mode: 'COUNT',
     map: 'riverworks-sector',
+    androidGestureStress: true,
   },
 ];
 
