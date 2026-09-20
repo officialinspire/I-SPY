@@ -303,6 +303,13 @@ check(
   'Android touch/pointer cancellation clears gesture ownership and removes its DOM listeners on shutdown',
 );
 check(
+  recon.includes('this.stepPanGesture(pointer)')
+    && recon.includes('this.stepPinchGesture([pointer, ...remaining])')
+    && recon.includes('stepPanGesture(pointerOverride = null)')
+    && recon.includes('stepPinchGesture(pointers = this.mapPointersDown())'),
+  'fast pan and pinch releases flush their final coordinates even after the pointer is no longer down',
+);
+check(
   !/pointers\.length !== 2 \|\| this\.paused \|\| this\.marking/.test(recon)
     && recon.includes('this.tapPointer = null;')
     && recon.includes('this.dragPointerId = null;'),
