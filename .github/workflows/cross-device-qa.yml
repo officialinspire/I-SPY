@@ -1,7 +1,15 @@
 name: Cross-device QA hardening
 on:
-  push:
-    branches: [qa-cross-device-hardening-final]
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'index.html'
+      - 'vite.config.js'
 permissions:
   contents: read
 jobs:
