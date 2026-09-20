@@ -46,29 +46,66 @@ const config = {
 
 const game = new Phaser.Game(config);
 
+const qaMode = new URLSearchParams(window.location.search).get('qa') === '1';
+if (qaMode) {
+  Object.defineProperty(window, '__ISPY_QA__', {
+    configurable: true,
+    value: {
+      game,
+      activeScenes: () => game.scene.getScenes(true).map((scene) => scene.scene.key),
+      buttonCenter: (sceneKey, property) => {
+        const scene = game.scene.getScene(sceneKey);
+        const button = scene?.[property];
+        return button?.background ? { x: button.background.x, y: button.background.y } : null;
+      },
+    },
+  });
+}
+
 /**
- * Phaser.Scale.RESIZE follows the host in normal desktop resizes, but mobile
- * browsers can update the visual/layout viewport during rotation without the
- * canvas receiving the final host dimensions. Observe the safe-area-aware
- * #app box directly and make that box authoritative.
+ * Keep RESIZE-mode Phaser dimensions locked to the safe-area-aware host.
+ * Mobile browsers can settle layout/visual viewport sizes over multiple
+ * frames during rotation, so synchronize immediately and again after the
+ * browser's orientation layout has settled.
  */
 const gameHost = document.getElementById('app');
 let viewportSyncFrame = null;
+let viewportSyncTimers = [];
 
 function syncGameViewport() {
   viewportSyncFrame = null;
   if (!gameHost || !game.scale) return;
+
   const rect = gameHost.getBoundingClientRect();
   const width = Math.max(1, Math.round(rect.width));
   const height = Math.max(1, Math.round(rect.height));
-  const current = game.scale.gameSize;
-  if (Math.round(current?.width ?? 0) === width && Math.round(current?.height ?? 0) === height) return;
-  game.scale.resize(width, height);
+  const currentWidth = Math.round(game.scale.gameSize?.width ?? 0);
+  const currentHeight = Math.round(game.scale.gameSize?.height ?? 0);
+
+  if (currentWidth !== width || currentHeight !== height) {
+    game.scale.getParentBounds();
+    game.scale.setGameSize(width, height);
+    game.scale.refresh(currentWidth, currentHeight);
+  }
+
+  // RESIZE should own these values, but explicitly clear stale auto-centering
+  // margins after a mobile orientation transition. This keeps the display
+  // canvas pinned to the host even if a browser reports intermediate bounds.
+  const canvas = game.canvas;
+  if (canvas) {
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    canvas.style.marginLeft = '0px';
+    canvas.style.marginTop = '0px';
+  }
 }
 
 function queueViewportSync() {
-  if (viewportSyncFrame !== null) return;
-  viewportSyncFrame = requestAnimationFrame(syncGameViewport);
+  if (viewportSyncFrame === null) {
+    viewportSyncFrame = requestAnimationFrame(syncGameViewport);
+  }
+  viewportSyncTimers.forEach((timer) => clearTimeout(timer));
+  viewportSyncTimers = [50, 150, 300].map((delay) => setTimeout(syncGameViewport, delay));
 }
 
 if (typeof ResizeObserver !== 'undefined' && gameHost) {
