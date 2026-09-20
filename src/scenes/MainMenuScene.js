@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { SPRITE_SHEETS } from '../assets/spriteManifest.js';
 import { createLocateMission } from '../game/locateMission.js';
@@ -92,6 +93,51 @@ const TIERS = [
   },
 ];
 
+/**
+ * Floors for a compressed tier: the point past which a control stops being
+ * legible or tappable, whatever the screen asks for.
+ */
+const COMPRESSION_FLOORS = Object.freeze({
+  titleFont: 16, subtitleFont: 8, statusFont: 7, sectionFont: 7, readoutFont: 7,
+  primaryHeight: 34, primaryFont: 11, sectorHeight: 22, sectorFont: 8,
+  cardHeight: 30, cardFont: 10, descriptionFont: 7,
+  systemHeight: 30, systemFont: 8, iconSize: 12,
+  sectionGap: 4, labelGap: 4, headerGap: 4,
+});
+
+/**
+ * The tier table's smallest entry, scaled to fit a shorter console.
+ *
+ * The table stops at the smallest composition that still reads well. A screen
+ * shorter than that — a 320x568 phone, a short landscape window — composed
+ * past the bottom edge, which pushed SYSTEM controls off the display where
+ * nothing could reach them: SETTINGS simply was not there. Compressing keeps
+ * every control on screen, and the floors keep the result usable rather than
+ * letting a very small screen shrink the console into nothing.
+ */
+function compressTier(tier, factor) {
+  if (!(factor < 1)) return tier;
+  const next = { ...tier };
+  Object.entries(COMPRESSION_FLOORS).forEach(([key, floor]) => {
+    if (typeof tier[key] !== 'number') return;
+    next[key] = Math.max(floor, Math.round(tier[key] * factor));
+  });
+  return next;
+}
+
+/**
+ * Half of a layout gap, less a pixel, for a stacked control's hit padding.
+ *
+ * A control shorter than the 44px minimum touch target grows its hit area to
+ * reach it, and two grown hit areas that meet are worse than two small ones:
+ * where they overlap, Phaser gives the press to whichever control is drawn
+ * last, so a press on the bottom edge of a row runs the row beneath it. Each
+ * stacked control may take only the space its own layout left free.
+ */
+function hitGap(gap) {
+  return Math.max(0, Math.floor((gap - 1) / 2));
+}
+
 /** Gap between the tasking card and the sector row it is tied to. */
 function sectorGap(tier) {
   return Math.round(tier.sectionGap * 0.4);
@@ -103,51 +149,33 @@ function primaryBlockHeight(tier) {
 }
 
 const SYSTEM_GAP = 14;
-/** The longest SYSTEM label decides how many will fit across a row. */
-const SYSTEM_LABEL_CHARS = 'IDENTIFICATION GUIDE'.length;
+/** Side padding a SYSTEM label needs inside its own control. */
+const SYSTEM_LABEL_PADDING = 20;
+/** Fallback label ratio if the font has not been measured yet. */
+const SYSTEM_LABEL_RATIO = 'IDENTIFICATION GUIDE'.length * 0.6;
 
 /**
- * SYSTEM holds four controls and its labels are long, so the column count is
+ * SYSTEM holds seven controls and its labels are long, so the column count is
  * the widest arrangement whose cells can still hold the longest label at this
  * tier's font — four across on a desktop, two by two on a tablet, one per row
  * on a phone. Measuring the label rather than the viewport is what keeps a
- * short landscape window from folding to two tall rows it has no height for.
+ * short landscape window from folding to rows it has no height for.
  *
- * `fold` is the last resort, set only when no tier fits the screen at all: the
- * block goes two across with smaller labels rather than running off the bottom.
+ * `ratio` is the label's width per point of font size, measured from the font
+ * the console actually renders. A nominal character advance under-counted how
+ * many controls fit, which cost a short screen a whole extra row of height.
  */
-function systemColumns(tier, innerWidth, count, fold = false) {
-  // Courier advances at roughly 0.6em, plus the button's own padding.
-  const needed = SYSTEM_LABEL_CHARS * tier.systemFont * 0.6 + 28;
-  for (const columns of [4, 2]) {
+function systemColumns(tier, innerWidth, count, ratio = SYSTEM_LABEL_RATIO) {
+  const needed = ratio * tier.systemFont + SYSTEM_LABEL_PADDING;
+  for (const columns of [4, 3, 2, 1]) {
     if (columns > count) continue;
     if ((innerWidth - SYSTEM_GAP * (columns - 1)) / columns >= needed) return columns;
   }
-  // Nothing fits the height even at the smallest tier: fold to two columns and
-  // let the labels shrink. A phone short enough to reach here (a 320px screen,
-  // or a taller one once the browser chrome is subtracted) used to push ANALYST
-  // RECORD and SETTINGS off the bottom of the console entirely, where nothing
-  // scrolls and no press can reach them.
-  if (fold && count > 2) return 2;
   return 1;
 }
 
-/**
- * Half of a layout gap, less a pixel, for a stacked control's hit padding.
- * Two padded hit areas then always leave a seam instead of meeting.
- */
-function hitGap(gap) {
-  return Math.max(0, Math.floor((gap - 1) / 2));
-}
-
-/** Label size that fits a SYSTEM cell, never smaller than the legible floor. */
-function systemFont(tier, cellWidth) {
-  const fitted = Math.floor((cellWidth - 28) / (SYSTEM_LABEL_CHARS * 0.6));
-  return Phaser.Math.Clamp(fitted, 8, tier.systemFont);
-}
-
-function systemBlockHeight(tier, innerWidth, count, fold = false) {
-  const rows = Math.ceil(count / systemColumns(tier, innerWidth, count, fold));
+function systemBlockHeight(tier, innerWidth, count, ratio) {
+  const rows = Math.ceil(count / systemColumns(tier, innerWidth, count, ratio));
   return rows * tier.systemHeight + (rows - 1) * sectorGap(tier);
 }
 
@@ -396,6 +424,7 @@ export default class MainMenuScene extends Phaser.Scene {
       this.operationButton, this.dailyButton, this.recordButton, this.settingsButton,
     ];
     this.buttons = [this.randomCard, this.sectorButton, ...this.modeCards, ...this.systemButtons];
+    this.systemLabelRatio = this.measureSystemLabelRatio();
     this.refreshTrainingLabel();
     this.refreshDailyLabel();
   }
@@ -494,11 +523,11 @@ export default class MainMenuScene extends Phaser.Scene {
     }).setOrigin(1, 0.5).setDepth(70).setVisible(false);
 
     this.noticeBackdrop.on('pointerdown', () => this.hideNotice());
-    this.input.keyboard?.on('keydown-ESC', () => {
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('menu-esc', () => {
       if (this.orientationOpen) this.dismissOrientation();
       else if (this.noticeOpen) this.hideNotice();
       else if (this.settingsOpen) this.closeSettings();
-    });
+    }));
   }
 
   showNotice() {
@@ -832,15 +861,15 @@ export default class MainMenuScene extends Phaser.Scene {
   }
 
   /** Height of the whole composition at a tier, used to pick and centre it. */
-  composedHeight(tier, stackCards, framePad, innerWidth, fold = false) {
+  composedHeight(tier, stackCards, framePad, innerWidth) {
     const headerHeight = tier.titleFont * 1.05 + (tier.showSubtitle ? tier.subtitleFont + 12 : 0);
-    const bodyHeight = this.measureTier(tier, stackCards, innerWidth, fold) + framePad * 2;
+    const bodyHeight = this.measureTier(tier, stackCards, innerWidth) + framePad * 2;
     const readoutHeight = tier.showReadout ? tier.readoutFont + 18 : 0;
     return { headerHeight, bodyHeight, readoutHeight, total: headerHeight + tier.headerGap + bodyHeight + readoutHeight };
   }
 
   /** Height the console body needs at a given tier, used to pick that tier. */
-  measureTier(tier, stackCards, innerWidth, fold = false) {
+  measureTier(tier, stackCards, innerWidth) {
     const archiveHeight = stackCards
       ? tier.cardHeight * 3 + tier.sectionGap * 0.4 * 2
       : tier.cardHeight;
@@ -848,7 +877,30 @@ export default class MainMenuScene extends Phaser.Scene {
     return tier.statusFont + tier.labelGap + 6
       + sectionBlock(primaryBlockHeight(tier)) + tier.sectionGap
       + sectionBlock(archiveHeight) + tier.sectionGap
-      + sectionBlock(systemBlockHeight(tier, innerWidth, this.systemButtons.length, fold));
+      + sectionBlock(systemBlockHeight(tier, innerWidth, this.systemButtons.length, this.systemLabelRatio));
+  }
+
+  /**
+   * Width the longest SYSTEM label needs per point of font size.
+   *
+   * Measured from the rendered font rather than assumed from a nominal
+   * character advance, because the column count this feeds decides how many
+   * rows SYSTEM occupies, and that is the difference between a short screen
+   * fitting its console and running past the bottom of the display.
+   */
+  measureSystemLabelRatio() {
+    const longest = this.systemButtons.reduce(
+      (winner, button) => (button.text.text.length > winner.length ? button.text.text : winner),
+      '',
+    );
+    const probe = this.add.text(0, 0, longest, {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: '100px',
+      letterSpacing: UI_TOKENS.metrics.labelSpacing,
+    }).setVisible(false);
+    const ratio = probe.width / 100;
+    probe.destroy();
+    return Number.isFinite(ratio) && ratio > 0 ? ratio : SYSTEM_LABEL_RATIO;
   }
 
   layout(gameSize) {
@@ -862,7 +914,11 @@ export default class MainMenuScene extends Phaser.Scene {
     // Narrow consoles stack; so do tall portrait screens, where a single
     // column of full-width cards reads better than a squeezed three-up row.
     const portrait = height / Math.max(1, width) > 1.25;
-    const stackCards = contentWidth < 660 || (portrait && contentWidth < 820);
+    // A short console has width to spend and no height to waste, so it keeps
+    // the three tasking cards on one row rather than stacking them into three.
+    const shortConsole = height < 470;
+    const stackCards = !shortConsole
+      && (contentWidth < 660 || (portrait && contentWidth < 820));
     const framePadX = width < 520 ? 12 : 18;
     const innerLeft = contentLeft + framePadX;
     const innerRight = contentRight - framePadX;
@@ -877,15 +933,18 @@ export default class MainMenuScene extends Phaser.Scene {
     // Pick the richest tier that fits, then centre the composition in the
     // space that is left so tall screens do not hang everything off the top.
     const available = height - topSafe - bottomSafe - brandingSlot;
-    const fitsIn = (candidate, folded) =>
-      this.composedHeight(candidate, stackCards, framePadX, innerWidth, folded).total <= available;
-    let fold = false;
-    let tier = TIERS.find((candidate) => fitsIn(candidate, false));
-    if (!tier) {
-      fold = true;
-      tier = TIERS.find((candidate) => fitsIn(candidate, true)) ?? TIERS[TIERS.length - 1];
+    let tier = TIERS.find((candidate) => this.composedHeight(candidate, stackCards, framePadX, innerWidth).total <= available)
+      ?? TIERS[TIERS.length - 1];
+    let composed = this.composedHeight(tier, stackCards, framePadX, innerWidth);
+    // Not even the smallest tier fits: compress until it does. Each pass
+    // re-measures, because a smaller SYSTEM label can also change how many
+    // controls fit across a row, which changes the height again.
+    for (let pass = 0; pass < 4 && composed.total > available; pass += 1) {
+      const next = compressTier(tier, available / composed.total);
+      if (next === tier) break;
+      tier = next;
+      composed = this.composedHeight(tier, stackCards, framePadX, innerWidth);
     }
-    const composed = this.composedHeight(tier, stackCards, framePadX, innerWidth, fold);
     const startY = topSafe + Math.max(0, (available - composed.total) * 0.42);
 
     this.title.setFontSize(tier.titleFont).setPosition(width / 2, startY + tier.titleFont * 0.55);
@@ -917,10 +976,6 @@ export default class MainMenuScene extends Phaser.Scene {
 
     const primary = placeSection(this.primarySectionLabel, primaryBlockHeight(tier));
     const primaryWidth = stackCards ? innerWidth : Math.min(innerWidth, Math.max(420, innerWidth * 0.62));
-    // Every stacked control caps its hit padding at half of the gap below it.
-    // Reaching the 44px minimum matters, but not at the cost of overlapping the
-    // next control: where two hit areas meet, the one drawn last wins, so a
-    // press on the bottom edge of a row used to run the row beneath it.
     const stackPad = hitGap(sectorGap(tier));
     this.randomCard
       .resize({
@@ -981,12 +1036,10 @@ export default class MainMenuScene extends Phaser.Scene {
           .setPosition(innerLeft + cardWidth / 2 + index * (cardWidth + columnGap), archive.bodyTop + tier.cardHeight / 2);
       });
     }
-    const system = placeSection(this.systemSectionLabel,
-      systemBlockHeight(tier, innerWidth, this.systemButtons.length, fold));
-    const systemCols = systemColumns(tier, innerWidth, this.systemButtons.length, fold);
+    const system = placeSection(this.systemSectionLabel, systemBlockHeight(tier, innerWidth, this.systemButtons.length, this.systemLabelRatio));
+    const systemCols = systemColumns(tier, innerWidth, this.systemButtons.length, this.systemLabelRatio);
     const systemWidth = (innerWidth - SYSTEM_GAP * (systemCols - 1)) / systemCols;
     const systemRowGap = sectorGap(tier);
-    const systemLabelFont = systemFont(tier, systemWidth);
     this.systemButtons.forEach((button, index) => {
       const column = index % systemCols;
       const row = Math.floor(index / systemCols);
@@ -994,7 +1047,7 @@ export default class MainMenuScene extends Phaser.Scene {
         .resize({
           width: systemWidth,
           height: tier.systemHeight,
-          fontSize: systemLabelFont,
+          fontSize: tier.systemFont,
           hitPaddingX: hitGap(SYSTEM_GAP),
           hitPaddingY: hitGap(systemRowGap),
         })

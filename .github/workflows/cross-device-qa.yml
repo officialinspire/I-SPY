@@ -1,26 +1,33 @@
-name: Cross-device QA hardening
+name: Cross-device QA
+
+# The browser suite plays a real mission to its debrief on desktop, tablet,
+# iPhone and Android profiles, so it guards the things the deterministic
+# suites cannot see: layout, hit areas, input, and scene lifecycle under
+# actual rendering. It runs on every pull request and on main, because a
+# regression here reaches players through GitHub Pages.
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'scripts/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'index.html'
-      - 'vite.config.js'
+  push:
+    branches: [main]
 permissions:
   contents: read
+
+concurrency:
+  group: cross-device-qa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install app dependencies
         run: npm ci
       - name: Run deterministic and source QA
@@ -40,5 +47,9 @@ jobs:
           done
           cat /tmp/ispy-preview.log
           exit 1
-      - name: Cross-device browser smoke test
-        run: node scripts/cross-device-e2e.mjs
+      # Under a virtual display. Headless WebKit on this runner has been seen
+      # rendering twenty-two animation frames in four minutes, which starves
+      # the game of the steps every scene transition and input is processed
+      # in, and makes a working build look like a broken one.
+      - name: Cross-device browser QA
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" node scripts/cross-device-e2e.mjs

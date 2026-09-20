@@ -1,4 +1,5 @@
 import { feedback } from '../audio/feedback.js';
+import { oncePerKeyEvent } from './keyboardEvents.js';
 
 const NEXT_KEYS = new Set(['ArrowDown', 'ArrowRight']);
 const PREVIOUS_KEYS = new Set(['ArrowUp', 'ArrowLeft']);
@@ -82,11 +83,14 @@ export function createFocusGroup(scene, buttons = [], options = {}) {
 
   const onPointerDown = () => clearFocus();
 
-  scene.input.keyboard?.on('keydown', onKeyDown);
+  // Phaser can deliver one press to this handler several times, which used
+  // to skip focus past a control or activate one twice.
+  const onKeyDownOnce = oncePerKeyEvent(`focus-${options.id ?? scene.scene.key}`, onKeyDown);
+  scene.input.keyboard?.on('keydown', onKeyDownOnce);
   scene.input.on('pointerdown', onPointerDown);
 
   const detach = () => {
-    scene.input.keyboard?.off('keydown', onKeyDown);
+    scene.input.keyboard?.off('keydown', onKeyDownOnce);
     scene.input.off('pointerdown', onPointerDown);
   };
 
