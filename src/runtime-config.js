@@ -14,9 +14,9 @@ export const GAME_CONFIG=Object.freeze({
   rendering:{maxDevicePixelRatio:2,spriteRasterScale:2},
   sprites:{frameSize:64,authoredPalette:['#0b0b0b','#333333','#bdbdbd','#f6f6ee']},
   recon:{defaultMapId:'woodland-corridor-7',minZoom:0.45,maxZoom:2.4,zoomStep:0.12,dragThreshold:6,hudHeight:78,defaultZoom:0.75,cautionSeconds:30,criticalSeconds:15},
-  locate:{timeLimitSeconds:240,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:5,perfectBonus:500}},
-  count:{timeLimitSeconds:240,maxAnswer:99,scoring:{correctAnswer:1000,incorrectSubmissionPenalty:300,timeBonusPerSecond:5,perfectBonus:500}},
-  change:{timeLimitSeconds:240,splitViewMinWidth:980,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:5,perfectBonus:500}},
+  locate:{timeLimitSeconds:240,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:2,perfectBonus:500}},
+  count:{timeLimitSeconds:240,maxAnswer:99,scoring:{correctAnswer:1000,incorrectSubmissionPenalty:300,timeBonusPerSecond:2,perfectBonus:500}},
+  change:{timeLimitSeconds:240,splitViewMinWidth:980,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:2,perfectBonus:500}},
   generator:{
     maxAttempts:12,
     timeLimits:[180,210,240,270,300],
