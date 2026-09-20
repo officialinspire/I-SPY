@@ -290,6 +290,29 @@ check(
   'pinch remains available while marking and cancels tap/pan interpretation',
 );
 check(
+  recon.includes('isGestureBlockedPointer(pointer)')
+    && recon.includes('this.controlPointerIds.has(pointer.id)')
+    && !/mapPointersDown\(\) \{[\s\S]*?!this\.isHudPoint\(pointer\)/.test(recon),
+  'map gestures block actual control pointers instead of the entire mode-specific bottom rail',
+);
+check(
+  recon.includes("this.input.on('pointerupoutside', releasePointer)")
+    && recon.includes("this.input.on('pointercancel', releasePointer)")
+    && recon.includes('this.controlReleasedPointerIds.has(pointer.id)'),
+  'Android pointer cancellation and release ownership cannot strand a pan or pinch',
+);
+check(
+  recon.includes('panCameraByScreenDelta(camera, dx, dy)')
+    && recon.includes('GAME_CONFIG.recon.panStepMax')
+    && recon.includes('clampCameraScroll(camera)'),
+  'one-finger pan is step-bounded and clamped to map bounds',
+);
+check(
+  recon.includes('const floor = this.minZoomForCamera(this.cameras.main)')
+    && recon.indexOf('this.cameras.main.setViewport(0, 0, width, height)') < recon.indexOf('const floor = this.minZoomForCamera(this.cameras.main)'),
+  'resize applies the actual imagery viewport before enforcing its zoom floor',
+);
+check(
   recon.includes('this.completedTargetIds = []')
     && recon.includes('CONTACT CONFIRMED //')
     && recon.includes('this.locateTargets.length > 1'),
