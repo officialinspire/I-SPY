@@ -35,7 +35,6 @@ const PROFILES = [
     deviceScaleFactor: 2,
     mode: 'COUNT',
     map: 'border-farms',
-    menuTap: { x: 340, y: 293 },
   },
   {
     name: 'iphone-webkit',
@@ -47,7 +46,6 @@ const PROFILES = [
     deviceScaleFactor: 3,
     mode: 'CHANGE',
     map: 'frostline-relay',
-    menuTap: { x: 197, y: 196 },
   },
   {
     name: 'android-chromium',
@@ -60,7 +58,6 @@ const PROFILES = [
     deviceScaleFactor: 2.625,
     mode: 'LOCATE',
     map: 'dustline-sector',
-    menuTap: { x: 206, y: 273 },
   },
 ];
 
@@ -181,6 +178,7 @@ async function runProfile(profile) {
   url.searchParams.set('seed', `QA-CROSS-DEVICE-${profile.name}`);
   url.searchParams.set('mode', profile.mode);
   url.searchParams.set('map', profile.map);
+  url.searchParams.set('qa', '1');
 
   try {
     const response = await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 20_000 });
@@ -221,31 +219,43 @@ async function runProfile(profile) {
         throw new Error(`intro/menu startup did not settle // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
       });
 
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().includes('MainMenu'), null, { timeout: 5_000 });
+    await page.waitForTimeout(120);
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
     const menuHash = await screenHash(page);
 
-    // Desktop smoke-tests the keyboard focus path. Touch profiles tap the
-    // responsive RANDOM MISSION card directly, exercising Phaser pointer/touch
-    // input on tablet, iPhone-class WebKit and Android-class Chromium.
-    if (profile.hasTouch && profile.menuTap) {
-      await page.touchscreen.tap(profile.menuTap.x, profile.menuTap.y);
+    // Desktop smoke-tests keyboard focus. Touch profiles ask the QA-only hook
+    // for the button's actual responsive center and then send a real touch at
+    // that coordinate, so portrait/landscape density tiers cannot invalidate
+    // hard-coded test coordinates.
+    if (profile.hasTouch) {
+      const point = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MainMenu', 'randomCard'));
+      if (!point) throw new Error('RANDOM MISSION touch target unavailable');
+      await page.touchscreen.tap(point.x, point.y);
     } else {
       await page.keyboard.press('Tab');
       await page.keyboard.press('Enter');
     }
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().includes('MissionBriefing'), null, { timeout: 5_000 });
+    await page.waitForTimeout(120);
     const briefingHash = await screenHash(page);
-    if (briefingHash === menuHash) throw new Error('menu did not transition to mission briefing');
+    if (briefingHash === menuHash) throw new Error('menu did not visually transition to mission briefing');
 
     await assertViewport(page, profile.viewport, `${profile.name}/briefing`);
 
     // On touch profiles, ACQUIRE IMAGERY is tapped directly on the Phaser
     // canvas at its responsive layout coordinate. Desktop uses the keyboard.
-    await activateAcquireImagery(page, profile);
-    await page.waitForTimeout(500);
+    if (profile.hasTouch) {
+      const point = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MissionBriefing', 'begin'));
+      if (!point) throw new Error('ACQUIRE IMAGERY touch target unavailable');
+      await page.touchscreen.tap(point.x, point.y);
+    } else {
+      await activateAcquireImagery(page, profile);
+    }
+    await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().includes('Recon'), null, { timeout: 5_000 });
+    await page.waitForTimeout(120);
     const reconHash = await screenHash(page);
-    if (reconHash === briefingHash) throw new Error('briefing did not transition to recon');
+    if (reconHash === briefingHash) throw new Error('briefing did not visually transition to recon');
 
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
 
@@ -259,11 +269,11 @@ async function runProfile(profile) {
     // Rotate/resize while the live mission is running. This hits the layout,
     // camera, rail, weather and safe-area resize paths under actual rendering.
     await page.setViewportSize(profile.rotateTo);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(420);
     await assertViewport(page, profile.rotateTo, `${profile.name}/rotated-recon`);
 
     await page.setViewportSize(profile.viewport);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(420);
     await assertViewport(page, profile.viewport, `${profile.name}/restored-recon`);
 
     if (badResponses.length) throw new Error(`HTTP failures: ${badResponses.join(' | ')}`);
