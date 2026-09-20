@@ -1,7 +1,7 @@
 {
   "name": "i-spy",
   "private": true,
-  "version": "1.8.4-demo",
+  "version": "1.8.5-demo",
   "type": "module",
   "scripts": {
     "dev": "vite",

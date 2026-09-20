@@ -416,19 +416,22 @@ export default class ReconScene extends Phaser.Scene {
     this.dragCamera = null;
     this.dragPointerId = null;
     this.pinchGesture = null;
-    this.controlPressed = false;
-    this.controlReleased = false;
+    this.controlPointerIds = new Set();
+    this.controlReleasedPointerIds = new Set();
     this.tapPointer = null;
 
     // A press that lands on a HUD control belongs to that control, not to the
     // map: Phaser emits the game-object events before the scene-level ones.
-    this.input.on('gameobjectdown', () => { this.controlPressed = true; });
-    this.input.on('gameobjectup', () => { this.controlReleased = true; });
+    this.input.on('gameobjectdown', (pointer) => {
+      this.controlPointerIds.add(pointer.id);
+    });
+    this.input.on('gameobjectup', (pointer) => {
+      this.controlReleasedPointerIds.add(pointer.id);
+    });
 
     this.input.on('pointerdown', (pointer) => {
-      const onControl = this.controlPressed;
-      this.controlPressed = false;
-      if (onControl || this.paused || this.missionEnded || this.isHudPoint(pointer)) {
+      const onControl = this.controlPointerIds.has(pointer.id);
+      if (onControl || this.paused || this.missionEnded || this.isGestureBlockedPointer(pointer)) {
         this.tapPointer = null;
         return;
       }
@@ -483,16 +486,20 @@ export default class ReconScene extends Phaser.Scene {
       }
 
       const camera = this.dragCamera ?? this.cameras.main;
-      camera.scrollX -= (pointer.x - this.lastPointer.x) / camera.zoom;
-      camera.scrollY -= (pointer.y - this.lastPointer.y) / camera.zoom;
-      if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
+      this.panCameraByScreenDelta(
+        camera,
+        pointer.x - this.lastPointer.x,
+        pointer.y - this.lastPointer.y,
+      );
       this.lastPointer = { x: pointer.x, y: pointer.y };
       if (this.candidate) this.drawCandidateMarker();
     });
 
-    this.input.on('pointerup', (pointer) => {
-      const onControl = this.controlReleased;
-      this.controlReleased = false;
+    const releasePointer = (pointer) => {
+      const onControl = this.controlReleasedPointerIds.has(pointer.id)
+        || this.controlPointerIds.has(pointer.id);
+      this.controlReleasedPointerIds.delete(pointer.id);
+      this.controlPointerIds.delete(pointer.id);
 
       if (this.pinchGesture) {
         const remaining = this.mapPointersDown().filter((item) => item.id !== pointer.id);
@@ -508,7 +515,10 @@ export default class ReconScene extends Phaser.Scene {
       this.dragCamera = null;
       this.dragPointerId = null;
       if (tap && !onControl) this.handleMapTap(pointer);
-    });
+    };
+    this.input.on('pointerup', releasePointer);
+    this.input.on('pointerupoutside', releasePointer);
+    this.input.on('pointercancel', releasePointer);
 
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
@@ -536,8 +546,17 @@ export default class ReconScene extends Phaser.Scene {
     return pointer?.wasTouch ? GAME_CONFIG.recon.touchDragThreshold : GAME_CONFIG.recon.dragThreshold;
   }
 
+  isTopHudPoint(pointer) {
+    return pointer.y < GAME_CONFIG.recon.hudHeight;
+  }
+
+  isGestureBlockedPointer(pointer) {
+    return this.isTopHudPoint(pointer) || this.controlPointerIds.has(pointer.id);
+  }
+
   mapPointersDown() {
-    return this.input.manager.pointers.filter((pointer) => pointer.isDown && !this.isHudPoint(pointer));
+    return this.input.manager.pointers.filter((pointer) =>
+      pointer.isDown && !this.isGestureBlockedPointer(pointer));
   }
 
   pinchPointers(pointers = this.mapPointersDown()) {
@@ -549,8 +568,11 @@ export default class ReconScene extends Phaser.Scene {
   beginPinch(pointers = this.mapPointersDown()) {
     if (pointers.length < 2 || this.paused || this.missionEnded) return false;
     const [first, second] = pointers.slice(0, 2);
+    const firstContext = this.getPointerContext(first);
+    const secondContext = this.getPointerContext(second);
+    if (firstContext.camera !== secondContext.camera) return false;
     const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-    const camera = this.getPointerContext(midpoint).camera;
+    const camera = firstContext.camera;
     const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
 
     this.pinchGesture = {
@@ -620,6 +642,7 @@ export default class ReconScene extends Phaser.Scene {
     const after = camera.getWorldPoint(appliedMidpoint.x, appliedMidpoint.y);
     camera.scrollX += anchorWorld.x - after.x;
     camera.scrollY += anchorWorld.y - after.y;
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
 
     // Keep our virtual gesture state aligned with the transform we actually
     // applied, not with a possibly-spurious raw Android sample. Large real
@@ -628,7 +651,6 @@ export default class ReconScene extends Phaser.Scene {
     else this.pinchGesture.lastDistance = previousDistance * scaleRatio;
     this.pinchGesture.lastMidpoint = appliedMidpoint;
 
-    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
     if (this.candidate) this.drawCandidateMarker();
     return true;
   }
@@ -1150,6 +1172,21 @@ export default class ReconScene extends Phaser.Scene {
    * the imagery covering the viewport instead; it never restricts a window the
    * map already covers.
    */
+  panCameraByScreenDelta(camera, dx, dy) {
+    const distance = Math.hypot(dx, dy);
+    if (!Number.isFinite(distance) || distance === 0) return;
+    let appliedX = dx;
+    let appliedY = dy;
+    if (distance > GAME_CONFIG.recon.panStepMax) {
+      const factor = GAME_CONFIG.recon.panStepMax / distance;
+      appliedX *= factor;
+      appliedY *= factor;
+    }
+    camera.scrollX -= appliedX / Math.max(camera.zoom, 0.001);
+    camera.scrollY -= appliedY / Math.max(camera.zoom, 0.001);
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
+  }
+
   minZoomForViewport(width = this.scale.gameSize.width, height = this.scale.gameSize.height) {
     const cover = Math.max(width / this.map.width, height / this.map.height);
     return Phaser.Math.Clamp(Math.max(GAME_CONFIG.recon.minZoom, cover),
@@ -1191,7 +1228,7 @@ export default class ReconScene extends Phaser.Scene {
     } else if (this.isChangeMode && this.mission.focus) {
       view = this.mission.focus;
     }
-    this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, this.minZoomForViewport(), GAME_CONFIG.recon.maxZoom));
+    this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, this.minZoomForCamera(this.cameras.main), GAME_CONFIG.recon.maxZoom));
     this.cameras.main.centerOn(view.x ?? this.map.width / 2, view.y ?? this.map.height / 2);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (showMessage) this.flashStatus('VIEW RECENTERED');
@@ -1207,6 +1244,8 @@ export default class ReconScene extends Phaser.Scene {
     this.dragCamera = null;
     this.tapPointer = null;
     this.pinchGesture = null;
+    this.controlPointerIds?.clear();
+    this.controlReleasedPointerIds?.clear();
     if (this.paused) this.pauseStartedAt = this.time.now;
     else if (this.pauseStartedAt) {
       this.totalPausedMs = (this.totalPausedMs ?? 0) + (this.time.now - this.pauseStartedAt);
@@ -1249,12 +1288,6 @@ export default class ReconScene extends Phaser.Scene {
   onResize(gameSize) {
     const { width, height } = gameSize;
     this.uiCamera?.setSize(width, height);
-    const floor = this.minZoomForViewport(width, height);
-    if (this.cameras.main.zoom < floor) {
-      this.cameras.main.setZoom(floor);
-      if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
-      if (this.candidate) this.drawCandidateMarker();
-    }
     this.hudBackground.width = width;
     this.hudBorder.width = width;
     // One HUD strip spans the viewport, so the readout stays at its right
@@ -1273,10 +1306,14 @@ export default class ReconScene extends Phaser.Scene {
       const half = Math.floor(width / 2);
       this.cameras.main.setViewport(0, 0, half, height);
       this.compareCamera.setViewport(half, 0, width - half, height);
-      this.syncChangeCameras(this.cameras.main);
     } else if (!this.splitView) {
       this.cameras.main.setViewport(0, 0, width, height);
     }
+
+    const floor = this.minZoomForCamera(this.cameras.main);
+    if (this.cameras.main.zoom < floor) this.cameras.main.setZoom(floor);
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
+    if (this.candidate) this.drawCandidateMarker();
 
     if (this.isCountMode) {
       // Tally module (adjust) sits apart from the submit action, each captioned.
@@ -1444,6 +1481,8 @@ export default class ReconScene extends Phaser.Scene {
     this.splitView = false;
     this.compareCamera = null;
     this.scale.off('resize', this.onResize, this);
+    this.controlPointerIds?.clear();
+    this.controlReleasedPointerIds?.clear();
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
   }

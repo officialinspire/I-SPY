@@ -32,8 +32,8 @@ check(
   'ReconScene resets resolvingIdentification for every mission create',
 );
 check(
-  /bindInput\(\) \{[\s\S]*?this\.controlPressed = false;[\s\S]*?this\.controlReleased = false;[\s\S]*?this\.tapPointer = null;/.test(recon),
-  'ReconScene resets transient pointer/control guards when rebinding input',
+  /bindInput\(\) \{[\s\S]*?this\.controlPointerIds = new Set\(\);[\s\S]*?this\.controlReleasedPointerIds = new Set\(\);[\s\S]*?this\.tapPointer = null;/.test(recon),
+  'ReconScene resets pointer-specific control ownership and tap state when rebinding input',
 );
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.totalPausedMs = 0;[\s\S]*?this\.pauseStartedAt = null;/.test(recon),
@@ -288,6 +288,29 @@ check(
     && recon.includes('this.tapPointer = null;')
     && recon.includes('this.dragPointerId = null;'),
   'pinch remains available while marking and cancels tap/pan interpretation',
+);
+check(
+  recon.includes('isGestureBlockedPointer(pointer)')
+    && recon.includes('this.controlPointerIds.has(pointer.id)')
+    && !/mapPointersDown\(\) \{[\s\S]*?!this\.isHudPoint\(pointer\)/.test(recon),
+  'map gestures block actual control pointers instead of the entire mode-specific bottom rail',
+);
+check(
+  recon.includes("this.input.on('pointerupoutside', releasePointer)")
+    && recon.includes("this.input.on('pointercancel', releasePointer)")
+    && recon.includes('this.controlReleasedPointerIds.has(pointer.id)'),
+  'Android pointer cancellation and release ownership cannot strand a pan or pinch',
+);
+check(
+  recon.includes('panCameraByScreenDelta(camera, dx, dy)')
+    && recon.includes('GAME_CONFIG.recon.panStepMax')
+    && !recon.includes('clampCameraScroll(camera'),
+  'one-finger pan is step-bounded while Phaser remains the single camera-bounds authority',
+);
+check(
+  recon.includes('const floor = this.minZoomForCamera(this.cameras.main)')
+    && recon.indexOf('this.cameras.main.setViewport(0, 0, width, height)') < recon.indexOf('const floor = this.minZoomForCamera(this.cameras.main)'),
+  'resize applies the actual imagery viewport before enforcing its zoom floor',
 );
 check(
   recon.includes('this.completedTargetIds = []')
