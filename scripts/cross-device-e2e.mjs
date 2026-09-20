@@ -15,6 +15,7 @@ const PROFILES = [
   {
     name: 'desktop-chromium',
     engine: chromium,
+    launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader'] },
     viewport: { width: 1440, height: 900 },
     rotateTo: { width: 900, height: 700 },
     isMobile: false,
@@ -26,6 +27,7 @@ const PROFILES = [
   {
     name: 'tablet-chromium',
     engine: chromium,
+    launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader'] },
     viewport: { width: 1024, height: 768 },
     rotateTo: { width: 768, height: 1024 },
     isMobile: false,
@@ -48,6 +50,7 @@ const PROFILES = [
   {
     name: 'android-chromium',
     engine: chromium,
+    launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader'] },
     viewport: { width: 412, height: 915 },
     rotateTo: { width: 915, height: 412 },
     isMobile: true,
@@ -127,7 +130,7 @@ async function activateAcquireImagery(page, profile) {
 }
 
 async function runProfile(profile) {
-  const browser = await profile.engine.launch({ headless: true });
+  const browser = await profile.engine.launch({ headless: true, ...(profile.launchOptions ?? {}) });
   const context = await browser.newContext({
     viewport: profile.viewport,
     isMobile: profile.isMobile,
@@ -177,13 +180,34 @@ async function runProfile(profile) {
     const response = await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 20_000 });
     if (!response?.ok()) throw new Error(`initial document failed: ${response?.status()}`);
 
-    await page.locator('.intro-start__button').waitFor({ state: 'visible', timeout: 15_000 });
+    try {
+      await page.locator('.intro-start__button').waitFor({ state: 'visible', timeout: 12_000 });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => {
+        const notice = document.getElementById('boot-notice');
+        const detail = document.getElementById('boot-detail');
+        return {
+          canvas: Boolean(document.querySelector('canvas')),
+          bootNoticeDisplay: notice ? getComputedStyle(notice).display : null,
+          bootDetail: detail?.textContent ?? null,
+          appChildren: document.getElementById('app')?.children.length ?? null,
+          readyState: document.readyState,
+        };
+      }).catch(() => ({ evaluationFailed: true }));
+      throw new Error(`intro did not appear // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
+    }
     if (profile.hasTouch) await page.locator('.intro-start__button').tap();
     else await page.locator('.intro-start__button').click();
 
     await page.locator('.intro-skip.is-visible').waitFor({ state: 'visible', timeout: 5_000 });
-    if (profile.hasTouch) await page.locator('.intro-skip.is-visible').tap();
-    else await page.locator('.intro-skip.is-visible').click();
+    if (profile.hasTouch) {
+      // WebKit can consider the button perpetually "unstable" while the video
+      // behind it is entering playback. Dispatching the same pointerdown the
+      // control listens for avoids a false harness timeout.
+      await page.locator('.intro-skip.is-visible').dispatchEvent('pointerdown', { pointerType: 'touch' });
+    } else {
+      await page.locator('.intro-skip.is-visible').dispatchEvent('pointerdown', { pointerType: 'mouse' });
+    }
 
     await page.locator('.intro-gate').waitFor({ state: 'detached', timeout: 5_000 });
     await page.waitForTimeout(250);
