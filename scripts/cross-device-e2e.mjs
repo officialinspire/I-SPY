@@ -74,6 +74,23 @@ async function screenHash(page) {
   return hash(await page.screenshot());
 }
 
+async function waitForScene(page, sceneKey, errors, timeout = 8_000) {
+  try {
+    await page.waitForFunction(
+      (key) => window.__ISPY_QA__?.activeScenes().includes(key),
+      sceneKey,
+      { timeout },
+    );
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => ({
+      activeScenes: window.__ISPY_QA__?.activeScenes?.() ?? null,
+      introPresent: Boolean(document.querySelector('.intro-gate')),
+      canvas: Boolean(document.querySelector('canvas')),
+    })).catch(() => ({ evaluationFailed: true }));
+    throw new Error(`scene '${sceneKey}' not active // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
+  }
+}
+
 async function assertViewport(page, expected, label) {
   const metrics = await page.evaluate(() => {
     const canvas = document.querySelector('canvas');
@@ -219,7 +236,7 @@ async function runProfile(profile) {
         throw new Error(`intro/menu startup did not settle // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
       });
 
-    await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().includes('MainMenu'), null, { timeout: 5_000 });
+    await waitForScene(page, 'MainMenu', errors);
     await page.waitForTimeout(120);
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
     const menuHash = await screenHash(page);
@@ -236,7 +253,7 @@ async function runProfile(profile) {
       await page.keyboard.press('Tab');
       await page.keyboard.press('Enter');
     }
-    await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().includes('MissionBriefing'), null, { timeout: 5_000 });
+    await waitForScene(page, 'MissionBriefing', errors);
     await page.waitForTimeout(120);
     const briefingHash = await screenHash(page);
     if (briefingHash === menuHash) throw new Error('menu did not visually transition to mission briefing');
@@ -245,14 +262,11 @@ async function runProfile(profile) {
 
     // On touch profiles, ACQUIRE IMAGERY is tapped directly on the Phaser
     // canvas at its responsive layout coordinate. Desktop uses the keyboard.
-    if (profile.hasTouch) {
-      const point = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MissionBriefing', 'begin'));
-      if (!point) throw new Error('ACQUIRE IMAGERY touch target unavailable');
-      await page.touchscreen.tap(point.x, point.y);
-    } else {
-      await activateAcquireImagery(page, profile);
-    }
-    await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().includes('Recon'), null, { timeout: 5_000 });
+    const acquirePoint = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MissionBriefing', 'begin'));
+    if (!acquirePoint) throw new Error('ACQUIRE IMAGERY pointer target unavailable');
+    if (profile.hasTouch) await page.touchscreen.tap(acquirePoint.x, acquirePoint.y);
+    else await page.mouse.click(acquirePoint.x, acquirePoint.y);
+    await waitForScene(page, 'Recon', errors);
     await page.waitForTimeout(120);
     const reconHash = await screenHash(page);
     if (reconHash === briefingHash) throw new Error('briefing did not visually transition to recon');
