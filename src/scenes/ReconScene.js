@@ -38,6 +38,12 @@ export default class ReconScene extends Phaser.Scene {
     this.resolvingIdentification = false;
     this.marking = false;
     this.candidate = null;
+    this.completedTargetIds = [];
+    this.locateTargets = (!this.isCountMode && !this.isChangeMode)
+      ? (Array.isArray(this.mission.targets) && this.mission.targets.length
+        ? this.mission.targets.map((target) => ({ id: target.id, label: target.label }))
+        : [{ id: this.mission.targetId, label: this.mission.targetLabel }].filter((target) => target.id))
+      : [];
     this.activePass = 'A';
     this.splitView = false;
     this.compareCamera = null;
@@ -55,6 +61,9 @@ export default class ReconScene extends Phaser.Scene {
     this.createUiCamera();
     this.bindInput();
     this.startMissionTimer();
+    this.time.delayedCall(450, () => {
+      if (!this.missionEnded && !this.paused) this.flashStatus('DRAG TO PAN // PINCH OR WHEEL TO ZOOM');
+    });
 
     this.scale.on('resize', this.onResize, this);
     this.events.once('shutdown', () => this.cleanup());
@@ -140,6 +149,7 @@ export default class ReconScene extends Phaser.Scene {
     this.hud.add([this.hudBackground, this.hudBorder, this.objectiveText, this.modeChip,
       this.modeDetail, this.coordText, this.timerText]);
     this.refreshModeStrip();
+    this.refreshLocateObjective();
 
     this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13, variant: 'secondary', pressSound: false });
     this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12, variant: 'secondary' });
@@ -197,8 +207,15 @@ export default class ReconScene extends Phaser.Scene {
       }
     } else {
       const falseIds = this.falseIdentifications;
-      detail = this.isChangeMode ? `PASS ${this.activePass}` : `FALSE ID ${falseIds}`;
-      if (this.isChangeMode && falseIds > 0) detail += ` \u00b7 FALSE ID ${falseIds}`;
+      if (this.isChangeMode) {
+        detail = `PASS ${this.activePass}`;
+        if (falseIds > 0) detail += ` · FALSE ID ${falseIds}`;
+      } else if ((this.locateTargets?.length ?? 0) > 1) {
+        detail = `CONTACTS ${this.completedTargetIds.length}/${this.locateTargets.length}`;
+        if (falseIds > 0) detail += ` · FALSE ID ${falseIds}`;
+      } else {
+        detail = `FALSE ID ${falseIds}`;
+      }
       if (falseIds > 0) detailTone = UI_TOKENS.text.negative;
     }
     this.modeDetail.setText(detail).setColor(detailTone);
@@ -208,6 +225,21 @@ export default class ReconScene extends Phaser.Scene {
     // The grid readout tails the strip, clear of the utility buttons that sit
     // in the HUD's right-hand corner.
     this.coordText?.setPosition(detail ? detailX + this.modeDetail.width + 12 : detailX, rowY);
+  }
+
+  refreshLocateObjective() {
+    if (this.isCountMode || this.isChangeMode || !this.objectiveText) return;
+    if ((this.locateTargets?.length ?? 0) <= 1) {
+      this.objectiveText.setText(this.mission.objective);
+      return;
+    }
+
+    const completed = new Set(this.completedTargetIds);
+    const pending = this.locateTargets.filter((target) => !completed.has(target.id));
+    const labels = pending.map((target) => target.label).join(' + ');
+    this.objectiveText.setText(
+      `LOCATE PRIORITY CONTACT${pending.length === 1 ? '' : 'S'}: ${labels} // ${this.completedTargetIds.length}/${this.locateTargets.length} CONFIRMED`,
+    );
   }
 
   createLocateControls() {
