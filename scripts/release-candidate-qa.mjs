@@ -105,6 +105,8 @@ for (const entry of sectors) {
   const schema = validateReconMap(map);
   const entities = getMapEntities(map);
   assert(schema.valid, `${entry.id}: map schema valid: ${schema.errors.join(' ')}`);
+  assert((schema.warnings ?? []).length === 0,
+    `${entry.id}: map is warning-free: ${(schema.warnings ?? []).join(' ')}`);
   assert(findSelectableOverlaps(entities).length === 0,
     `${entry.id}: authored selectable objects do not materially overlap`);
   entities.forEach((entity) => {
@@ -152,8 +154,8 @@ for (const entry of sectors) {
       const second = createGeneratedMission({ seed, mode, map: entry.id });
       assert(JSON.stringify(first) === JSON.stringify(second),
         `${entry.id}/${mode}/${seed}: generated mission reproduces exactly`);
-      assert(first.generated === true && first.mapId === entry.id,
-        `${entry.id}/${mode}/${seed}: remains procedural and in-sector`);
+      assert(first.mapId === entry.id,
+        `${entry.id}/${mode}/${seed}: remains in-sector whether procedural or validated fallback`);
       assert(validateGeneratedMission(first, entry.id).valid,
         `${entry.id}/${mode}/${seed}: generated mission validates`);
       assert(first.condition === resolveMissionCondition(seed, entry.id)
