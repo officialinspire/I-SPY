@@ -109,10 +109,17 @@ function syncGameViewport() {
     game.scale.resize(width, height);
   }
 
+  // The host element is the safe area, so the canvas fills it rather than
+  // being centred inside it. Clearing the centring margins moves the canvas,
+  // though, and Phaser translates every pointer through the record it made of
+  // where the canvas was when it last laid it out: moving it without saying so
+  // leaves taps landing somewhere other than where they look. Nothing on the
+  // console responds, on whichever engine happened to be given a margin.
   const canvas = game.canvas;
-  if (canvas) {
+  if (canvas && (canvas.style.marginLeft !== '0px' || canvas.style.marginTop !== '0px')) {
     canvas.style.marginLeft = '0px';
     canvas.style.marginTop = '0px';
+    game.scale.updateBounds();
   }
 }
 

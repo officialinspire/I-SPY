@@ -131,6 +131,10 @@ check(
   main.includes("window.screen?.orientation?.addEventListener?.('change', queueViewportSync"),
   'viewport sync also follows the Screen Orientation API, which some engines report a rotation through alone',
 );
+check(
+  /canvas\.style\.marginTop = '0px';\s*game\.scale\.updateBounds\(\);/.test(main),
+  'clearing the centring margins tells the scale manager the canvas moved, so pointer input is not left behind',
+);
 
 /* --- Console layout -------------------------------------------------- *
  * A screen shorter than the smallest density tier used to compose past
@@ -252,5 +256,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 42 mission, start-gate, viewport, console-layout, recon-rail, split-view, keyboard, weather and persistence checks.');
+  console.log('I SPY scene lifecycle QA passed: 43 mission, start-gate, viewport, console-layout, recon-rail, split-view, keyboard, weather and persistence checks.');
 }

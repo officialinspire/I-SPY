@@ -377,7 +377,14 @@ async function assertViewport(page, expected, label) {
   const metrics = await page.evaluate(() => {
     const canvas = document.querySelector('canvas');
     const rect = canvas?.getBoundingClientRect();
+    const scale = window.__ISPY_QA__?.game?.scale;
+    const known = scale?.canvasBounds;
     return {
+      // Where Phaser believes the canvas is. Every pointer is translated
+      // through this, so if it disagrees with the real rectangle then taps
+      // land somewhere other than where the analyst aimed and the console
+      // simply stops responding.
+      canvasBounds: known ? { left: known.x, top: known.y, width: known.width, height: known.height } : null,
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       bodyScrollWidth: document.body.scrollWidth,
@@ -412,6 +419,13 @@ async function assertViewport(page, expected, label) {
   if (metrics.canvas.width < Math.max(1, metrics.innerWidth - 4)
       || metrics.canvas.height < Math.max(1, metrics.innerHeight - 4)) {
     fail('canvas does not fill the safe viewport');
+  }
+  if (metrics.canvasBounds) {
+    const offsetX = Math.abs(metrics.canvasBounds.left - metrics.canvas.left);
+    const offsetY = Math.abs(metrics.canvasBounds.top - metrics.canvas.top);
+    if (offsetX > 1 || offsetY > 1) {
+      fail(`pointer input is offset by ${Math.round(offsetX)}x${Math.round(offsetY)}px: the game's record of where the canvas is disagrees with where it is`);
+    }
   }
 }
 
@@ -712,6 +726,35 @@ async function runProfile(profile) {
     await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
     await assertControlsReachable(page, 'menuControls', `${profile.name}/menu`);
+
+    /* --- Pointer transform ------------------------------------------- *
+     * Phaser translates every pointer through its record of where the
+     * canvas is. The viewport sync clears the centring margins so the
+     * canvas fills the safe area, which moves it; if it does not say so,
+     * taps land offset by exactly that margin and nothing on the console
+     * responds. Forced here rather than waited for, because which engine
+     * gets given a margin is not ours to choose.                         */
+    await page.evaluate(() => {
+      const canvas = document.querySelector('canvas');
+      canvas.style.marginLeft = '40px';
+      canvas.style.marginTop = '25px';
+      window.__ISPY_QA__.game.scale.updateBounds();
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+    await settle(page, 4, { minMs: 420 });
+    const transform = await page.evaluate(() => {
+      const scale = window.__ISPY_QA__.game.scale;
+      const rect = document.querySelector('canvas').getBoundingClientRect();
+      return {
+        offsetX: Math.round(rect.left - scale.canvasBounds.x),
+        offsetY: Math.round(rect.top - scale.canvasBounds.y),
+        margin: [document.querySelector('canvas').style.marginLeft, document.querySelector('canvas').style.marginTop],
+      };
+    });
+    if (Math.abs(transform.offsetX) > 1 || Math.abs(transform.offsetY) > 1) {
+      throw new Error(`${profile.name}/menu: moving the canvas left pointer input behind by ${transform.offsetX}x${transform.offsetY}px // ${JSON.stringify(transform)}`);
+    }
+    await assertViewport(page, profile.viewport, `${profile.name}/menu-after-recentre`);
     const menuHash = await screenHash(page);
 
     await tapControl(page, profile, 'MainMenu', 'RANDOM MISSION', `${profile.name}/menu`);
