@@ -797,6 +797,15 @@ export default class ReconScene extends Phaser.Scene {
 
   disableSplitView(showMessage = true) {
     if (!this.splitView) return;
+    // The camera manager is torn down before this scene's own shutdown
+    // handler runs, so a teardown route can arrive here with no main camera.
+    // Restoring a viewport on a scene that is going away is pointless, and
+    // throwing while doing it used to take the whole transition with it.
+    if (!this.cameras?.main) {
+      this.splitView = false;
+      this.compareCamera = null;
+      return;
+    }
     this.splitView = false;
     this.worldA.root.cameraFilter = 0;
     this.worldB.root.cameraFilter = 0;
@@ -1184,7 +1193,13 @@ export default class ReconScene extends Phaser.Scene {
     this.statusTimer?.remove(false);
     this.weatherOverlay?.destroy();
     this.weatherOverlay = null;
-    if (this.splitView) this.disableSplitView(false);
+    // Split view is only forgotten here, never unwound. Phaser reuses this
+    // scene instance, so the flag must not survive into the next mission;
+    // the cameras it owned are the camera manager's to dispose of, and
+    // reaching for them during shutdown threw and left the game with no
+    // active scene at all after a CHANGE mission finished in split view.
+    this.splitView = false;
+    this.compareCamera = null;
     this.scale.off('resize', this.onResize, this);
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();

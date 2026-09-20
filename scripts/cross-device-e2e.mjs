@@ -42,8 +42,11 @@ const ALL_PROFILES = [
     isMobile: false,
     hasTouch: true,
     deviceScaleFactor: 2,
-    mode: 'COUNT',
+    mode: 'CHANGE',
     map: 'border-farms',
+    // Wide enough for SPLIT VIEW, and its rotation is narrow enough to force
+    // the console back out of it mid-mission.
+    splitView: true,
   },
   {
     name: 'iphone-webkit',
@@ -79,7 +82,7 @@ const ALL_PROFILES = [
     isMobile: true,
     hasTouch: true,
     deviceScaleFactor: 3,
-    mode: 'CHANGE',
+    mode: 'COUNT',
     map: 'riverworks-sector',
   },
 ];
@@ -168,6 +171,27 @@ const PAGE_HELPERS = () => {
         candidateHasEntity: Boolean(scene.candidate?.entity),
       };
     },
+    /**
+     * Which pass the analyst has to mark the change in.
+     *
+     * A CHANGE mission can be a vehicle that moved, one that appeared, or a
+     * structure that is gone in the second pass. Only the pass where the
+     * object is actually on the ground can be marked, so the answer is the
+     * pass that still holds a markable copy of it — PASS B where there is
+     * one, because that is the later look.
+     */
+    markablePass() {
+      const scene = game().scene.getScene('Recon');
+      if (!scene?.passEntities) return null;
+      const markable = (passId) => {
+        const entity = scene.passEntities[passId]
+          ?.find((candidate) => candidate.id === scene.mission.targetId);
+        return Boolean(entity) && entity.selectable !== false && !entity.hidden;
+      };
+      if (markable('B')) return 'B';
+      if (markable('A')) return 'A';
+      return null;
+    },
     /** Where the mission's answer object sits on screen, right now. */
     targetPoint(passId) {
       const scene = game().scene.getScene('Recon');
@@ -221,6 +245,7 @@ const PAGE_HELPERS = () => {
         width: size.width,
         height: size.height,
         railHeight: scene.railHeight(size.width),
+        splitView: scene.splitView === true,
         paused: scene.paused === true,
         missionEnded: scene.missionEnded === true,
       };
@@ -389,12 +414,16 @@ async function centreOnTarget(page, profile, passId, context) {
   const chrome = await page.evaluate(() => window.__qa.reconChrome());
   const safeTop = 78 + 26;
   const safeBottom = chrome.height - chrome.railHeight - 26;
-  const centre = { x: chrome.width / 2, y: (safeTop + safeBottom) / 2 };
+  // In split view each pass has its own pane, and the mark has to land in
+  // the pane that shows it.
+  const paneLeft = chrome.splitView && passId === 'B' ? Math.floor(chrome.width / 2) : 0;
+  const paneRight = chrome.splitView && passId !== 'B' ? Math.floor(chrome.width / 2) : chrome.width;
+  const centre = { x: (paneLeft + paneRight) / 2, y: (safeTop + safeBottom) / 2 };
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const target = await page.evaluate((id) => window.__qa.targetPoint(id), passId ?? null);
     if (!target) throw new Error(`${context}: mission target entity is not on the map`);
-    const inside = target.screen.x > 24 && target.screen.x < chrome.width - 24
+    const inside = target.screen.x > paneLeft + 24 && target.screen.x < paneRight - 24
       && target.screen.y > safeTop && target.screen.y < safeBottom;
     if (inside) return target;
     const dx = centre.x - target.screen.x;
@@ -402,7 +431,8 @@ async function centreOnTarget(page, profile, passId, context) {
     // Pan in bounded steps: the camera is clamped to the imagery, and a step
     // larger than the viewport would simply be eaten by that clamp.
     const clamp = (value, limit) => Math.max(-limit, Math.min(limit, value));
-    await dragBy(page, centre, clamp(dx, chrome.width * 0.35), clamp(dy, chrome.height * 0.3));
+    const paneWidth = paneRight - paneLeft;
+    await dragBy(page, centre, clamp(dx, paneWidth * 0.35), clamp(dy, chrome.height * 0.3));
   }
   const final = await page.evaluate((id) => window.__qa.targetPoint(id), passId ?? null);
   throw new Error(`${context}: could not bring the target into the workspace // ${JSON.stringify(final)} // ${JSON.stringify(chrome)}`);
@@ -412,14 +442,21 @@ async function playLocateOrChange(page, profile, context) {
   const summary = await page.evaluate(() => window.__qa.missionSummary());
   const isChange = summary.mode === 'CHANGE';
   const markLabel = isChange ? 'MARK CHANGE' : 'MARK TARGET';
-  const passId = isChange ? 'B' : null;
+  let passId = null;
 
   if (isChange) {
-    // The moved vehicle is only where PASS B says it is, so the analyst has
-    // to switch passes before marking — the same thing a player must do.
-    await tapControl(page, profile, 'Recon', 'PASS B', context);
-    const afterSwitch = await page.evaluate(() => window.__qa.missionSummary());
-    if (afterSwitch.activePass !== 'B') throw new Error(`${context}: PASS B did not become the active pass`);
+    passId = await page.evaluate(() => window.__qa.markablePass());
+    if (!passId) throw new Error(`${context}: neither pass holds a markable changed object`);
+    const chrome = await page.evaluate(() => window.__qa.reconChrome());
+    // In split view both passes are on screen at once, so there is nothing
+    // to switch: each pane is its own pass.
+    if (!chrome.splitView) {
+      await tapControl(page, profile, 'Recon', `PASS ${passId}`, context);
+      const afterSwitch = await page.evaluate(() => window.__qa.missionSummary());
+      if (afterSwitch.activePass !== passId) {
+        throw new Error(`${context}: PASS ${passId} did not become the active pass`);
+      }
+    }
   }
 
   await tapControl(page, profile, 'Recon', markLabel, context);
@@ -586,8 +623,35 @@ async function runProfile(profile) {
     await page.waitForTimeout(250);
     await assertViewport(page, profile.viewport, `${profile.name}/restored-recon`);
 
-    /* --- Play it ---------------------------------------------------- */
+    /* --- Split view -------------------------------------------------- *
+     * Two passes side by side, dropped automatically when the console is
+     * too narrow to hold them, and picked up again when it is not. A
+     * mission finished in split view used to throw during teardown and
+     * leave the game with no active scene at all.                        */
     const context$ = `${profile.name}/${profile.mode}`;
+    if (profile.splitView) {
+      await tapControl(page, profile, 'Recon', 'SPLIT VIEW', `${profile.name}/split`);
+      let chrome = await page.evaluate(() => window.__qa.reconChrome());
+      if (!chrome.splitView) throw new Error(`${context$}: SPLIT VIEW did not engage`);
+      await assertControlsReachable(page, 'reconControls', `${profile.name}/split`);
+
+      // Rotating into a console too narrow for two panes has to drop back
+      // to one, in the middle of a live mission, without stranding a mark.
+      await page.setViewportSize(profile.rotateTo);
+      await page.waitForTimeout(300);
+      chrome = await page.evaluate(() => window.__qa.reconChrome());
+      if (chrome.splitView && profile.rotateTo.width < 980) {
+        throw new Error(`${context$}: split view survived a resize below its minimum width`);
+      }
+      await assertControlsReachable(page, 'reconControls', `${profile.name}/split-narrowed`);
+      await page.setViewportSize(profile.viewport);
+      await page.waitForTimeout(300);
+
+      await tapControl(page, profile, 'Recon', 'SPLIT VIEW', `${profile.name}/split-again`);
+      chrome = await page.evaluate(() => window.__qa.reconChrome());
+      if (!chrome.splitView) throw new Error(`${context$}: split view could not be re-entered`);
+    }
+
     if (profile.mode === 'COUNT') await playCount(page, profile, context$);
     else await playLocateOrChange(page, profile, context$);
 

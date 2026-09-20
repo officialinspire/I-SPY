@@ -160,6 +160,21 @@ check(
   'SUBMIT COUNT steps its label down when the rail has compressed its button',
 );
 
+/* --- Split view teardown --------------------------------------------- *
+ * Phaser shuts its camera manager down before the scene's own shutdown
+ * handler runs, so unwinding split view from cleanup() threw and took the
+ * whole transition with it: finishing a CHANGE mission in split view left
+ * the game with no active scene at all.                                   */
+check(
+  /cleanup\(\) \{[\s\S]*?this\.splitView = false;\s*this\.compareCamera = null;/.test(recon)
+    && !/cleanup\(\) \{[\s\S]*?this\.disableSplitView\(false\)/.test(recon),
+  'recon cleanup forgets split view instead of unwinding its cameras',
+);
+check(
+  /disableSplitView\(showMessage = true\) \{[\s\S]*?if \(!this\.cameras\?\.main\) \{/.test(recon),
+  'disableSplitView bails out safely when the camera manager is already gone',
+);
+
 /* --- Scene data ------------------------------------------------------ */
 check(
   !/^\s*this\.data = data;/m.test(results) && results.includes('this.debrief = data;'),
@@ -171,5 +186,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 30 repeat-mission, start-gate, viewport, console-layout, recon-rail and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 32 repeat-mission, start-gate, viewport, console-layout, recon-rail, split-view and debrief-idempotency checks.');
 }
