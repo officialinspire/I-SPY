@@ -4,6 +4,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const BASE_URL = process.env.ISPY_E2E_URL ?? 'http://127.0.0.1:4173/';
+const SETTINGS_KEY = 'i-spy-settings-v1';
 const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ispy-pwa-'));
 const launchOptions = {
   headless: true,
@@ -24,6 +25,20 @@ async function waitForScene(page, key, timeout = 12_000) {
 
 async function prepareOnlineInstall() {
   const context = await chromium.launchPersistentContext(profileDir, launchOptions);
+  await context.addInitScript(({ key }) => {
+    localStorage.setItem(key, JSON.stringify({
+      masterVolume: 0,
+      musicEnabled: false,
+      sfxEnabled: false,
+      hapticsLevel: 'off',
+      scanlinesEnabled: true,
+      imageGrainEnabled: true,
+      sector: 'any',
+      tutorialCompleted: false,
+      tutorialStep: 0,
+      orientationSeen: true,
+    }));
+  }, { key: SETTINGS_KEY });
   const page = context.pages()[0] ?? await context.newPage();
   const url = new URL(BASE_URL);
   url.searchParams.set('qa', '1');
