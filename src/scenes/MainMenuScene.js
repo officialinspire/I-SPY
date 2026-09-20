@@ -4,7 +4,7 @@ import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
 import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
-import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
+import { UI_TOKENS, hexToNumber, hitGap } from '../ui/designTokens.js';
 import { SPRITE_SHEETS } from '../assets/spriteManifest.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { createCountMission } from '../game/countMission.js';
@@ -123,19 +123,6 @@ function compressTier(tier, factor) {
     next[key] = Math.max(floor, Math.round(tier[key] * factor));
   });
   return next;
-}
-
-/**
- * Half of a layout gap, less a pixel, for a stacked control's hit padding.
- *
- * A control shorter than the 44px minimum touch target grows its hit area to
- * reach it, and two grown hit areas that meet are worse than two small ones:
- * where they overlap, Phaser gives the press to whichever control is drawn
- * last, so a press on the bottom edge of a row runs the row beneath it. Each
- * stacked control may take only the space its own layout left free.
- */
-function hitGap(gap) {
-  return Math.max(0, Math.floor((gap - 1) / 2));
 }
 
 /** Gap between the tasking card and the sector row it is tied to. */

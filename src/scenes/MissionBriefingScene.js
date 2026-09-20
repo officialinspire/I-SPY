@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion, typeText } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { getGeneratorOptions } from '../game/missionGenerator.js';
@@ -89,6 +90,12 @@ export default class MissionBriefingScene extends Phaser.Scene {
     this.begin = createButton(this, 0, 0, 'ACQUIRE IMAGERY', () => this.beginRecon(), { variant: 'primary', pressSound: 'acquire' });
     this.back = createButton(this, 0, 0, 'RETURN', () => this.scene.start('MainMenu'), { width: 180, fontSize: 16, variant: 'secondary' });
     this.focusGroup = createFocusGroup(this, [this.begin, this.back]);
+    // ESC returns from every screen that is only navigation. The mission
+    // scenes keep it for pause, so it means the same thing everywhere: back
+    // out of where you are.
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('briefing-esc', () => {
+      if (!this.transitioning) this.scene.start('MainMenu');
+    }));
 
     typeText(this, this.briefing, this.fullBriefing, {
       charsPerSecond: GAME_CONFIG.presentation.typewriterCharsPerSecond,

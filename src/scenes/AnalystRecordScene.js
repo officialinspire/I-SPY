@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { getAnalystRecord, resetAnalystRecord } from '../game/analystRecord.js';
 import { sectorTitle } from '../world/mapRegistry.js';
@@ -54,6 +55,10 @@ export default class AnalystRecordScene extends Phaser.Scene {
       width: 230, fontSize: 14, variant: 'primary',
     });
     this.focusGroup = createFocusGroup(this, [this.resetButton, this.backButton]);
+    // ESC returns from every screen that is only navigation. The mission
+    // scenes keep it for pause, so it means the same thing everywhere: back
+    // out of where you are.
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('record-esc', () => this.scene.start('MainMenu')));
 
     this.refresh();
     this.scale.on('resize', this.layout, this);

@@ -612,6 +612,42 @@ async function assertHandoverIsGuarded(page, cdp, point, label) {
   }
 }
 
+/**
+ * Audit every control the live scenes actually expose, whatever they are.
+ *
+ * The named readers only know the menu and the recon console, so a scene
+ * neither of them covers was never checked: the IDENTIFICATION GUIDE's
+ * category tabs sit a few pixels apart and pad out to the minimum touch
+ * target, and on a 360px phone they overlapped by 9px — a press near the
+ * seam opened the category next door. This reads whatever is on screen.
+ */
+async function assertLiveTouchTargets(page, label) {
+  const report = await page.evaluate(() => window.__ISPY_QA__?.touchTargets?.() ?? null);
+  if (!report) throw new Error(`${label}: live touch target audit unavailable`);
+  if (!report.targets.length) throw new Error(`${label}: no live controls found to check`);
+
+  const overlaps = [];
+  for (let i = 0; i < report.targets.length; i += 1) {
+    for (let j = i + 1; j < report.targets.length; j += 1) {
+      const a = report.targets[i];
+      const b = report.targets[j];
+      const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+      const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      if (overlapX > 0.5 && overlapY > 0.5) {
+        overlaps.push(`${a.name} / ${b.name} share ${Math.round(overlapX)}x${Math.round(overlapY)}px`);
+      }
+    }
+  }
+  if (overlaps.length) throw new Error(`${label}: overlapping hit areas // ${overlaps.join(' | ')}`);
+
+  const unreachable = report.targets
+    .filter((t) => t.x < -0.5 || t.y < -0.5 || t.x + t.width > report.width + 0.5 || t.y + t.height > report.height + 0.5)
+    .map((t) => `${t.name} @ ${Math.round(t.x)},${Math.round(t.y)}`);
+  if (unreachable.length) {
+    throw new Error(`${label}: controls outside the ${report.width}x${report.height} viewport // ${unreachable.join(' | ')}`);
+  }
+}
+
 /** A tap where the device has a finger, a click where it has a pointer. */
 async function tap(page, profile, point) {
   if (profile.hasTouch) await page.touchscreen.tap(point.x, point.y);
@@ -879,6 +915,27 @@ async function runProfile(profile) {
       } finally {
         await cdp.detach().catch(() => {});
       }
+    }
+
+    // The gate leaves a shield over the console for the tail of the press
+    // that dismissed it, and it swallows everything while it stands. A person
+    // never notices; a suite that taps the instant the menu appears does, so
+    // wait for it to stand down rather than racing it.
+    await page.waitForFunction(() => !document.querySelector('.intro-handover'), null, { timeout: 5_000 })
+      .catch(() => { /* no shield was raised, which is the usual case here */ });
+    await settle(page, 2);
+
+    /* --- Identification guide ---------------------------------------- *
+     * A whole scene the named readers do not cover, and the narrowest
+     * profile is where its tabs had the least room.                       */
+    if (profile.viewport.width <= 380) {
+      await tapControl(page, profile, 'MainMenu', 'IDENTIFICATION GUIDE', `${profile.name}/guide`);
+      await waitForScene(page, 'IdentificationGuide', `${profile.name}/guide`, 12_000, errors);
+      await settle(page, 4);
+      await assertLiveTouchTargets(page, `${profile.name}/guide`);
+      await page.keyboard.press('Escape');
+      await waitForScene(page, 'MainMenu', `${profile.name}/guide-return`, 12_000, errors);
+      await settle(page, 3);
     }
 
     /* --- Pointer transform ------------------------------------------- *

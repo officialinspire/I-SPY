@@ -4,7 +4,7 @@ import { createButton } from '../ui/createButton.js';
 import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { createTerminalChrome } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
-import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
+import { UI_TOKENS, hexToNumber, hitGap } from '../ui/designTokens.js';
 import { findSprite } from '../assets/spriteManifest.js';
 import { GUIDE_CATEGORIES } from '../game/identificationGuide.js';
 import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
@@ -362,7 +362,17 @@ export default class IdentificationGuideScene extends Phaser.Scene {
       const rowWidth = countInRow * tabWidth + (countInRow - 1) * tabGap;
       const rowLeft = left + (contentWidth - rowWidth) / 2;
       tab.setLabel(useShortTitles ? GUIDE_CATEGORIES[index].shortTitle : GUIDE_CATEGORIES[index].title);
-      tab.resize({ width: tabWidth, height: tabHeight, fontSize: tabFont })
+      // The tabs sit a few pixels apart and are shorter than the minimum
+      // touch target, so their padding has to stop inside that gap: on a
+      // 360px phone they were overlapping by 9px and a press near the seam
+      // opened the category next door.
+      tab.resize({
+        width: tabWidth,
+        height: tabHeight,
+        fontSize: tabFont,
+        hitPaddingX: hitGap(tabGap),
+        hitPaddingY: hitGap(tabGap),
+      })
         .setPosition(rowLeft + tabWidth / 2 + column * (tabWidth + tabGap),
           cursor + tabHeight / 2 + row * (tabHeight + tabGap));
     });

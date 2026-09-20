@@ -14,6 +14,7 @@ const check = (condition, message) => {
 
 const recon = read('src/scenes/ReconScene.js');
 const briefing = read('src/scenes/MissionBriefingScene.js');
+const record = read('src/scenes/AnalystRecordScene.js');
 const results = read('src/scenes/ResultsScene.js');
 const enhanced = read('src/scenes/EnhancedReconScene.js');
 const weather = read('src/ui/weatherOverlay.js');
@@ -336,6 +337,21 @@ check(
   'one control at a time, and a lock whose pointer is gone is taken over rather than stranding the console',
 );
 
+/* --- Navigation -------------------------------------------------------- *
+ * ESC means the same thing everywhere: back out of where you are. The
+ * mission scenes hold it for pause; the screens that are only navigation
+ * had no binding at all, so the key did nothing on three of them.          */
+check(
+  /keydown-ESC', oncePerKeyEvent\('briefing-esc'/.test(briefing)
+    && /keydown-ESC', oncePerKeyEvent\('results-esc'/.test(results)
+    && /keydown-ESC', oncePerKeyEvent\('record-esc'/.test(record),
+  'the briefing, the debrief and the analyst record all return on ESC',
+);
+check(
+  /oncePerKeyEvent\('briefing-esc', \(\) => \{\s*if \(!this\.transitioning\)/.test(briefing),
+  'ESC on the briefing respects the same transition guard ACQUIRE IMAGERY does',
+);
+
 /* --- Touch targets ---------------------------------------------------- *
  * A control shorter than the 44px minimum grows its hit area to reach it.
  * Two grown hit areas that meet are worse than two small ones: Phaser gives
@@ -358,6 +374,15 @@ check(
     && recon.includes('entry.place(Math.round(cursor + entryWidth / 2), entryWidth, pad)')
     && (recon.match(/hitPaddingX: pad/g) ?? []).length >= 5,
   'every rail control is padded only into the gap the rail left it',
+);
+check(
+  /hitPaddingX: hitGap\(tabGap\),\s*hitPaddingY: hitGap\(tabGap\),/.test(guide),
+  'the guide category tabs are padded only into the gap between them',
+);
+check(
+  /export function hitGap\(gap\)/.test(tokens)
+    && !/^function hitGap\(/m.test(menu) && !/^function hitGap\(/m.test(recon),
+  'hitGap lives with touchPadding, which it bounds, rather than being copied per scene',
 );
 check(
   menu.includes('const stackPad = hitGap(sectorGap(tier));')
