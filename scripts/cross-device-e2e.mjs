@@ -438,7 +438,11 @@ async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
         overlays: window.__qa?.domOverlays() ?? null,
         loop: window.__qa?.loopState() ?? null,
         scenes: window.__qa?.sceneStatus() ?? null,
+        // A press that never landed and a press that landed on a console
+        // holding a stale lock look identical from out here.
+        input: window.__ISPY_QA__?.inputState?.() ?? null,
       })).catch((evaluationError) => ({ evaluationFailed: String(evaluationError) }));
+      state.lastTap = lastTap;
       // A scene that never arrives is usually a scene whose create() threw,
       // and a throw inside a game step stops the loop for good, so the
       // collected browser errors are the diagnosis, not a footnote to it.
@@ -667,7 +671,11 @@ async function assertLiveTouchTargets(page, label) {
 }
 
 /** A tap where the device has a finger, a click where it has a pointer. */
+/** The most recent press the suite made, so a failure can say where it went. */
+let lastTap = null;
+
 async function tap(page, profile, point) {
+  lastTap = { x: point.x, y: point.y, touch: Boolean(profile.hasTouch), at: Date.now() };
   if (profile.hasTouch) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
   await settle(page, 2);
@@ -683,7 +691,10 @@ async function tapControl(page, profile, sceneKey, label, context) {
   if (point.x < 0 || point.y < 0 || point.x > size.width || point.y > size.height) {
     throw new Error(`${context}: control '${label}' is outside the viewport at ${JSON.stringify(point)} (${size.width}x${size.height})`);
   }
+  lastTap = { ...point, touch: Boolean(profile.hasTouch), control: label, scene: sceneKey };
   await tap(page, profile, point);
+  lastTap.control = label;
+  lastTap.scene = sceneKey;
   return point;
 }
 

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
+import { describeArmLock } from './ui/createButton.js';
 import { registerOfflineSupport } from './pwa/registerServiceWorker.js';
 import './settings/userSettings.js';
 import BootScene from './scenes/BootScene.js';
@@ -98,6 +99,40 @@ if (qaMode) {
           });
         });
         return { width, height, targets };
+      },
+      /**
+       * Everything the input system is currently holding.
+       *
+       * A pointer that never lifts, or an arm lock nobody released, makes
+       * every later press vanish with nothing on screen to say why. The
+       * browser suite cannot see either from the outside.
+       */
+      inputState: () => {
+        const manager = game.input?.manager;
+        return {
+          armLock: describeArmLock(),
+          pointers: (manager?.pointers ?? []).map((pointer) => ({
+            id: pointer.id,
+            identifier: pointer.identifier ?? null,
+            isDown: Boolean(pointer.isDown),
+            active: Boolean(pointer.active),
+            wasTouch: Boolean(pointer.wasTouch),
+            wasCanceled: Boolean(pointer.wasCanceled),
+            x: Math.round(pointer.x),
+            y: Math.round(pointer.y),
+          })),
+          canvasBounds: game.scale?.canvasBounds
+            ? {
+              x: Math.round(game.scale.canvasBounds.x),
+              y: Math.round(game.scale.canvasBounds.y),
+              width: Math.round(game.scale.canvasBounds.width),
+              height: Math.round(game.scale.canvasBounds.height),
+            }
+            : null,
+          gameSize: game.scale?.gameSize
+            ? { width: game.scale.gameSize.width, height: game.scale.gameSize.height }
+            : null,
+        };
       },
       reconState: () => {
         const scene = game.scene.getScene('Recon');

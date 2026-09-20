@@ -36,6 +36,24 @@ function releaseLock(token) {
   if (armLock?.token === token) armLock = null;
 }
 
+/**
+ * Read-only view of the arm lock, for the QA handle.
+ *
+ * A lock whose pointer never lifts silently disables every control on the
+ * console, which looks exactly like a tap that did not land. Diagnosing that
+ * from the outside is impossible without being able to see the lock.
+ */
+export function describeArmLock() {
+  if (!armLock) return null;
+  return {
+    label: armLock.token?.parentContainer?.list
+      ?.find((item) => item?.type === 'Text')?.text ?? null,
+    pointerId: armLock.pointer?.id ?? null,
+    pointerIsDown: Boolean(armLock.pointer?.isDown),
+    pointerWasTouch: Boolean(armLock.pointer?.wasTouch),
+  };
+}
+
 function hoverTick() {
   const now = globalThis.performance?.now?.() ?? Date.now();
   if (now - lastHoverTickAt < HOVER_TICK_INTERVAL_MS) return;
