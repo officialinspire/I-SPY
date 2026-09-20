@@ -408,8 +408,9 @@ export default class ReconScene extends Phaser.Scene {
   bindInput() {
     this.dragging = false;
     this.paused = false;
-    this.pinchDistance = null;
     this.dragCamera = null;
+    this.dragPointerId = null;
+    this.pinchGesture = null;
     this.controlPressed = false;
     this.controlReleased = false;
     this.tapPointer = null;
@@ -426,27 +427,46 @@ export default class ReconScene extends Phaser.Scene {
         this.tapPointer = null;
         return;
       }
-      if (this.tapPointer) {
-        // Second finger down: this gesture is a pinch, so it is not a tap.
-        this.tapPointer = null;
-        this.dragging = false;
+
+      const active = this.mapPointersDown();
+      if (active.length >= 2) {
+        // Two fingers own the gesture exclusively. Any pending tap/pan is
+        // cancelled before zoom begins, so a pinch cannot accidentally mark.
+        this.beginPinch(active);
         return;
       }
+
       const context = this.getPointerContext(pointer);
       this.dragging = true;
+      this.dragPointerId = pointer.id;
       this.dragCamera = context.camera;
       this.lastPointer = { x: pointer.x, y: pointer.y };
       this.tapPointer = { id: pointer.id, x: pointer.x, y: pointer.y, travel: 0 };
     });
+
     this.input.on('pointermove', (pointer) => {
       if (!this.paused) this.updateCoordinates(pointer);
+      if (this.paused || this.missionEnded) return;
+
+      const active = this.mapPointersDown();
+      if (active.length >= 2) {
+        if (!this.pinchGesture) this.beginPinch(active);
+        this.updatePinch(active);
+        return;
+      }
+
+      // pointerup rebases the remaining finger after a pinch. Until then, do
+      // not interpret an in-between pointermove as a giant one-finger pan.
+      if (this.pinchGesture) return;
+
       if (this.tapPointer && pointer.id === this.tapPointer.id) {
         this.tapPointer.travel = Math.max(
           this.tapPointer.travel,
           Phaser.Math.Distance.Between(this.tapPointer.x, this.tapPointer.y, pointer.x, pointer.y),
         );
       }
-      if (!this.dragging || !pointer.isDown || this.paused) return;
+      if (!this.dragging || pointer.id !== this.dragPointerId || !pointer.isDown) return;
+
       const camera = this.dragCamera ?? this.cameras.main;
       camera.scrollX -= (pointer.x - this.lastPointer.x) / camera.zoom;
       camera.scrollY -= (pointer.y - this.lastPointer.y) / camera.zoom;
@@ -454,37 +474,105 @@ export default class ReconScene extends Phaser.Scene {
       this.lastPointer = { x: pointer.x, y: pointer.y };
       if (this.candidate) this.drawCandidateMarker();
     });
+
     this.input.on('pointerup', (pointer) => {
       const onControl = this.controlReleased;
       this.controlReleased = false;
+
+      if (this.pinchGesture) {
+        const remaining = this.mapPointersDown().filter((item) => item.id !== pointer.id);
+        this.finishPinch(remaining);
+        return;
+      }
+
       const tap = this.tapPointer
         && pointer.id === this.tapPointer.id
         && this.tapPointer.travel <= GAME_CONFIG.recon.dragThreshold;
       this.tapPointer = null;
       this.dragging = false;
       this.dragCamera = null;
-      this.pinchDistance = null;
+      this.dragPointerId = null;
       if (tap && !onControl) this.handleMapTap(pointer);
     });
+
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
       this.zoomAt(pointer, deltaY > 0 ? -GAME_CONFIG.recon.zoomStep : GAME_CONFIG.recon.zoomStep);
-    });
-    this.input.on('pointermove', () => {
-      const pointers = this.input.manager.pointers.filter((pointer) => pointer.isDown);
-      if (pointers.length !== 2 || this.paused || this.marking) { this.pinchDistance = null; return; }
-      const distance = Phaser.Math.Distance.Between(pointers[0].x, pointers[0].y, pointers[1].x, pointers[1].y);
-      if (this.pinchDistance !== null) {
-        const midpoint = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
-        this.zoomAt(midpoint, (distance - this.pinchDistance) * 0.0035);
-      }
-      this.pinchDistance = distance;
     });
 
     this.input.keyboard?.on('keydown-ESC', () => {
       if (!this.isCountMode && this.candidate) this.cancelCandidate(); else this.togglePause();
     });
     this.input.keyboard?.on('keydown', (event) => this.handleKeyboard(event));
+  }
+
+  mapPointersDown() {
+    return this.input.manager.pointers.filter((pointer) => pointer.isDown && !this.isHudPoint(pointer));
+  }
+
+  beginPinch(pointers = this.mapPointersDown()) {
+    if (pointers.length < 2 || this.paused || this.missionEnded) return false;
+    const [first, second] = pointers;
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const camera = this.getPointerContext(midpoint).camera;
+    const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
+
+    this.pinchGesture = {
+      pointerIds: [first.id, second.id],
+      startDistance: distance,
+      startZoom: camera.zoom,
+      camera,
+      anchorWorld: camera.getWorldPoint(midpoint.x, midpoint.y),
+    };
+    this.tapPointer = null;
+    this.dragging = false;
+    this.dragCamera = null;
+    this.dragPointerId = null;
+    return true;
+  }
+
+  updatePinch(pointers = this.mapPointersDown()) {
+    if (pointers.length < 2 || this.paused || this.missionEnded) return false;
+    if (!this.pinchGesture) this.beginPinch(pointers);
+    if (!this.pinchGesture) return false;
+
+    const [first, second] = pointers;
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
+    const camera = this.pinchGesture.camera;
+    const ratio = distance / Math.max(1, this.pinchGesture.startDistance);
+    const nextZoom = Phaser.Math.Clamp(
+      this.pinchGesture.startZoom * ratio,
+      this.minZoomForCamera(camera),
+      GAME_CONFIG.recon.maxZoom,
+    );
+
+    camera.setZoom(nextZoom);
+    const after = camera.getWorldPoint(midpoint.x, midpoint.y);
+    camera.scrollX += this.pinchGesture.anchorWorld.x - after.x;
+    camera.scrollY += this.pinchGesture.anchorWorld.y - after.y;
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
+    if (this.candidate) this.drawCandidateMarker();
+    return true;
+  }
+
+  finishPinch(remaining = []) {
+    this.pinchGesture = null;
+    this.tapPointer = null;
+    this.dragging = false;
+    this.dragCamera = null;
+    this.dragPointerId = null;
+
+    // Continuing with one finger after lifting the other should feel like one
+    // continuous gesture, not a camera jump.
+    if (remaining.length === 1 && !this.paused && !this.missionEnded) {
+      const pointer = remaining[0];
+      const context = this.getPointerContext(pointer);
+      this.dragging = true;
+      this.dragPointerId = pointer.id;
+      this.dragCamera = context.camera;
+      this.lastPointer = { x: pointer.x, y: pointer.y };
+    }
   }
 
   /** A tap on the imagery only marks while marking is armed. */
