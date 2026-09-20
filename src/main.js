@@ -109,8 +109,12 @@ if (qaMode) {
           marking: Boolean(scene.marking),
           candidate: Boolean(scene.candidate),
           pinchActive: Boolean(scene.pinchGesture),
+          pinchDirty: Boolean(scene.pinchGesture?.dirty),
           pinchPointerIds: scene.pinchGesture?.pointerIds ? [...scene.pinchGesture.pointerIds] : [],
           activeMapPointers: scene.mapPointersDown?.().map((pointer) => pointer.id) ?? [],
+          dragging: Boolean(scene.dragging),
+          panGestureDirty: Boolean(scene.panGestureDirty),
+          cameraLimits: scene.cameraScrollLimits?.(camera) ?? null,
           completedTargets: scene.completedTargetIds?.length ?? 0,
           requiredTargets: scene.locateTargets?.length ?? 0,
         } : null;
