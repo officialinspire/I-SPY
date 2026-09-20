@@ -210,13 +210,30 @@ async function runProfile(profile) {
 
     const introStart = page.locator('.intro-start__button');
     if (await introStart.isVisible().catch(() => false)) {
-      await introStart.dispatchEvent('pointerdown', { pointerType: profile.hasTouch ? 'touch' : 'mouse' })
-        .catch(() => {});
-      await page.waitForTimeout(40);
+      if (profile.hasTouch) {
+        const startPoint = await page.evaluate(() => {
+          const rect = document.querySelector('.intro-start__button')?.getBoundingClientRect();
+          return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+        });
+        if (!startPoint) throw new Error('intro start touch target unavailable');
+        await page.touchscreen.tap(startPoint.x, startPoint.y);
+      } else {
+        await introStart.dispatchEvent('pointerdown', { pointerType: 'mouse' }).catch(() => {});
+      }
+
+      await page.waitForTimeout(80);
       const skip = page.locator('.intro-skip.is-visible');
       if (await skip.isVisible().catch(() => false)) {
-        await skip.dispatchEvent('pointerdown', { pointerType: profile.hasTouch ? 'touch' : 'mouse' })
-          .catch(() => {});
+        if (profile.hasTouch) {
+          const skipPoint = await page.evaluate(() => {
+            const rect = document.querySelector('.intro-skip.is-visible')?.getBoundingClientRect();
+            return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+          });
+          if (!skipPoint) throw new Error('intro skip touch target unavailable');
+          await page.touchscreen.tap(skipPoint.x, skipPoint.y);
+        } else {
+          await skip.dispatchEvent('pointerdown', { pointerType: 'mouse' }).catch(() => {});
+        }
       }
     }
 
