@@ -68,6 +68,20 @@ const ALL_PROFILES = [
     mode: 'LOCATE',
     map: 'dustline-sector',
   },
+  {
+    // The narrow end of the Android range, still common, and the width at
+    // which the console and the recon rails have the least room to work in.
+    name: 'small-android-chromium',
+    engine: chromium,
+    launchOptions: { args: CHROMIUM_ARGS },
+    viewport: { width: 360, height: 640 },
+    rotateTo: { width: 640, height: 360 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 3,
+    mode: 'CHANGE',
+    map: 'riverworks-sector',
+  },
 ];
 
 const only = (process.env.ISPY_E2E_ONLY ?? '').split(',').map((name) => name.trim()).filter(Boolean);
@@ -169,6 +183,36 @@ const PAGE_HELPERS = () => {
       const world = { x: entity.x + entity.width / 2, y: entity.y + entity.height / 2 };
       return { world, screen: worldToScreen(camera, world.x, world.y) };
     },
+    /** Every visible console control on the menu, with its own rectangle. */
+    menuControls() {
+      const scene = game().scene.getScene('MainMenu');
+      if (!scene) return [];
+      return (scene.buttons ?? []).filter((button) => button.isVisible()).map((button) => {
+        const bounds = button.background.getBounds();
+        return {
+          label: button.text.text,
+          left: Math.round(bounds.left), top: Math.round(bounds.top),
+          right: Math.round(bounds.right), bottom: Math.round(bounds.bottom),
+        };
+      });
+    },
+    /** Every visible recon control, with its own rectangle. */
+    reconControls() {
+      const scene = game().scene.getScene('Recon');
+      if (!scene) return [];
+      const all = [
+        ...(scene.commonButtons ?? []), ...(scene.locateButtons ?? []),
+        ...(scene.countButtons ?? []), ...(scene.changeButtons ?? []),
+      ];
+      return all.filter((button) => button.isVisible()).map((button) => {
+        const bounds = button.background.getBounds();
+        return {
+          label: button.text.text,
+          left: Math.round(bounds.left), top: Math.round(bounds.top),
+          right: Math.round(bounds.right), bottom: Math.round(bounds.bottom),
+        };
+      });
+    },
     reconChrome() {
       const scene = game().scene.getScene('Recon');
       if (!scene) return null;
@@ -267,6 +311,38 @@ async function assertViewport(page, expected, label) {
       || metrics.canvas.height < Math.max(1, metrics.innerHeight - 4)) {
     fail('canvas does not fill the safe viewport');
   }
+}
+
+/**
+ * Controls have to be where a finger can reach them, and only one of them
+ * can be under any given point. Both have failed on small phones: SETTINGS
+ * was composed off the bottom of a 320px console, and the compact recon
+ * rails drew RESET VIEW on top of MARK TARGET.
+ */
+async function assertControlsReachable(page, reader, label) {
+  const size = page.viewportSize();
+  const controls = await page.evaluate((name) => window.__qa[name](), reader);
+  if (!controls.length) throw new Error(`${label}: no controls found to check`);
+
+  controls.forEach((control) => {
+    if (control.left < -2 || control.top < -2
+        || control.right > size.width + 2 || control.bottom > size.height + 2) {
+      throw new Error(`${label}: control '${control.label}' is outside the ${size.width}x${size.height} viewport // ${JSON.stringify(control)}`);
+    }
+  });
+
+  for (let i = 0; i < controls.length; i += 1) {
+    for (let j = i + 1; j < controls.length; j += 1) {
+      const a = controls[i];
+      const b = controls[j];
+      const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (overlapX > 2 && overlapY > 2) {
+        throw new Error(`${label}: controls '${a.label}' and '${b.label}' overlap by ${overlapX}x${overlapY} // ${JSON.stringify([a, b])}`);
+      }
+    }
+  }
+  return controls.length;
 }
 
 /** A tap where the device has a finger, a click where it has a pointer. */
@@ -461,6 +537,7 @@ async function runProfile(profile) {
     await page.waitForTimeout(250);
     await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
+    await assertControlsReachable(page, 'menuControls', `${profile.name}/menu`);
     const menuHash = await canvasHash(page);
 
     await tapControl(page, profile, 'MainMenu', 'RANDOM MISSION', `${profile.name}/menu`);
@@ -478,6 +555,8 @@ async function runProfile(profile) {
     await waitForScene(page, 'Recon', `${profile.name}/recon`);
     await page.waitForTimeout(400);
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
+
+    await assertControlsReachable(page, 'reconControls', `${profile.name}/recon`);
 
     const mission = await page.evaluate(() => window.__qa.missionSummary());
     if (!mission) throw new Error(`${profile.name}/recon: no mission on the recon scene`);
@@ -502,6 +581,7 @@ async function runProfile(profile) {
     await page.setViewportSize(profile.rotateTo);
     await page.waitForTimeout(250);
     await assertViewport(page, profile.rotateTo, `${profile.name}/rotated-recon`);
+    await assertControlsReachable(page, 'reconControls', `${profile.name}/rotated-recon`);
     await page.setViewportSize(profile.viewport);
     await page.waitForTimeout(250);
     await assertViewport(page, profile.viewport, `${profile.name}/restored-recon`);

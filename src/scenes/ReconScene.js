@@ -540,6 +540,39 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   /**
+   * Lays a row of controls across the rail, in order, without overlaps.
+   *
+   * The compact rails used to be positioned from fixed offsets that assumed
+   * a phone at least ~390px wide. Narrower Android phones — 360 and 320 are
+   * both still in the wild — drew RESET VIEW over MARK TARGET, + over SUBMIT
+   * COUNT and MARK CHANGE over PASS A, so a tap could activate a control the
+   * analyst was not aiming at. Widths are requested here rather than fixed:
+   * a row with room to spare spreads across the rail exactly as before, and
+   * a row that does not fit shrinks every control in it by the same factor
+   * instead of letting two of them share a space.
+   *
+   * Each entry places itself through `place(centreX, width)`, because the
+   * modes put different things in a slot — a button, or the tally module's
+   * three pieces.
+   */
+  placeRail(entries, { width, margin = 14, minGap = 10 } = {}) {
+    const requested = entries.reduce((total, entry) => total + entry.width, 0);
+    const available = Math.max(1, width - margin * 2);
+    const slots = Math.max(1, entries.length - 1);
+    const scale = Phaser.Math.Clamp((available - minGap * slots) / Math.max(1, requested), 0.1, 1);
+    const widths = entries.map((entry) => Math.max(1, Math.round(entry.width * scale)));
+    const used = widths.reduce((total, value) => total + value, 0);
+    const gap = entries.length > 1 ? Math.max(minGap, (available - used) / slots) : 0;
+
+    let cursor = margin;
+    entries.forEach((entry, index) => {
+      const entryWidth = widths[index];
+      entry.place(Math.round(cursor + entryWidth / 2), entryWidth);
+      cursor += entryWidth + gap;
+    });
+  }
+
+  /**
    * Height of this mode's bottom control rail. One source of truth: the
    * enhanced scene draws the rail at this height and taps are guarded by it,
    * so the guarded band and the drawn band can never drift apart.
@@ -1003,44 +1036,108 @@ export default class ReconScene extends Phaser.Scene {
       // Tally module (adjust) sits apart from the submit action, each captioned.
       const controlY = compact ? height - 76 : height - 34;
       const captionY = controlY - 33;
-      const step = compact ? 66 : 78;
       const stepperWidth = compact ? 48 : 54;
       const tallyWidth = compact ? 76 : 92;
       const submitWidth = compact ? 126 : 168;
-      const groupCentre = compact ? 22 + stepperWidth / 2 + step : width / 2 - 150;
-      const submitX = compact ? width - 18 - submitWidth / 2 : width / 2 + 130;
+      // The three tally pieces are one module and stay tight together; the
+      // rail only decides where the module and the submit action sit.
+      const moduleGap = compact ? 9 : 12;
+      const moduleWidth = stepperWidth * 2 + tallyWidth + moduleGap * 2;
 
-      this.decrementButton.resize({ width: stepperWidth }).setPosition(groupCentre - step, controlY);
-      this.tallyFrame.setSize(tallyWidth, compact ? 44 : 46).setPosition(groupCentre, controlY);
-      this.answerText.setFontSize(compact ? 26 : 30).setPosition(groupCentre, controlY);
-      this.incrementButton.resize({ width: stepperWidth }).setPosition(groupCentre + step, controlY);
-      this.adjustCaption.setPosition(groupCentre, captionY).setVisible(height >= 420);
+      if (compact) {
+        this.placeRail([
+          {
+            width: moduleWidth,
+            place: (centre, placed) => {
+              const shrink = placed / moduleWidth;
+              const stepper = Math.round(stepperWidth * shrink);
+              const tally = Math.round(tallyWidth * shrink);
+              const step = (stepper + tally) / 2 + moduleGap * shrink;
+              this.decrementButton.resize({ width: stepper }).setPosition(centre - step, controlY);
+              this.tallyFrame.setSize(tally, 44).setPosition(centre, controlY);
+              this.answerText.setFontSize(26).setPosition(centre, controlY);
+              this.incrementButton.resize({ width: stepper }).setPosition(centre + step, controlY);
+              this.adjustCaption.setPosition(centre, captionY).setVisible(height >= 420);
+            },
+          },
+          {
+            width: submitWidth,
+            place: (centre, placed) => {
+              // The label has to stay inside its own button when the rail
+              // has compressed it, so the type steps down with the width.
+              this.submitCountButton
+                .resize({ width: placed, fontSize: placed < 118 ? 11 : 13 })
+                .setPosition(centre, controlY);
+              this.submitCaption.setPosition(centre, captionY).setVisible(height >= 420);
+            },
+          },
+        ], { width, margin: 16, minGap: 12 });
+      } else {
+        const groupCentre = width / 2 - 150;
+        const submitX = width / 2 + 130;
+        const step = (stepperWidth + tallyWidth) / 2 + moduleGap * 2;
+        this.decrementButton.resize({ width: stepperWidth }).setPosition(groupCentre - step, controlY);
+        this.tallyFrame.setSize(tallyWidth, 46).setPosition(groupCentre, controlY);
+        this.answerText.setFontSize(30).setPosition(groupCentre, controlY);
+        this.incrementButton.resize({ width: stepperWidth }).setPosition(groupCentre + step, controlY);
+        this.adjustCaption.setPosition(groupCentre, captionY).setVisible(height >= 420);
+        this.submitCountButton.resize({ width: submitWidth }).setPosition(submitX, controlY);
+        this.submitCaption.setPosition(submitX, captionY).setVisible(height >= 420);
+      }
 
-      this.submitCountButton.resize({ width: submitWidth }).setPosition(submitX, controlY);
-      this.submitCaption.setPosition(submitX, captionY).setVisible(height >= 420);
-
-      this.resetButton.setPosition(compact ? width / 2 - 70 : width - 181, compact ? height - 26 : 48);
-      this.pauseButton.setPosition(compact ? width / 2 + 70 : width - 58, compact ? height - 26 : 48);
+      if (compact) {
+        this.placeRail([
+          { width: 124, place: (centre, placed) => this.resetButton.resize({ width: placed }).setPosition(centre, height - 26) },
+          { width: 96, place: (centre, placed) => this.pauseButton.resize({ width: placed }).setPosition(centre, height - 26) },
+        ], { width, margin: Math.max(16, width * 0.12), minGap: 12 });
+      } else {
+        this.resetButton.resize({ width: 124 }).setPosition(width - 181, 48);
+        this.pauseButton.resize({ width: 96 }).setPosition(width - 58, 48);
+      }
       this.statusText.setPosition(width / 2, height - (compact ? 134 : 88));
     } else if (this.isChangeMode) {
       const split = this.splitView;
       const usableWidth = split ? Math.floor(width / 2) : width;
       const controlY = compact ? height - 76 : height - 34;
-      this.markButton.resize({ width: compact ? 128 : 150 })
-        .setPosition(split ? usableWidth * 0.22 : (compact ? 18 + 64 : width / 2 - 210), controlY);
 
       const segmentWidth = compact ? 84 : 96;
-      const segmentCentre = compact ? width - 22 - segmentWidth : width / 2 + 10;
-      this.passAButton.resize({ width: segmentWidth }).setPosition(segmentCentre - segmentWidth / 2 - 2, controlY);
-      this.passBButton.resize({ width: segmentWidth }).setPosition(segmentCentre + segmentWidth / 2 + 2, controlY);
-      this.passCaption.setPosition(segmentCentre, controlY - 32).setVisible(!split && height >= 420);
+      const segmentGap = 4;
+      const segmentPairWidth = segmentWidth * 2 + segmentGap;
+      const placeSegments = (centre, placed) => {
+        const half = (placed - segmentGap) / 2;
+        this.passAButton.resize({ width: Math.round(half) })
+          .setPosition(Math.round(centre - half / 2 - segmentGap / 2), controlY);
+        this.passBButton.resize({ width: Math.round(half) })
+          .setPosition(Math.round(centre + half / 2 + segmentGap / 2), controlY);
+        this.passCaption.setPosition(centre, controlY - 32).setVisible(!split && height >= 420);
+      };
+
+      if (compact && !split) {
+        // MARK and the A/B segments share one narrow rail. Below roughly
+        // 390px the fixed offsets put them on top of each other.
+        this.placeRail([
+          { width: 128, place: (centre, placed) => this.markButton.resize({ width: placed }).setPosition(centre, controlY) },
+          { width: segmentPairWidth, place: placeSegments },
+        ], { width, margin: 16, minGap: 12 });
+      } else {
+        this.markButton.resize({ width: 150 })
+          .setPosition(split ? usableWidth * 0.22 : width / 2 - 210, controlY);
+        placeSegments(width / 2 + 10, segmentPairWidth);
+      }
       this.splitButton.setPosition(split ? usableWidth * 0.78 : width / 2 + 190, controlY);
       this.splitButton.setVisible(width >= GAME_CONFIG.change.splitViewMinWidth);
       this.passAButton.setVisible(!split);
       this.passBButton.setVisible(!split);
 
-      this.resetButton.setPosition(split || !compact ? width - 181 : width / 2 - 70, split || !compact ? 48 : height - 26);
-      this.pauseButton.setPosition(split || !compact ? width - 58 : width / 2 + 70, split || !compact ? 48 : height - 26);
+      if (split || !compact) {
+        this.resetButton.resize({ width: 124 }).setPosition(width - 181, 48);
+        this.pauseButton.resize({ width: 96 }).setPosition(width - 58, 48);
+      } else {
+        this.placeRail([
+          { width: 124, place: (centre, placed) => this.resetButton.resize({ width: placed }).setPosition(centre, height - 26) },
+          { width: 96, place: (centre, placed) => this.pauseButton.resize({ width: placed }).setPosition(centre, height - 26) },
+        ], { width, margin: Math.max(16, width * 0.12), minGap: 12 });
+      }
       this.confirmButton.setPosition(split ? usableWidth / 2 - 60 : width / 2 - 60, height - (compact ? 132 : 82));
       this.cancelButton.setPosition(split ? usableWidth / 2 + 60 : width / 2 + 60, height - (compact ? 132 : 82));
       this.passStatusText.setPosition(split ? usableWidth / 2 : width / 2, GAME_CONFIG.recon.hudHeight + 20);
@@ -1048,12 +1145,17 @@ export default class ReconScene extends Phaser.Scene {
     } else {
       // Phone rail: the primary action leads, the two utilities share the tail
       // of the row at their own smaller sizes.
-      this.markButton.resize({ width: compact ? 150 : 170 });
-      this.resetButton.resize({ width: compact ? 104 : 124 });
-      this.pauseButton.resize({ width: compact ? 84 : 96 });
-      this.markButton.setPosition(compact ? 93 : width - 340, compact ? height - 34 : 48);
-      this.resetButton.setPosition(compact ? width - 162 : width - 181, compact ? height - 34 : 48);
-      this.pauseButton.setPosition(compact ? width - 60 : width - 58, compact ? height - 34 : 48);
+      if (compact) {
+        this.placeRail([
+          { width: 150, place: (centre, placed) => this.markButton.resize({ width: placed }).setPosition(centre, height - 34) },
+          { width: 104, place: (centre, placed) => this.resetButton.resize({ width: placed }).setPosition(centre, height - 34) },
+          { width: 84, place: (centre, placed) => this.pauseButton.resize({ width: placed }).setPosition(centre, height - 34) },
+        ], { width, margin: 14, minGap: 10 });
+      } else {
+        this.markButton.resize({ width: 170 }).setPosition(width - 340, 48);
+        this.resetButton.resize({ width: 124 }).setPosition(width - 181, 48);
+        this.pauseButton.resize({ width: 96 }).setPosition(width - 58, 48);
+      }
       this.confirmButton.setPosition(width / 2 - 60, height - (compact ? 86 : 40));
       this.cancelButton.setPosition(width / 2 + 60, height - (compact ? 86 : 40));
       this.statusText.setPosition(width / 2, height - (compact ? 128 : 88));

@@ -136,6 +136,30 @@ check(
   'a short console keeps the tasking cards on one row instead of stacking them',
 );
 
+/* --- Recon rails ------------------------------------------------------ *
+ * The compact rails used fixed offsets that assumed a phone at least
+ * ~390px wide. Narrower Android phones drew RESET VIEW over MARK TARGET,
+ * + over SUBMIT COUNT and MARK CHANGE over PASS A.                        */
+check(
+  /placeRail\(entries, \{ width, margin = 14, minGap = 10 \} = \{\}\) \{/.test(recon)
+    && recon.includes('const scale = Phaser.Math.Clamp((available - minGap * slots) / Math.max(1, requested), 0.1, 1);'),
+  'a rail that does not fit shrinks every control in it by the same factor',
+);
+check(
+  (recon.match(/this\.placeRail\(\[/g) ?? []).length >= 5,
+  'every compact rail — LOCATE, COUNT, CHANGE and their utility rows — is laid out through the rail',
+);
+check(
+  !/this\.markButton\.setPosition\(compact \? 93/.test(recon)
+    && !/this\.resetButton\.setPosition\(compact \? width - 162/.test(recon)
+    && !/const groupCentre = compact \?/.test(recon),
+  'no compact rail positions a control from a fixed phone-width offset',
+);
+check(
+  recon.includes('fontSize: placed < 118 ? 11 : 13'),
+  'SUBMIT COUNT steps its label down when the rail has compressed its button',
+);
+
 /* --- Scene data ------------------------------------------------------ */
 check(
   !/^\s*this\.data = data;/m.test(results) && results.includes('this.debrief = data;'),
@@ -147,5 +171,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 26 repeat-mission, start-gate, viewport, console-layout and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 30 repeat-mission, start-gate, viewport, console-layout, recon-rail and debrief-idempotency checks.');
 }

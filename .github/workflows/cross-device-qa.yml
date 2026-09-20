@@ -1,18 +1,33 @@
-name: Cross-device QA hardening
+name: Cross-device QA
+
+# The browser suite plays a real mission to its debrief on desktop, tablet,
+# iPhone and Android profiles, so it guards the things the deterministic
+# suites cannot see: layout, hit areas, input, and scene lifecycle under
+# actual rendering. It runs on every pull request and on main, because a
+# regression here reaches players through GitHub Pages.
 on:
   push:
-    branches: [qa-cross-device-hardening]
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: cross-device-qa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install app dependencies
         run: npm ci
       - name: Run deterministic and source QA
@@ -32,5 +47,5 @@ jobs:
           done
           cat /tmp/ispy-preview.log
           exit 1
-      - name: Cross-device browser smoke test
+      - name: Cross-device browser QA
         run: node scripts/cross-device-e2e.mjs
