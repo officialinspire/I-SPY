@@ -47,6 +47,15 @@ export const MAP_CATALOG = Object.freeze([
     source: 'assets/maps/border-farms.json',
   }),
   Object.freeze({
+    id: 'greywall-district',
+    title: 'GREYWALL DISTRICT',
+    environment: 'URBAN INDUSTRIAL DISTRICT',
+    description: 'Dense apartment and warehouse blocks around a central traffic corridor, with alleys, damaged structures and a fenced communications compound hidden among civilian development.',
+    difficulty: 4,
+    recommendedZoom: 0.72,
+    source: 'assets/maps/greywall-district.json',
+  }),
+  Object.freeze({
     id: 'training-range-alpha',
     title: 'TRAINING RANGE ALPHA',
     environment: 'ANALYST TRAINING RANGE',
