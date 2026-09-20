@@ -11,6 +11,7 @@ const recon = read('src/scenes/ReconScene.js');
 const briefing = read('src/scenes/MissionBriefingScene.js');
 const results = read('src/scenes/ResultsScene.js');
 const enhanced = read('src/scenes/EnhancedReconScene.js');
+const weather = read('src/ui/weatherOverlay.js');
 
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.missionEnded = false;[\s\S]*?this\.resolvingIdentification = false;/.test(recon),
@@ -57,11 +58,23 @@ check(
   results.includes('recordUpdate.duplicate') && results.includes('operationRecord?.duplicate'),
   'duplicate mission and operation debriefs are surfaced without recounting',
 );
+check(
+  recon.includes('this.weatherOverlay?.setPaused(this.paused)') && recon.includes('this.weatherOverlay?.destroy()'),
+  'mission weather pauses with recon and is destroyed on scene shutdown',
+);
+check(
+  weather.includes('tick?.remove(false)') && weather.includes('graphics?.destroy()'),
+  'weather overlay removes its timer and graphics on destroy',
+);
+check(
+  briefing.includes("CONDITIONS: ${this.mission.condition ?? 'CLEAR'}"),
+  'mission briefing surfaces the environmental condition',
+);
 
 if (failures.length) {
   console.error(`I SPY scene lifecycle QA failed (${failures.length}):`);
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 11 repeat-mission and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 14 repeat-mission, weather-lifecycle, and debrief-idempotency checks.');
 }
