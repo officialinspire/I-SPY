@@ -1,7 +1,7 @@
 name: Cross-device QA hardening
 on:
   push:
-    branches: [qa-cross-device-hardening]
+    branches: [qa-cross-device-hardening-final]
 permissions:
   contents: read
 jobs:
