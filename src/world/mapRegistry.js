@@ -5,6 +5,7 @@ import woodlandCorridor7 from '../../assets/maps/woodland-corridor-7.json' with 
 import frostlineRelay from '../../assets/maps/frostline-relay.json' with { type: 'json' };
 import riverworksSector from '../../assets/maps/riverworks-sector.json' with { type: 'json' };
 import borderFarms from '../../assets/maps/border-farms.json' with { type: 'json' };
+import greywallDistrict from '../../assets/maps/greywall-district.json' with { type: 'json' };
 import trainingRangeAlpha from '../../assets/maps/training-range-alpha.json' with { type: 'json' };
 
 /**
@@ -22,6 +23,7 @@ const MAP_DATA = Object.freeze({
   'frostline-relay': frostlineRelay,
   'riverworks-sector': riverworksSector,
   'border-farms': borderFarms,
+  'greywall-district': greywallDistrict,
   'training-range-alpha': trainingRangeAlpha,
 });
 

@@ -2,7 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GAME_CONFIG } from '../src/runtime-config.js';
-import { SPRITE_SHEETS, findSprite } from '../src/assets/spriteManifest.js';
+import {
+  LEGACY_SPRITE_FRAME_COUNT,
+  LEGACY_SPRITE_SHEET_KEYS,
+  SPRITE_SHEETS,
+  findSprite,
+  frameFor,
+} from '../src/assets/spriteManifest.js';
 import { MAP_CATALOG } from '../src/world/mapCatalog.js';
 import { validateReconMap, getCountRegion, countEntitiesInRegion, findSelectableOverlaps, OVERLAP_LIMIT } from '../src/world/reconMapSchema.js';
 import { GUIDE_CATEGORIES, validateIdentificationGuide } from '../src/game/identificationGuide.js';
@@ -59,9 +65,29 @@ assert(MAP_CATALOG.length > 0, 'map catalog registers at least one sector');
 assert(MAP_CATALOG.some((entry) => entry.id === GAME_CONFIG.recon.defaultMapId), `default map id is registered: ${GAME_CONFIG.recon.defaultMapId}`);
 assert(new Set(MAP_CATALOG.map((entry) => entry.id)).size === MAP_CATALOG.length, 'registered map ids are unique');
 
+const legacySpriteContract = [
+  'ground','dirt','mud','field','water','rocky','snow','crater','conifer','deciduous','dead_tree','forest_cluster','bush','hedge','stump','fallen_tree',
+  'road_straight','road_curve','road_intersection','dirt_track','rail','bridge','fence','gate','pole','pipeline','farmhouse','barn','warehouse','barracks','bunker','hangar',
+  'tank','apc','military_truck','fuel_truck','jeep','radar_vehicle','missile_transporter','artillery','radar_dish','antenna_array','radio_tower','watchtower','fuel_tanks','bunker_entrance','generator','sam_site',
+  'tire_tracks','track_marks','footprints','disturbed_soil','cut_vegetation','smoke','crates','barrels','camouflage_net','tractor','civilian_truck','hay_bale','destroyed_bridge','trench','dummy_tank','abandoned_equipment',
+  'reticle','reticle_lock','marker_confirm','marker_unverified','question','exclamation','grid_dot','grid_cross','scanline_h','scanline_v','corner_tl','corner_tr','corner_bl','corner_br','panel','cursor',
+];
+const legacySpriteNames = LEGACY_SPRITE_SHEET_KEYS.flatMap((key) => SPRITE_SHEETS[key].names);
 const spriteNames = Object.values(SPRITE_SHEETS).flatMap((sheet) => sheet.names);
-assert(spriteNames.length === 80, `sprite library contains 80 frames (found ${spriteNames.length})`);
+assert(legacySpriteNames.length === LEGACY_SPRITE_FRAME_COUNT,
+  `legacy sprite library remains ${LEGACY_SPRITE_FRAME_COUNT} frames (found ${legacySpriteNames.length})`);
+assert(legacySpriteNames.join('|') === legacySpriteContract.join('|'),
+  'legacy sprite names and frame order remain unchanged');
 assert(new Set(spriteNames).size === spriteNames.length, 'sprite frame names are unique');
+const supplemental = SPRITE_SHEETS.environmentSupplemental;
+assert(Boolean(supplemental) && supplemental.names.length === 24,
+  `supplemental environment sheet registers 24 frames (found ${supplemental?.names?.length ?? 0})`);
+assert(supplemental?.columns === 4 && supplemental?.rows === 6,
+  'supplemental environment sheet uses the 4x6 frame contract');
+supplemental?.names.forEach((name, index) => {
+  const frame = frameFor(supplemental, name);
+  assert(Boolean(frame) && frame.index === index, `supplemental frame resolves at stable index: ${name}`);
+});
 
 const loadedMaps = [];
 for (const entry of MAP_CATALOG) {
@@ -230,4 +256,4 @@ if (errors.length) {
 console.log(`I SPY release validation passed: ${checks.length} checks; ${warnings.length} warnings.`);
 console.log(`Version: ${GAME_CONFIG.version}`);
 console.log(`Maps: ${loadedMaps.map((entry) => `${entry.id} (${entry.width}x${entry.height})`).join(', ')}`);
-console.log(`Sprite frames: ${spriteNames.length}`);
+console.log(`Sprite frames: ${spriteNames.length} total; ${legacySpriteNames.length} legacy + ${supplemental.names.length} supplemental`);
