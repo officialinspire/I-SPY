@@ -76,6 +76,24 @@ check(
   briefing.includes("CONDITIONS: ${this.mission.condition ?? 'CLEAR'}"),
   'mission briefing surfaces the environmental condition',
 );
+check(
+  main.includes('game.scale.resize(width, height)')
+    && main.includes("window.addEventListener('orientationchange'")
+    && main.includes("window.visualViewport?.addEventListener('resize'"),
+  'mobile/tablet viewport sync follows host dimensions through rotation',
+);
+check(
+  main.includes("new ResizeObserver(queueViewportSync)")
+    && main.includes("viewportSyncTimers = [50, 150, 300]"),
+  'viewport sync retries after mobile browser layout settles',
+);
+check(
+  intro.includes("addEventListener('touchend', this.onStartPointer")
+    && intro.includes("addEventListener('touchend', this.onSkip")
+    && intro.includes("removeEventListener('touchend', this.onStartPointer")
+    && intro.includes("removeEventListener('touchend', this.onSkip"),
+  'intro start/skip carry iPhone Safari touch fallbacks and cleanup',
+);
 
 /* --- Start gate ----------------------------------------------------- *
  * The gate is the session's only trusted user gesture. A device that
@@ -105,15 +123,13 @@ check(
  * old one, leaving a rotated phone rendering the previous orientation's
  * canvas with nothing left to correct it.                                */
 check(
-  main.includes('game.scale.setParentSize(width, height)')
-    && /Math\.abs\(gameSize\.width - width\) <= 1 && Math\.abs\(gameSize\.height - height\) <= 1/.test(main),
+  main.includes('game.scale.resize(width, height)')
+    && main.includes('if (currentWidth !== width || currentHeight !== height)'),
   'the app re-syncs the canvas only when it no longer matches the space it fills',
 );
 check(
-  ['resize', 'orientationchange'].every((event) => main.includes(`addEventListener('${event}', requestViewportSync)`))
-    && main.includes('new ResizeObserver(requestViewportSync)')
-    && main.includes('window.visualViewport?.addEventListener'),
-  'viewport sync listens to resize, orientation, visual viewport and the parent element',
+  main.includes("window.screen?.orientation?.addEventListener?.('change', queueViewportSync"),
+  'viewport sync also follows the Screen Orientation API, which some engines report a rotation through alone',
 );
 
 /* --- Console layout -------------------------------------------------- *
@@ -236,5 +252,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 39 repeat-mission, start-gate, viewport, console-layout, recon-rail, split-view, keyboard and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 42 mission, start-gate, viewport, console-layout, recon-rail, split-view, keyboard, weather and persistence checks.');
 }

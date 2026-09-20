@@ -84,8 +84,10 @@ export default class StartIntroScene extends Phaser.Scene {
     // kept beside it for keyboard activation and for engines that withhold
     // pointer events from a control layered over a playing video.
     this.startButton.addEventListener('pointerdown', this.onStartPointer);
+    this.startButton.addEventListener('touchend', this.onStartPointer, { passive: false });
     this.startButton.addEventListener('click', this.onStartPointer);
     this.skipButton.addEventListener('pointerdown', this.onSkip);
+    this.skipButton.addEventListener('touchend', this.onSkip, { passive: false });
     this.skipButton.addEventListener('click', this.onSkip);
     document.addEventListener('keydown', this.onKey);
     this.video.addEventListener('ended', this.onVideoFinished, { once: true });
@@ -150,8 +152,10 @@ export default class StartIntroScene extends Phaser.Scene {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this.onKey);
     this.startButton?.removeEventListener('pointerdown', this.onStartPointer);
+    this.startButton?.removeEventListener('touchend', this.onStartPointer);
     this.startButton?.removeEventListener('click', this.onStartPointer);
     this.skipButton?.removeEventListener('pointerdown', this.onSkip);
+    this.skipButton?.removeEventListener('touchend', this.onSkip);
     this.skipButton?.removeEventListener('click', this.onSkip);
     this.video?.removeEventListener('ended', this.onVideoFinished);
     this.video?.removeEventListener('error', this.onVideoUnavailable);
