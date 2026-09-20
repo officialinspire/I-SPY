@@ -196,6 +196,18 @@ export function resolveVariant(name) {
  * the wrong action. So a packed row or column passes half its gap here and the
  * padding grows only into space nothing else owns.
  */
+/**
+ * Half of a layout gap, less a pixel: what a packed control may pass to
+ * `touchPadding` as its limit.
+ *
+ * Two hit areas that meet are worse than two small ones — Phaser gives the
+ * shared pixels to whichever control is drawn last, so a press on the edge of
+ * one runs its neighbour — and a seam of at least a pixel keeps them apart.
+ */
+export function hitGap(gap) {
+  return Math.max(0, Math.floor((gap - 1) / 2));
+}
+
 export function touchPadding(size, limit = UI_TOKENS.metrics.maxHitPadding) {
   const deficit = UI_TOKENS.metrics.minTouchTarget - size;
   if (deficit <= 0) return 0;

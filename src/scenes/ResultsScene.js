@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createLocateMission } from '../game/locateMission.js';
 import { createGeneratedMission } from '../game/missionGenerator.js';
@@ -157,6 +158,10 @@ export default class ResultsScene extends Phaser.Scene {
     this.retry = createButton(this, 0, 0, primaryLabel, nextAction, { width: 250, fontSize: 16, variant: 'primary' });
     this.menu = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), { width: 250, fontSize: 16, variant: 'secondary' });
     this.focusGroup = createFocusGroup(this, [this.retry, this.menu]);
+    // ESC returns from every screen that is only navigation. The mission
+    // scenes keep it for pause, so it means the same thing everywhere: back
+    // out of where you are.
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('results-esc', () => this.scene.start('MainMenu')));
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
     this.layout(this.scale.gameSize);

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
-import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
+import { UI_TOKENS, hexToNumber, hitGap } from '../ui/designTokens.js';
 import { createAuthoredReconMap, applyReconOperations, entityNearPoint } from '../world/authoredReconMap.js';
 import { drawCandidateReticle } from '../ui/reconInteraction.js';
 import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
@@ -11,19 +11,6 @@ import { validateChangeIdentification, calculateChangeScore } from '../game/chan
 import { assessMissionPerformance, applyPerformanceBonus } from '../game/missionPerformance.js';
 import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 import { createWeatherOverlay as createMissionWeatherOverlay } from '../ui/weatherOverlay.js';
-
-/**
- * Half of a layout gap, less a pixel, as a cap on a control's hit padding.
- *
- * A control narrower than the 44px minimum touch target grows its hit area to
- * reach it, and two grown hit areas that meet are worse than two small ones:
- * Phaser gives the shared pixels to whichever control is drawn last, so a
- * press on the edge of one runs its neighbour. A rail hands each control only
- * the space it actually left free.
- */
-function hitGap(gap) {
-  return Math.max(0, Math.floor((gap - 1) / 2));
-}
 
 export default class ReconScene extends Phaser.Scene {
   /** Subclasses that are a different scene (ANALYST TRAINING) pass their own key. */
