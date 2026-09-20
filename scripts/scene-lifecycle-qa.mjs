@@ -14,6 +14,7 @@ const enhanced = read('src/scenes/EnhancedReconScene.js');
 const weather = read('src/ui/weatherOverlay.js');
 const main = read('src/main.js');
 const intro = read('src/scenes/StartIntroScene.js');
+const styles = read('src/styles.css');
 
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.missionEnded = false;[\s\S]*?this\.resolvingIdentification = false;/.test(recon),
@@ -98,11 +99,21 @@ check(
 );
 
 check(
-  recon.includes('beginPinch(pointers = this.mapPointersDown())')
+  recon.includes('pinchPointers(pointers = this.mapPointersDown())')
+    && recon.includes('beginPinch(pointers = this.mapPointersDown())')
     && recon.includes('updatePinch(pointers = this.mapPointersDown())')
     && recon.includes('finishPinch(remaining = [])')
-    && recon.includes('this.pinchGesture.startZoom * ratio'),
-  'ReconScene owns two-finger pinch as an anchored multiplicative zoom gesture',
+    && recon.includes('this.pinchGesture.pointerIds')
+    && recon.includes('camera.zoom * scaleRatio'),
+  'ReconScene keeps stable touch IDs and applies incremental two-finger transforms',
+);
+check(
+  recon.includes('pinchDistanceDeadZone')
+    && recon.includes('pinchMidpointDeadZone')
+    && recon.includes('pinchScaleStepMin')
+    && recon.includes('pinchScaleStepMax')
+    && recon.includes('pinchPanStepMax'),
+  'Android pinch filters jitter and bounds per-event zoom/pan deltas',
 );
 check(
   !/pointers\.length !== 2 \|\| this\.paused \|\| this\.marking/.test(recon)
@@ -117,10 +128,17 @@ check(
   'generated LOCATE can continue through multiple required contacts before mission completion',
 );
 
+check(
+  /#app\s*\{[\s\S]*?touch-action:\s*none;/.test(styles)
+    && /canvas\s*\{[\s\S]*?touch-action:\s*none;/.test(styles)
+    && /canvas\s*\{[\s\S]*?-webkit-touch-callout:\s*none;/.test(styles),
+  'game host and canvas explicitly suppress browser-native Android touch gestures',
+);
+
 if (failures.length) {
   console.error(`I SPY scene lifecycle QA failed (${failures.length}):`);
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 21 mission, gesture, cross-device, weather, and persistence checks.');
+  console.log('I SPY scene lifecycle QA passed: 23 mission, gesture, cross-device, weather, and persistence checks.');
 }

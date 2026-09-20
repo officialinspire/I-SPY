@@ -163,60 +163,148 @@ async function exerciseAndroidReconGestures(page, context) {
       force: 1,
     })),
   });
+  const state = () => page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  const maxStep = (before, after, label) => {
+    const zoomDelta = Math.abs(after.zoom - before.zoom);
+    const scrollDelta = Math.hypot(after.scrollX - before.scrollX, after.scrollY - before.scrollY);
+    if (zoomDelta > 0.22 || scrollDelta > 170) {
+      throw new Error(`${label} jumped: ${JSON.stringify({ zoomDelta, scrollDelta, before, after })}`);
+    }
+  };
 
-  const initial = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  const initial = await state();
   if (!initial) throw new Error('Android gesture QA could not read Recon state');
 
-  // One-finger pan.
-  await touch('touchStart', [{ id: 1, x: 206, y: 420 }]);
-  await touch('touchMove', [{ id: 1, x: 270, y: 475 }]);
+  // Multi-step one-finger pan instead of one synthetic teleport.
+  let finger = { id: 1, x: 206, y: 420 };
+  await touch('touchStart', [finger]);
+  let previous = initial;
+  for (const [dx, dy] of [[12, 8], [13, 10], [11, 9], [14, 12]]) {
+    finger = { ...finger, x: finger.x + dx, y: finger.y + dy };
+    await touch('touchMove', [finger]);
+    await page.waitForTimeout(18);
+    const next = await state();
+    maxStep(previous, next, 'one-finger pan');
+    previous = next;
+  }
   await touch('touchEnd', []);
-  await page.waitForTimeout(120);
-  const panned = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  await page.waitForTimeout(80);
+  const panned = await state();
   const panDistance = Math.hypot(panned.scrollX - initial.scrollX, panned.scrollY - initial.scrollY);
   if (panDistance < 20) throw new Error(`one-finger pan did not move the camera: ${JSON.stringify({ initial, panned })}`);
 
-  // Arm marking, then pinch. Pinch must remain available while marking is
-  // armed and must never turn into an accidental candidate selection.
   const markPoint = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('Recon', 'markButton'));
   if (!markPoint) throw new Error('MARK TARGET control unavailable for Android gesture QA');
   await page.touchscreen.tap(markPoint.x, markPoint.y);
-  await page.waitForTimeout(100);
-  const armed = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  await page.waitForTimeout(80);
+  const armed = await state();
   if (!armed?.marking) throw new Error(`marking did not arm before pinch: ${JSON.stringify(armed)}`);
 
-  await touch('touchStart', [
-    { id: 11, x: 160, y: 430 },
-    { id: 12, x: 252, y: 430 },
-  ]);
-  await touch('touchMove', [
-    { id: 11, x: 105, y: 430 },
-    { id: 12, x: 307, y: 430 },
-  ]);
-  await touch('touchEnd', []);
-  await page.waitForTimeout(160);
+  // Real Android fingers arrive sequentially. First finger lands and moves a
+  // little, then the second joins. The two contacts then update on alternating
+  // events, which is where the old implementation could jump.
+  let first = { id: 11, x: 158, y: 430 };
+  let second = { id: 12, x: 254, y: 430 };
+  await touch('touchStart', [first]);
+  first = { ...first, x: 161, y: 432 };
+  await touch('touchMove', [first]);
+  await touch('touchStart', [first, second]);
+  await page.waitForTimeout(30);
 
-  const pinched = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
-  if (!(pinched.zoom > armed.zoom + 0.08)) {
-    throw new Error(`two-finger pinch did not zoom in: ${JSON.stringify({ armed, pinched })}`);
-  }
-  if (!pinched.marking || pinched.candidate) {
-    throw new Error(`pinch corrupted targeting state: ${JSON.stringify(pinched)}`);
+  let last = await state();
+  if (!last.pinchActive || last.pinchPointerIds.length !== 2) {
+    throw new Error(`pinch did not acquire exactly two touch IDs: ${JSON.stringify(last)}`);
   }
 
-  // After a completed pinch, another one-finger drag must pan normally and
-  // must still not be mistaken for a target tap.
-  await touch('touchStart', [{ id: 21, x: 206, y: 440 }]);
-  await touch('touchMove', [{ id: 21, x: 245, y: 500 }]);
+  const samples = [];
+  const movePair = async (nextFirst, nextSecond, label) => {
+    first = nextFirst;
+    second = nextSecond;
+    await touch('touchMove', [first, second]);
+    await page.waitForTimeout(18);
+    const next = await state();
+    maxStep(last, next, label);
+    if (!next.marking || next.candidate) {
+      throw new Error(`${label} corrupted targeting state: ${JSON.stringify(next)}`);
+    }
+    if (next.pinchPointerIds.join(',') !== last.pinchPointerIds.join(',')) {
+      throw new Error(`${label} changed pinch ownership: ${JSON.stringify({ before:last, after:next })}`);
+    }
+    samples.push(next);
+    last = next;
+  };
+
+  // Pinch outward with alternating finger motion and slight midpoint drift.
+  for (let i = 0; i < 6; i += 1) {
+    await movePair({ ...first, x: first.x - 5, y: first.y + (i % 2) },
+      second, 'pinch-out/first');
+    await movePair(first,
+      { ...second, x: second.x + 5, y: second.y + ((i + 1) % 2) },
+      'pinch-out/second');
+  }
+  const zoomedOutward = last;
+  if (!(zoomedOutward.zoom > armed.zoom + 0.15)) {
+    throw new Error(`incremental pinch-out did not zoom in enough: ${JSON.stringify({ armed, zoomedOutward })}`);
+  }
+
+  // Two-finger pan at nearly constant separation, still delivered one contact
+  // at a time. Zoom should stay stable while the map follows the midpoint.
+  const beforeTwoFingerPan = last;
+  for (let i = 0; i < 5; i += 1) {
+    await movePair({ ...first, x: first.x + 7, y: first.y + 6 }, second, 'two-finger-pan/first');
+    await movePair(first, { ...second, x: second.x + 7, y: second.y + 6 }, 'two-finger-pan/second');
+  }
+  const afterTwoFingerPan = last;
+  const twoFingerScroll = Math.hypot(
+    afterTwoFingerPan.scrollX - beforeTwoFingerPan.scrollX,
+    afterTwoFingerPan.scrollY - beforeTwoFingerPan.scrollY,
+  );
+  if (twoFingerScroll < 20 || Math.abs(afterTwoFingerPan.zoom - beforeTwoFingerPan.zoom) > 0.18) {
+    throw new Error(`two-finger pan was unstable: ${JSON.stringify({ beforeTwoFingerPan, afterTwoFingerPan })}`);
+  }
+
+  // Pinch back inward using the same alternating cadence.
+  const beforeInward = last;
+  for (let i = 0; i < 6; i += 1) {
+    await movePair({ ...first, x: first.x + 5, y: first.y - (i % 2) },
+      second, 'pinch-in/first');
+    await movePair(first,
+      { ...second, x: second.x - 5, y: second.y - ((i + 1) % 2) },
+      'pinch-in/second');
+  }
+  const pinchedBack = last;
+  if (!(pinchedBack.zoom < beforeInward.zoom - 0.12)) {
+    throw new Error(`incremental pinch-in did not zoom back out: ${JSON.stringify({ beforeInward, pinchedBack })}`);
+  }
+
+  // End the pinch, then prove a fresh one-finger drag is immediately stable.
   await touch('touchEnd', []);
-  await page.waitForTimeout(120);
-  const postPinchPan = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
-  const secondPan = Math.hypot(postPinchPan.scrollX - pinched.scrollX, postPinchPan.scrollY - pinched.scrollY);
+  await page.waitForTimeout(60);
+  let post = await state();
+  if (post.pinchActive || post.candidate) {
+    throw new Error(`pinch did not release cleanly: ${JSON.stringify(post)}`);
+  }
+
+  let solo = { id: 21, x: 205, y: 445 };
+  await touch('touchStart', [solo]);
+  const postStart = await state();
+  for (const [dx, dy] of [[9, 12], [10, 12], [8, 11], [10, 13]]) {
+    solo = { ...solo, x: solo.x + dx, y: solo.y + dy };
+    await touch('touchMove', [solo]);
+    await page.waitForTimeout(18);
+    const next = await state();
+    maxStep(post, next, 'post-pinch pan');
+    post = next;
+  }
+  await touch('touchEnd', []);
+  await page.waitForTimeout(80);
+  const postPinchPan = await state();
+  const secondPan = Math.hypot(postPinchPan.scrollX - postStart.scrollX, postPinchPan.scrollY - postStart.scrollY);
   if (secondPan < 15 || postPinchPan.candidate) {
-    throw new Error(`post-pinch pan failed or created a mark: ${JSON.stringify({ pinched, postPinchPan })}`);
+    throw new Error(`post-pinch pan failed or created a mark: ${JSON.stringify({ postStart, postPinchPan })}`);
   }
 
-  console.log(`PASS android gestures: pan ${Math.round(panDistance)}px-world, pinch ${armed.zoom.toFixed(2)}→${pinched.zoom.toFixed(2)}, pan resumes`);
+  console.log(`PASS android gesture stress: pan ${Math.round(panDistance)} world, pinch ${armed.zoom.toFixed(2)}→${zoomedOutward.zoom.toFixed(2)}→${pinchedBack.zoom.toFixed(2)}, two-finger pan ${Math.round(twoFingerScroll)} world, no jumps`);
 }
 
 async function runProfile(profile) {

@@ -71,6 +71,8 @@ if (qaMode) {
           marking: Boolean(scene.marking),
           candidate: Boolean(scene.candidate),
           pinchActive: Boolean(scene.pinchGesture),
+          pinchPointerIds: scene.pinchGesture?.pointerIds ? [...scene.pinchGesture.pointerIds] : [],
+          activeMapPointers: scene.mapPointersDown?.().map((pointer) => pointer.id) ?? [],
           completedTargets: scene.completedTargetIds?.length ?? 0,
           requiredTargets: scene.locateTargets?.length ?? 0,
         } : null;
