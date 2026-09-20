@@ -1,7 +1,7 @@
 export const GAME_CONFIG=Object.freeze({
   title:'I SPY',
   subtitle:'SATELLITE RECONNAISSANCE DIVISION',
-  version:'1.8.2-demo',
+  version:'1.8.3-demo',
   palette:{
     black:'#0b0b0b',nearBlack:'#171717',charcoal:'#333333',gray:'#757575',lightGray:'#bdbdbd',offWhite:'#e8e8df',white:'#f6f6ee',
     phosphorDeep:'#132009',phosphorDim:'#3d5a2f',phosphor:'#7d9e64',phosphorBright:'#a7c78c',

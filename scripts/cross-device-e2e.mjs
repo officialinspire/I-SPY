@@ -584,6 +584,34 @@ async function resizeTo(page, size, label) {
   await settle(page, 2);
 }
 
+/**
+ * The console must not act on the tail of the press that dismissed the gate.
+ *
+ * The gate is a DOM layer over a canvas, and it has to act on pointerdown —
+ * that press is the session's one trusted gesture. So it is gone while the
+ * finger is still down, and a mobile browser then sends the compatibility
+ * mouse cascade (mousedown, mouseup, click) at the coordinates of the tap.
+ * mousedown plus mouseup is a complete press to Phaser, and the menu is now
+ * underneath: one tap on START used to launch the mission whose card had
+ * appeared under the START button.
+ *
+ * Playwright's touch emulation does not synthesise that cascade, so the
+ * suite sends it, at the point the gate was dismissed from, and requires
+ * that the console did not move.
+ */
+async function assertHandoverIsGuarded(page, cdp, point, label) {
+  const before = await page.evaluate(() => window.__qa.activeScenes());
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', clickCount: 0 });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+  await settle(page, 4);
+  const after = await page.evaluate(() => window.__qa.activeScenes());
+  if (before.join() !== after.join()) {
+    throw new Error(`${label}: the press that dismissed the start gate carried into the console `
+      + `// ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+  }
+}
+
 /** A tap where the device has a finger, a click where it has a pointer. */
 async function tap(page, profile, point) {
   if (profile.hasTouch) await page.touchscreen.tap(point.x, point.y);
@@ -815,6 +843,13 @@ async function runProfile(profile) {
       throw new Error(`start gate never appeared // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
     }
 
+    // Where the gate was dismissed from, so the handover guard can be tested
+    // at the coordinates a real device would send the cascade to.
+    const gatePoint = await page.evaluate(() => {
+      const rect = document.querySelector('.intro-start__button')?.getBoundingClientRect();
+      return rect ? { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } : null;
+    });
+
     if (profile.domIntroUnreachable) {
       // Headless Playwright WebKit does not deliver synthesized touch or click
       // events to this DOM media gate, so the gate is only asserted to exist
@@ -835,6 +870,16 @@ async function runProfile(profile) {
     await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
     await assertControlsReachable(page, 'menuControls', `${profile.name}/menu`);
+    // The cascade has to be synthesised through CDP, which is Chromium only.
+    // WebKit still exercises the gate itself, just not this one assertion.
+    if (gatePoint && !profile.domIntroUnreachable && profile.engine === chromium) {
+      const cdp = await context.newCDPSession(page);
+      try {
+        await assertHandoverIsGuarded(page, cdp, gatePoint, `${profile.name}/menu`);
+      } finally {
+        await cdp.detach().catch(() => {});
+      }
+    }
 
     /* --- Pointer transform ------------------------------------------- *
      * Phaser translates every pointer through its record of where the
