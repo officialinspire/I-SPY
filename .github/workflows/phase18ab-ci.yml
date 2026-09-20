@@ -1,0 +1,21 @@
+name: Phase 18A 18B audit
+
+on:
+  push:
+    branches: [phase-18a-18b-environment-urban]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run build
