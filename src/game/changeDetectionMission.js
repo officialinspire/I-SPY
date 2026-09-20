@@ -1,6 +1,7 @@
 import { GAME_CONFIG } from '../runtime-config.js';
 import { getMapEntities, getMapMetadata } from '../world/reconMapSchema.js';
 import { resolveReconMap } from '../world/mapRegistry.js';
+import { withMissionCondition } from './environmentConditions.js';
 
 export const CHANGE_TYPES = Object.freeze({
   VEHICLE_MOVED: 'vehicle_moved',
@@ -30,7 +31,7 @@ export function createChangeDetectionMission(mapSource) {
     y: Math.round((target.y + destination.y) / 2 + target.height / 2),
     zoom: 0.75,
   };
-  return {
+  return withMissionCondition({
     id: 'OP-SECOND-LOOK-001',
     operation: 'OPERATION SECOND LOOK',
     satellitePass: 'PASS A 05:12 ZULU // PASS B 05:27 ZULU',
@@ -49,7 +50,7 @@ export function createChangeDetectionMission(mapSource) {
     ],
     changeSummary: authored.summary ?? `${target.label} moved position between the two reconnaissance passes.`,
     timeLimitSeconds: GAME_CONFIG.change.timeLimitSeconds,
-  };
+  });
 }
 
 export function validateChangeIdentification(mission, entity, passId) {
