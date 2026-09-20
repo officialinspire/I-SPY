@@ -32,8 +32,10 @@ check(
   'ReconScene resets resolvingIdentification for every mission create',
 );
 check(
-  /bindInput\(\) \{[\s\S]*?this\.controlPointerIds = new Set\(\);[\s\S]*?this\.controlReleasedPointerIds = new Set\(\);[\s\S]*?this\.tapPointer = null;/.test(recon),
-  'ReconScene resets pointer-specific control ownership and tap state when rebinding input',
+  /bindInput\(\) \{[\s\S]*?this\.controlPointerIds = new Set\(\);[\s\S]*?this\.controlReleasedPointerIds = new Set\(\);[\s\S]*?this\.tapPointer = null;/.test(recon)
+    && !recon.includes('this.controlPressed')
+    && !recon.includes('this.controlReleased ='),
+  'ReconScene owns control presses per pointer id, with no shared flag one finger can spend on another',
 );
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.totalPausedMs = 0;[\s\S]*?this\.pauseStartedAt = null;/.test(recon),
@@ -269,48 +271,82 @@ check(
 check(
   recon.includes('pinchPointers(pointers = this.mapPointersDown())')
     && recon.includes('beginPinch(pointers = this.mapPointersDown())')
-    && recon.includes('updatePinch(pointers = this.mapPointersDown())')
+    && recon.includes('stepPinchGesture(pointers = this.mapPointersDown())')
     && recon.includes('finishPinch(remaining = [])')
     && recon.includes('this.pinchGesture.pointerIds')
     && recon.includes('camera.zoom * scaleRatio'),
   'ReconScene keeps stable touch IDs and applies incremental two-finger transforms',
 );
 check(
-  recon.includes('pinchDistanceDeadZone')
+  /pinchPointers\(pointers[\s\S]*?this\.pinchGesture\.pointerIds\.map\(\(id\) => byId\.get\(id\)\)/.test(recon)
+    && /releasePointer = \(pointer, allowTap\) => \{[\s\S]*?if \(!this\.pinchGesture\.pointerIds\.includes\(pointer\.id\)\) return;/.test(recon)
+    && /pointerdown'[\s\S]*?if \(this\.pinchGesture\) return;[\s\S]*?const active = this\.mapPointersDown\(\);/.test(recon),
+  'a pinch keeps the two contacts it captured: a third or reordered finger can neither join it nor end it',
+);
+check(
+  /pointermove'[\s\S]*?this\.pinchGesture\.dirty = true;[\s\S]*?this\.panGestureDirty = true;/.test(recon)
+    && /update\(\) \{[\s\S]*?this\.stepPinchGesture\(\);[\s\S]*?this\.stepPanGesture\(\);/.test(recon),
+  'raw Android pointer events only mark a gesture dirty; the camera transform is sampled once per game frame',
+);
+check(
+  recon.includes('panStepMax')
+    && recon.includes('touchPanStepMax')
+    && recon.includes('pinchDistanceDeadZone')
     && recon.includes('pinchMidpointDeadZone')
     && recon.includes('pinchScaleStepMin')
     && recon.includes('pinchScaleStepMax')
     && recon.includes('pinchPanStepMax'),
-  'Android pinch filters jitter and bounds per-event zoom/pan deltas',
+  'Android pan and pinch filter jitter and bound the per-frame zoom and pan delta',
+);
+check(
+  recon.includes('isGestureBlockedPointer(pointer)')
+    && recon.includes('isTopHudPoint(pointer)')
+    && recon.includes('this.controlPointerIds.has(pointer.id)')
+    && !/mapPointersDown\(\) \{[\s\S]*?!this\.isHudPoint\(pointer\)/.test(recon),
+  'map gestures block the top HUD and actual control pointers, never the whole COUNT/CHANGE bottom rail',
+);
+check(
+  recon.includes("this.input.on('pointerupoutside', (pointer) => releasePointer(pointer, false))")
+    && recon.includes("this.input.on('pointercancel', (pointer) => releasePointer(pointer, false))")
+    && recon.includes("addEventListener('touchcancel', this.nativeGestureCancel")
+    && recon.includes("addEventListener('pointercancel', this.nativeGestureCancel")
+    && recon.includes("removeEventListener('touchcancel', this.nativeGestureCancel")
+    && recon.includes("removeEventListener('pointercancel', this.nativeGestureCancel")
+    && recon.includes('cancelActiveMapGesture()'),
+  'every way a touch can end clears gesture ownership, and its DOM listeners come off at shutdown',
+);
+check(
+  recon.includes('this.stepPanGesture(pointer)')
+    && recon.includes('this.stepPinchGesture([pointer, ...remaining])')
+    && recon.includes('stepPanGesture(pointerOverride = null)'),
+  'a fast pan or pinch flushes its final coordinates even after the contact is no longer down',
+);
+check(
+  /finishPinch\(remaining = \[\]\) \{[\s\S]*?remaining\.length === 1[\s\S]*?this\.lastPointer = \{ x: pointer\.x, y: pointer\.y \};/.test(recon),
+  'lifting one finger rebases the survivor before one-finger panning resumes, so the map cannot jump',
+);
+check(
+  /beginPinch\(pointers[\s\S]*?const firstContext = this\.getPointerContext\(first\);[\s\S]*?const secondContext = this\.getPointerContext\(second\);[\s\S]*?if \(firstContext\.camera !== secondContext\.camera\) return false;/.test(recon),
+  'a CHANGE split-view pinch needs both fingers on one imagery camera, never one per pane',
+);
+check(
+  recon.includes('cameraScrollLimits(camera = this.cameras.main)')
+    && recon.includes('clampCameraScroll(camera = this.cameras.main)')
+    && recon.includes('camera.clampX(camera.scrollX)')
+    && recon.includes('camera.clampY(camera.scrollY)')
+    && (recon.match(/this\.clampCameraScroll\(/g) ?? []).length >= 6,
+  'pan, pinch, wheel zoom, split sync, reset and resize all settle the camera inside its map bounds',
+);
+check(
+  /onResize\(gameSize\)[\s\S]*?setViewport\(0, 0, half, height\)[\s\S]*?const floor = this\.minZoomForCamera\(this\.cameras\.main\);/.test(recon)
+    && !/onResize\(gameSize\) \{\s*\n\s*const \{ width, height \} = gameSize;\s*\n\s*this\.uiCamera\?\.setSize\(width, height\);\s*\n\s*const floor/.test(recon),
+  'resize applies the imagery viewport before it computes and enforces that viewport zoom floor',
 );
 check(
   !/pointers\.length !== 2 \|\| this\.paused \|\| this\.marking/.test(recon)
     && recon.includes('this.tapPointer = null;')
     && recon.includes('this.dragPointerId = null;'),
   'pinch remains available while marking and cancels tap/pan interpretation',
-);
-check(
-  recon.includes('isGestureBlockedPointer(pointer)')
-    && recon.includes('this.controlPointerIds.has(pointer.id)')
-    && !/mapPointersDown\(\) \{[\s\S]*?!this\.isHudPoint\(pointer\)/.test(recon),
-  'map gestures block actual control pointers instead of the entire mode-specific bottom rail',
-);
-check(
-  recon.includes("this.input.on('pointerupoutside', releasePointer)")
-    && recon.includes("this.input.on('pointercancel', releasePointer)")
-    && recon.includes('this.controlReleasedPointerIds.has(pointer.id)'),
-  'Android pointer cancellation and release ownership cannot strand a pan or pinch',
-);
-check(
-  recon.includes('panCameraByScreenDelta(camera, dx, dy)')
-    && recon.includes('GAME_CONFIG.recon.panStepMax')
-    && !recon.includes('clampCameraScroll(camera'),
-  'one-finger pan is step-bounded while Phaser remains the single camera-bounds authority',
-);
-check(
-  recon.includes('const floor = this.minZoomForCamera(this.cameras.main)')
-    && recon.indexOf('this.cameras.main.setViewport(0, 0, width, height)') < recon.indexOf('const floor = this.minZoomForCamera(this.cameras.main)'),
-  'resize applies the actual imagery viewport before enforcing its zoom floor',
 );
 check(
   recon.includes('this.completedTargetIds = []')
@@ -413,11 +449,17 @@ check(
   'every stacked console control is padded only into the gap below it',
 );
 
+const appBlock = (styles.match(/#app\s*\{[^}]*\}/) ?? [''])[0];
+const canvasBlock = (styles.match(/\bcanvas\s*\{[^}]*\}/) ?? [''])[0];
+const suppressesNativeTouch = (block) => /touch-action:\s*none;/.test(block)
+  && /overscroll-behavior:\s*none;/.test(block)
+  && /user-select:\s*none;/.test(block)
+  && /-webkit-user-select:\s*none;/.test(block);
 check(
-  /#app\s*\{[\s\S]*?touch-action:\s*none;/.test(styles)
-    && /canvas\s*\{[\s\S]*?touch-action:\s*none;/.test(styles)
-    && /canvas\s*\{[\s\S]*?-webkit-touch-callout:\s*none;/.test(styles),
-  'game host and canvas explicitly suppress browser-native Android touch gestures',
+  suppressesNativeTouch(appBlock)
+    && suppressesNativeTouch(canvasBlock)
+    && /-webkit-touch-callout:\s*none;/.test(canvasBlock),
+  'game host and canvas explicitly suppress browser-native Android touch, scroll and selection gestures',
 );
 
 if (failures.length) {

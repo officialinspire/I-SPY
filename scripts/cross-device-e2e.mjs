@@ -50,6 +50,7 @@ const ALL_PROFILES = [
     // Wide enough for SPLIT VIEW, and its rotation is narrow enough to force
     // the console back out of it mid-mission.
     splitView: true,
+    splitViewGestureStress: true,
   },
   {
     name: 'iphone-webkit',
@@ -74,8 +75,11 @@ const ALL_PROFILES = [
     deviceScaleFactor: 2.625,
     mode: 'LOCATE',
     map: 'dustline-sector',
+    androidGestureStress: true,
   },
   {
+    // The commonest Android handset size, on the mode with two cameras. Too
+    // narrow for SPLIT VIEW, so this is CHANGE's single-pane gesture model.
     name: 'android-change-chromium',
     engine: chromium,
     launchOptions: { args: CHROMIUM_ARGS },
@@ -86,6 +90,7 @@ const ALL_PROFILES = [
     deviceScaleFactor: 2.75,
     mode: 'CHANGE',
     map: 'woodland-corridor-7',
+    androidGestureStress: true,
   },
   {
     // The narrow end of the Android range, still common, and the width at
@@ -100,6 +105,7 @@ const ALL_PROFILES = [
     deviceScaleFactor: 3,
     mode: 'COUNT',
     map: 'riverworks-sector',
+    androidGestureStress: true,
   },
 ];
 
@@ -798,163 +804,514 @@ async function playCount(page, profile, context) {
   await tapControl(page, profile, 'Recon', 'SUBMIT COUNT', context);
 }
 
-async function exerciseAndroidReconGestures(page, context, profile) {
-  if (profile.engine !== chromium || !profile.isMobile || !profile.hasTouch) return;
-
-  const cdp = await context.newCDPSession(page);
-  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', {
+/* ------------------------------------------------------------------ *
+ * Android multitouch.
+ *
+ * Playwright's own touchscreen helper can only tap. Real pan and pinch
+ * regressions live in the sequence of contacts, so these drive CDP
+ * directly and, crucially, deliver the two fingers of a pinch on
+ * SEPARATE events the way Android does — moving both in one event is
+ * precisely the case the broken build handled correctly.
+ * ------------------------------------------------------------------ */
+function androidTouchDriver(cdp) {
+  return (type, points) => cdp.send('Input.dispatchTouchEvent', {
     type,
     touchPoints: points.map((point) => ({
-      x: point.x,
-      y: point.y,
+      x: Math.round(point.x),
+      y: Math.round(point.y),
       id: point.id,
       radiusX: 3,
       radiusY: 3,
       force: 1,
     })),
   });
-  const state = () => page.evaluate(() => window.__ISPY_QA__?.reconState?.());
-  const assertStableStep = (before, after, label) => {
-    const zoomDelta = Math.abs(after.zoom - before.zoom);
-    const panDelta = Math.hypot(after.scrollX - before.scrollX, after.scrollY - before.scrollY);
-    if (zoomDelta > 0.16 || panDelta > 145) {
-      throw new Error(`${profile.name}/${label}: camera jump // ${JSON.stringify({ zoomDelta, panDelta, before, after })}`);
-    }
-  };
+}
 
-  const initial = await state();
-  if (!initial) throw new Error(`${profile.name}: no Recon state for gesture QA`);
+const readRecon = (page) => page.evaluate(() => window.__ISPY_QA__?.reconState?.());
 
-  // Smooth one-finger pan delivered as a real sequence, not one teleport.
-  let finger = { id: 71, x: Math.round(profile.viewport.width * 0.48), y: 330 };
-  await touch('touchStart', [finger]);
-  let last = initial;
-  for (const [dx, dy] of [[10, 8], [12, 9], [11, 11], [13, 8], [10, 10]]) {
-    finger = { ...finger, x: finger.x + dx, y: finger.y + dy };
-    await touch('touchMove', [finger]);
-    await page.waitForTimeout(18);
-    const next = await state();
-    assertStableStep(last, next, 'one-finger-pan');
-    last = next;
+/** The camera may never sit outside the scroll window its bounds allow. */
+function assertInBounds(state, label, step) {
+  if (!state?.cameraLimits) throw new Error(`${label}/${step}: camera limits unavailable // ${JSON.stringify(state)}`);
+  const { minX, maxX, minY, maxY } = state.cameraLimits;
+  const epsilon = 1.5;
+  if (state.scrollX < minX - epsilon || state.scrollX > maxX + epsilon
+    || state.scrollY < minY - epsilon || state.scrollY > maxY + epsilon) {
+    throw new Error(`${label}/${step}: camera escaped its map bounds // ${JSON.stringify(state)}`);
   }
-  await touch('touchEnd', []);
-  await page.waitForTimeout(60);
-  const panned = await state();
-  if (Math.hypot(panned.scrollX - initial.scrollX, panned.scrollY - initial.scrollY) < 20) {
-    throw new Error(`${profile.name}: one-finger pan did not move the map`);
-  }
+}
 
-  // Find a point in the visually reserved bottom rail that is NOT an actual
-  // interactive control. COUNT/CHANGE used to reject this entire band, so a
-  // second pinch finger drifting here made the gesture collapse.
-  const railPoint = await page.evaluate(() => {
+/** No single rendered frame may move the camera further than a hand can. */
+function assertFrameBounded(before, after, label, step, { maxScroll = 175, maxZoom = 0.2 } = {}) {
+  assertInBounds(after, label, step);
+  const scroll = Math.hypot(after.scrollX - before.scrollX, after.scrollY - before.scrollY);
+  const zoom = Math.abs(after.zoom - before.zoom);
+  if (scroll > maxScroll || zoom > maxZoom) {
+    throw new Error(`${label}/${step}: camera jumped in one rendered frame // ${JSON.stringify({ scroll, zoom, before, after })}`);
+  }
+}
+
+/**
+ * A point inside the mode's reserved bottom rail that is not an actual
+ * control.
+ *
+ * COUNT and CHANGE reserve up to a fifth of a small phone's height for their
+ * rail, and the scene used to refuse map gestures across that whole band. A
+ * second pinch finger landing in the blank space beside a button was simply
+ * not seen, and the pinch it should have started collapsed into a pan.
+ */
+async function blankRailPoint(page) {
+  return page.evaluate(() => {
     const game = window.__ISPY_QA__.game;
     const scene = game.scene.getScene('Recon');
     const { width, height } = game.scale.gameSize;
     const railTop = height - scene.railHeight(width);
-    const report = window.__ISPY_QA__.touchTargets();
-    const live = report.targets.filter((target) => target.scene === 'Recon');
-    const inside = (x, y, rect) =>
-      x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
-    for (let y = Math.max(railTop + 8, 100); y < height - 8; y += 8) {
-      for (let x = 20; x < width - 20; x += 12) {
-        if (!live.some((rect) => inside(x, y, rect))) return { x, y, railTop };
+    const live = window.__ISPY_QA__.touchTargets().targets.filter((target) => target.scene === 'Recon');
+    const clear = (x, y) => !live.some((rect) =>
+      x >= rect.x - 6 && x <= rect.x + rect.width + 6 && y >= rect.y - 6 && y <= rect.y + rect.height + 6);
+    for (let y = height - 10; y > Math.max(railTop, 96); y -= 6) {
+      for (let x = 14; x < width - 14; x += 10) {
+        if (clear(x, y)) return { x, y, railTop, inRail: y > railTop, height };
       }
     }
-    return { x: Math.round(width / 2), y: Math.max(100, railTop - 20), railTop };
+    return null;
   });
+}
 
-  let first = { id: 81, x: Math.round(profile.viewport.width * 0.35), y: Math.max(250, railPoint.y - 120) };
-  let second = { id: 82, x: Math.round(profile.viewport.width * 0.65), y: railPoint.y };
-  await touch('touchStart', [first]);
-  await page.waitForTimeout(16);
-  await touch('touchStart', [first, second]);
-  await page.waitForTimeout(32);
+async function exerciseAndroidTouchNavigation(page, context, profile, label) {
+  const cdp = await context.newCDPSession(page);
+  const touch = androidTouchDriver(cdp);
+  const read = () => readRecon(page);
+  const viewport = page.viewportSize();
 
-  let pinchState = await state();
-  if (!pinchState.pinchActive || pinchState.pinchPointerIds.length !== 2) {
-    throw new Error(`${profile.name}: second finger in blank rail did not start pinch // ${JSON.stringify({ railPoint, pinchState })}`);
+  try {
+    const baseX = Math.round(viewport.width * 0.5);
+    const baseY = Math.round(Math.max(170, Math.min(viewport.height - 200, viewport.height * 0.45)));
+
+    let state = await read();
+    if (!state) throw new Error(`${label}: recon gesture state unavailable`);
+    assertInBounds(state, label, 'initial');
+    const startedAt = state;
+
+    /* 1-3. A multi-step one-finger drag has to scroll gradually. */
+    let finger = { id: 31, x: baseX, y: baseY };
+    await touch('touchStart', [finger]);
+    await settle(page, 1);
+    for (const [dx, dy] of [[12, 8], [14, 9], [13, 11], [15, 8], [12, 10]]) {
+      const before = await read();
+      finger = { ...finger, x: finger.x + dx, y: finger.y + dy };
+      await touch('touchMove', [finger]);
+      const immediate = await read();
+      if (immediate.panGestureDirty
+        && Math.hypot(immediate.scrollX - before.scrollX, immediate.scrollY - before.scrollY) > 0.5) {
+        throw new Error(`${label}/pan-event: a raw pointermove moved the camera before the frame // ${JSON.stringify({ before, immediate })}`);
+      }
+      await settle(page, 1);
+      assertFrameBounded(before, await read(), label, 'pan-frame', { maxScroll: 140, maxZoom: 0.01 });
+    }
+
+    // One deliberately malformed sample. The excess may be discarded; it may
+    // never fling the imagery.
+    const beforeSpike = await read();
+    finger = {
+      ...finger,
+      x: Math.max(28, Math.min(viewport.width - 28, finger.x - 190)),
+      y: Math.max(120, Math.min(viewport.height - 40, finger.y + 170)),
+    };
+    await touch('touchMove', [finger]);
+    await settle(page, 1);
+    assertFrameBounded(beforeSpike, await read(), label, 'pan-spike', { maxScroll: 145, maxZoom: 0.01 });
+    await touch('touchEnd', []);
+    await settle(page, 1);
+
+    const panned = await read();
+    if (Math.hypot(panned.scrollX - startedAt.scrollX, panned.scrollY - startedAt.scrollY) < 12) {
+      throw new Error(`${label}/pan: a five-step drag did not move the map // ${JSON.stringify({ startedAt, panned })}`);
+    }
+
+    /* Arm marking. Navigation must still work with the mark control live,
+     * and must never leave a mark behind. */
+    const summary = await page.evaluate(() => window.__qa.missionSummary());
+    const markLabel = summary.mode === 'CHANGE' ? 'MARK CHANGE' : 'MARK TARGET';
+    let armed = false;
+    if (summary.mode !== 'COUNT') {
+      await tapControl(page, profile, 'Recon', markLabel, `${label}/arm`);
+      const armedState = await page.evaluate(() => window.__qa.missionSummary());
+      if (!armedState.marking) throw new Error(`${label}: '${markLabel}' did not arm`);
+      armed = true;
+    }
+
+    /* 4-6. Start the pinch with its second finger in blank rail space. */
+    const rail = await blankRailPoint(page);
+    if (!rail) throw new Error(`${label}: found no blank space in the bottom rail to pinch from`);
+    // The blank space can be at either edge of the rail, so the other finger
+    // goes to whichever side has room and the spread direction follows from
+    // the geometry rather than being assumed.
+    const margin = 34;
+    const clampX = (x) => Math.max(margin, Math.min(viewport.width - margin, x));
+    const partnerX = rail.x < viewport.width / 2
+      ? clampX(rail.x + Math.max(90, viewport.width * 0.3))
+      : clampX(rail.x - Math.max(90, viewport.width * 0.3));
+    let first = { id: 41, x: clampX(rail.x), y: rail.y };
+    let second = { id: 42, x: partnerX, y: Math.max(140, rail.railTop - 40) };
+    // -1 moves this finger left, +1 right; outward for each of the pair.
+    const outward = first.x <= second.x ? -1 : 1;
+
+    await touch('touchStart', [first]);
+    await touch('touchMove', [{ ...first, x: first.x + 3, y: first.y + 2 }]);
+    first = { ...first, x: first.x + 3, y: first.y + 2 };
+    await touch('touchStart', [first, second]);
+    await settle(page, 1);
+
+    let pinch = await read();
+    if (!pinch.pinchActive || pinch.pinchPointerIds.length !== 2) {
+      throw new Error(`${label}/pinch-start: a second finger in blank rail space did not start a pinch // ${JSON.stringify({ rail, pinch })}`);
+    }
+    const capturedIds = pinch.pinchPointerIds.join(',');
+    const pinchStartZoom = pinch.zoom;
+
+    /* 7. Alternate the two contacts, one event per finger — Android's cadence. */
+    // One contact per event, each given its own rendered frame, because that
+    // is what a phone does: the finger that did not move is re-reported at
+    // its previous coordinate. Every frame is asserted on its own, so a
+    // bounded step cannot hide inside a pair of steps.
+    const moveContact = async (points, step) => {
+      const before = await read();
+      await touch('touchMove', points);
+      const immediate = await read();
+      if (immediate.pinchDirty) {
+        const rawScroll = Math.hypot(immediate.scrollX - before.scrollX, immediate.scrollY - before.scrollY);
+        if (rawScroll > 0.5 || Math.abs(immediate.zoom - before.zoom) > 0.002) {
+          throw new Error(`${label}/${step}: a raw pinch event transformed the camera before the frame // ${JSON.stringify({ before, immediate })}`);
+        }
+      }
+      await settle(page, 1);
+      const after = await read();
+      assertFrameBounded(before, after, label, step);
+      if (!after.pinchActive) throw new Error(`${label}/${step}: the pinch dropped mid-gesture // ${JSON.stringify(after)}`);
+      if (after.pinchPointerIds.join(',') !== capturedIds) {
+        throw new Error(`${label}/${step}: pinch ownership changed mid-gesture // ${JSON.stringify({ capturedIds, after })}`);
+      }
+      if (after.candidate) throw new Error(`${label}/${step}: navigating created an accidental mark`);
+      return after;
+    };
+
+    const movePair = async (nextFirst, nextSecond, step) => {
+      const previousSecond = second;
+      const firstChanged = nextFirst.x !== first.x || nextFirst.y !== first.y;
+      const secondChanged = nextSecond.x !== second.x || nextSecond.y !== second.y;
+      first = nextFirst;
+      second = nextSecond;
+      let after = await read();
+      if (firstChanged) after = await moveContact([first, previousSecond], step);
+      if (secondChanged) after = await moveContact([first, second], step);
+      return after;
+    };
+
+    /* 8. Pinch outward, smoothly. */
+    for (let index = 0; index < 6; index += 1) {
+      pinch = await movePair({ ...first, x: clampX(first.x + 6 * outward), y: first.y + (index % 2) }, second, 'pinch-out-a');
+      pinch = await movePair(first, { ...second, x: clampX(second.x - 6 * outward), y: second.y - (index % 2) }, 'pinch-out-b');
+    }
+    if (!(pinch.zoom > pinchStartZoom + 0.08)) {
+      throw new Error(`${label}/pinch-out: zoom barely moved // ${JSON.stringify({ pinchStartZoom, pinch })}`);
+    }
+
+    /* 9. Both fingers together: a pan, at near-constant separation. */
+    const beforeTwoFingerPan = pinch;
+    for (let index = 0; index < 5; index += 1) {
+      pinch = await movePair({ ...first, x: clampX(first.x + 6), y: first.y - 5 }, second, 'two-finger-pan-a');
+      pinch = await movePair(first, { ...second, x: clampX(second.x + 6), y: second.y - 5 }, 'two-finger-pan-b');
+    }
+    const twoFingerScroll = Math.hypot(
+      pinch.scrollX - beforeTwoFingerPan.scrollX,
+      pinch.scrollY - beforeTwoFingerPan.scrollY,
+    );
+    if (twoFingerScroll < 8 || Math.abs(pinch.zoom - beforeTwoFingerPan.zoom) > 0.12) {
+      throw new Error(`${label}/two-finger-pan: unstable translation // ${JSON.stringify({ beforeTwoFingerPan, pinch, twoFingerScroll })}`);
+    }
+
+    /* 11. A wild separation change stays bounded, then normal samples resume
+     *     without springing back. */
+    const beforeBadSample = await read();
+    const afterBadSample = await movePair(
+      { ...first, x: clampX(first.x + 110 * outward) },
+      { ...second, x: clampX(second.x - 110 * outward) },
+      'pinch-spike',
+    );
+    // movePair already bounded each of the two frames the pair produced; the
+    // pair as a whole may not exceed two frames' worth either, which is what
+    // catches a discarded excess springing back on the following frame.
+    assertFrameBounded(beforeBadSample, afterBadSample, label, 'pinch-spike-pair', { maxScroll: 350, maxZoom: 0.4 });
+
+    /* A third contact — a palm, a stray thumb — may not take over either of
+     * the two fingers the pinch captured. */
+    const intruder = { id: 43, x: clampX(Math.round(viewport.width / 2)), y: Math.max(140, rail.railTop - 90) };
+    await touch('touchStart', [first, second, intruder]);
+    await settle(page, 1);
+    const withIntruder = await read();
+    if (!withIntruder.pinchActive || withIntruder.pinchPointerIds.join(',') !== capturedIds) {
+      throw new Error(`${label}/third-finger: a third contact took over the pinch // ${JSON.stringify({ capturedIds, withIntruder })}`);
+    }
+    await touch('touchMove', [first, second, { ...intruder, x: clampX(intruder.x + 40), y: intruder.y + 30 }]);
+    await settle(page, 1);
+    const afterIntruderMove = await read();
+    if (afterIntruderMove.pinchPointerIds.join(',') !== capturedIds) {
+      throw new Error(`${label}/third-finger: moving a third contact reassigned the pinch // ${JSON.stringify(afterIntruderMove)}`);
+    }
+    assertFrameBounded(withIntruder, afterIntruderMove, label, 'third-finger');
+    // CDP releases the contacts it is handed, so this lifts the intruder only.
+    await touch('touchEnd', [intruder]);
+    await settle(page, 1);
+    const afterIntruderLift = await read();
+    if (!afterIntruderLift.pinchActive) {
+      throw new Error(`${label}/third-finger: lifting the third contact ended the pinch // ${JSON.stringify(afterIntruderLift)}`);
+    }
+
+    /* 10. Pinch back inward. */
+    for (let index = 0; index < 6; index += 1) {
+      pinch = await movePair({ ...first, x: clampX(first.x - 6 * outward), y: first.y - (index % 2) }, second, 'pinch-in-a');
+      pinch = await movePair(first, { ...second, x: clampX(second.x + 6 * outward), y: second.y + (index % 2) }, 'pinch-in-b');
+    }
+    if (!(pinch.zoom < afterBadSample.zoom - 0.06)) {
+      throw new Error(`${label}/pinch-in: zoom did not come back down // ${JSON.stringify({ afterBadSample, pinch })}`);
+    }
+
+    /* 12. Release cleanly, one finger at a time: lifting the first must rebase
+     *     the survivor rather than jump. */
+    const beforeLift = await read();
+    await touch('touchEnd', [first]);
+    await settle(page, 2);
+    const afterLift = await read();
+    if (afterLift.pinchActive) throw new Error(`${label}/pinch-release: the pinch survived its first release`);
+    // The survivor becomes a one-finger pan, rebased to where it actually is.
+    if (!afterLift.dragging || afterLift.activeMapPointers.length !== 1) {
+      throw new Error(`${label}/pinch-release: the remaining finger did not take over the pan // ${JSON.stringify(afterLift)}`);
+    }
+    assertFrameBounded(beforeLift, afterLift, label, 'pinch-release', { maxScroll: 40, maxZoom: 0.03 });
+
+    const beforeRebasedPan = afterLift;
+    first = { ...first, x: clampX(first.x + 24), y: first.y - 18 };
+    await touch('touchMove', [first]);
+    await settle(page, 1);
+    assertFrameBounded(beforeRebasedPan, await read(), label, 'post-pinch-pan', { maxScroll: 140, maxZoom: 0.01 });
+    await touch('touchEnd', []);
+    await settle(page, 2);
+
+    const released = await read();
+    if (released.pinchActive || released.dragging || released.panGestureDirty) {
+      throw new Error(`${label}/release: gesture state stuck after every finger lifted // ${JSON.stringify(released)}`);
+    }
+
+    /* 14. Still armed, still unmarked: navigation is not marking. */
+    if (armed) {
+      const afterNavigation = await page.evaluate(() => window.__qa.missionSummary());
+      if (afterNavigation.hasCandidate) {
+        throw new Error(`${label}: pan and pinch left an accidental mark on the map`);
+      }
+      if (!afterNavigation.marking) {
+        throw new Error(`${label}: navigating disarmed '${markLabel}'`);
+      }
+      // A deliberate single tap still marks after the gesture storm, and
+      // cancelling it puts the mode control back the way the mission play
+      // path expects to find it.
+      const chrome = await page.evaluate(() => window.__qa.reconChrome());
+      await tap(page, profile, {
+        x: Math.round(chrome.width / 2),
+        y: Math.round((78 + (chrome.height - chrome.railHeight)) / 2),
+      });
+      const deliberate = await page.evaluate(() => window.__qa.missionSummary());
+      if (!deliberate.hasCandidate) {
+        throw new Error(`${label}: a deliberate tap no longer marks once panning and pinching are done`);
+      }
+      await tapControl(page, profile, 'Recon', 'CANCEL', `${label}/disarm`);
+      const disarmed = await page.evaluate(() => window.__qa.missionSummary());
+      if (disarmed.marking || disarmed.hasCandidate) {
+        throw new Error(`${label}: CANCEL left the mark control armed // ${JSON.stringify(disarmed)}`);
+      }
+    }
+
+    /* 13. Pan again immediately. */
+    const freshBefore = await read();
+    const fresh = { id: 51, x: baseX, y: baseY };
+    await touch('touchStart', [fresh]);
+    await touch('touchMove', [{ ...fresh, x: fresh.x + 20, y: fresh.y + 16 }]);
+    await settle(page, 1);
+    await touch('touchMove', [{ ...fresh, x: fresh.x + 40, y: fresh.y + 32 }]);
+    await settle(page, 1);
+    const freshAfter = await read();
+    assertFrameBounded(freshBefore, freshAfter, label, 'immediate-pan', { maxScroll: 140, maxZoom: 0.01 });
+    if (Math.hypot(freshAfter.scrollX - freshBefore.scrollX, freshAfter.scrollY - freshBefore.scrollY) < 6) {
+      throw new Error(`${label}/immediate-pan: the map did not respond to the next drag // ${JSON.stringify({ freshBefore, freshAfter })}`);
+    }
+
+    /* A DOM-level cancellation must release everything, and the gesture after
+     * it must be accepted normally. */
+    await page.evaluate((pointerId) => {
+      document.querySelector('canvas').dispatchEvent(new PointerEvent('pointercancel', {
+        pointerId, pointerType: 'touch', isPrimary: true, bubbles: true,
+      }));
+    }, fresh.id);
+    await touch('touchEnd', []);
+    await settle(page, 2);
+    const cancelled = await read();
+    if (cancelled.pinchActive || cancelled.dragging || cancelled.panGestureDirty) {
+      throw new Error(`${label}/touchcancel: stale gesture state survived cancellation // ${JSON.stringify(cancelled)}`);
+    }
+    assertInBounds(cancelled, label, 'touchcancel');
+
+    const postCancel = { id: 61, x: baseX, y: baseY };
+    await touch('touchStart', [postCancel]);
+    await touch('touchMove', [{ ...postCancel, x: postCancel.x - 30, y: postCancel.y - 24 }]);
+    await settle(page, 1);
+    const postCancelState = await read();
+    assertFrameBounded(cancelled, postCancelState, label, 'post-cancel-pan', { maxScroll: 140, maxZoom: 0.01 });
+    if (Math.hypot(postCancelState.scrollX - cancelled.scrollX, postCancelState.scrollY - cancelled.scrollY) < 6) {
+      throw new Error(`${label}/post-cancel-pan: the controller did not accept the next finger // ${JSON.stringify({ cancelled, postCancelState })}`);
+    }
+    await touch('touchEnd', []);
+    await settle(page, 2);
+
+    console.log(`PASS ${label}: Android pan/pinch stable at ${viewport.width}x${viewport.height} (zoom ${pinchStartZoom.toFixed(2)}→${afterBadSample.zoom.toFixed(2)}→${pinch.zoom.toFixed(2)})`);
+  } finally {
+    await cdp.detach().catch(() => {});
   }
+}
 
-  const startZoom = pinchState.zoom;
-  last = pinchState;
-
-  // Alternate individual finger movement, matching Android's event cadence.
-  for (let i = 0; i < 7; i += 1) {
-    first = { ...first, x: first.x - 4, y: first.y + (i % 2) };
-    await touch('touchMove', [first, second]);
-    await page.waitForTimeout(16);
-    let next = await state();
-    assertStableStep(last, next, 'pinch-out-a');
-    if (!next.pinchActive) throw new Error(`${profile.name}: pinch dropped after first-finger move`);
-    last = next;
-
-    second = { ...second, x: second.x + 4, y: second.y - (i % 2) };
-    await touch('touchMove', [first, second]);
-    await page.waitForTimeout(16);
-    next = await state();
-    assertStableStep(last, next, 'pinch-out-b');
-    if (!next.pinchActive) throw new Error(`${profile.name}: pinch dropped after second-finger move`);
-    last = next;
+/**
+ * CHANGE split view: two panes, two cameras, one gesture model.
+ *
+ * A pinch inside either pane zooms both, because the panes are a comparison
+ * and have to stay registered. A pair of fingers that straddles the seam
+ * belongs to neither camera and is refused outright rather than dragging one
+ * pane's imagery with the other pane's finger.
+ */
+/**
+ * After split view is dropped mid-mission the scene is back to one camera
+ * over the full width. A gesture that still assumed two panes would move
+ * nothing, or move the wrong camera.
+ */
+async function exerciseSinglePaneGestureAfterSplit(page, context, label) {
+  const cdp = await context.newCDPSession(page);
+  const touch = androidTouchDriver(cdp);
+  try {
+    const chrome = await page.evaluate(() => window.__qa.reconChrome());
+    const before = await readRecon(page);
+    assertInBounds(before, label, 'post-split-initial');
+    const y = Math.round((78 + (chrome.height - chrome.railHeight)) / 2);
+    const finger = { id: 91, x: Math.round(chrome.width / 2), y };
+    await touch('touchStart', [finger]);
+    let previous = before;
+    for (let step = 1; step <= 4; step += 1) {
+      await touch('touchMove', [{ ...finger, x: finger.x - 14 * step, y: y - 10 * step }]);
+      await settle(page, 1);
+      const next = await readRecon(page);
+      assertFrameBounded(previous, next, label, 'post-split-pan', { maxScroll: 140, maxZoom: 0.01 });
+      previous = next;
+    }
+    await touch('touchEnd', []);
+    await settle(page, 2);
+    const after = await readRecon(page);
+    if (after.splitView) throw new Error(`${label}: split view came back on its own`);
+    if (after.dragging || after.pinchActive) {
+      throw new Error(`${label}: a gesture after the split was dropped did not release // ${JSON.stringify(after)}`);
+    }
+    if (Math.hypot(after.scrollX - before.scrollX, after.scrollY - before.scrollY) < 6) {
+      throw new Error(`${label}: panning stopped working once split view was dropped // ${JSON.stringify({ before, after })}`);
+    }
+    console.log(`PASS ${label}: gestures stay stable after split view is dropped`);
+  } finally {
+    await cdp.detach().catch(() => {});
   }
+}
 
-  const zoomed = await state();
-  if (zoomed.zoom <= startZoom + 0.08) {
-    throw new Error(`${profile.name}: pinch-out did not zoom smoothly // ${JSON.stringify({ startZoom, zoomed })}`);
+async function exerciseSplitViewGestures(page, context, profile, label) {
+  const cdp = await context.newCDPSession(page);
+  const touch = androidTouchDriver(cdp);
+  const read = () => readRecon(page);
+
+  try {
+    const chrome = await page.evaluate(() => window.__qa.reconChrome());
+    if (!chrome?.splitView) throw new Error(`${label}: split view is not engaged`);
+    const half = Math.floor(chrome.width / 2);
+    const y = Math.round((78 + (chrome.height - chrome.railHeight)) / 2);
+
+    const pinchInside = async (paneLeft, paneRight, pane) => {
+      const centre = Math.round((paneLeft + paneRight) / 2);
+      let a = { id: 71, x: centre - 50, y };
+      let b = { id: 72, x: centre + 50, y };
+      const before = await read();
+      await touch('touchStart', [a]);
+      await touch('touchStart', [a, b]);
+      await settle(page, 1);
+
+      const started = await read();
+      if (!started.pinchActive || started.pinchPointerIds.length !== 2) {
+        throw new Error(`${label}/pane-${pane}: a pinch inside one pane did not start // ${JSON.stringify(started)}`);
+      }
+      if (started.pinchCameraIsCompare !== (pane === 'B')) {
+        throw new Error(`${label}/pane-${pane}: the pinch bound the wrong pane's camera // ${JSON.stringify(started)}`);
+      }
+
+      for (let index = 0; index < 6; index += 1) {
+        const previousB = b;
+        a = { ...a, x: Math.max(paneLeft + 8, a.x - 5) };
+        await touch('touchMove', [a, previousB]);
+        b = { ...b, x: Math.min(paneRight - 8, b.x + 5) };
+        await touch('touchMove', [a, b]);
+        await settle(page, 1);
+        const step = await read();
+        assertFrameBounded(index === 0 ? started : step, step, label, `pane-${pane}-pinch`);
+        if (!step.pinchActive) throw new Error(`${label}/pane-${pane}: the pinch dropped mid-gesture`);
+      }
+      await touch('touchEnd', []);
+      await settle(page, 2);
+
+      const after = await read();
+      if (!(after.zoom > before.zoom + 0.06)) {
+        throw new Error(`${label}/pane-${pane}: pinching inside the pane did not zoom // ${JSON.stringify({ before, after })}`);
+      }
+      if (!after.compare) throw new Error(`${label}/pane-${pane}: the comparison camera vanished`);
+      const drift = Math.hypot(after.compare.scrollX - after.scrollX, after.compare.scrollY - after.scrollY);
+      if (Math.abs(after.compare.zoom - after.zoom) > 0.001 || drift > 1.5) {
+        throw new Error(`${label}/pane-${pane}: the panes fell out of register // ${JSON.stringify(after)}`);
+      }
+      if (after.candidate) throw new Error(`${label}/pane-${pane}: pinching marked the imagery`);
+      return after;
+    };
+
+    await pinchInside(0, half, 'A');
+    await pinchInside(half, chrome.width, 'B');
+
+    // One finger per pane: refused, and nothing moves.
+    const before = await read();
+    const left = { id: 81, x: Math.round(half / 2), y };
+    const right = { id: 82, x: Math.round(half + half / 2), y };
+    await touch('touchStart', [left]);
+    await touch('touchStart', [left, right]);
+    await settle(page, 1);
+    const straddling = await read();
+    if (straddling.pinchActive) {
+      throw new Error(`${label}/straddle: one finger in each pane started a pinch // ${JSON.stringify(straddling)}`);
+    }
+    for (let index = 0; index < 4; index += 1) {
+      await touch('touchMove', [{ ...left, x: left.x - 8 * (index + 1) }, right]);
+      await touch('touchMove', [{ ...left, x: left.x - 8 * (index + 1) }, { ...right, x: right.x + 8 * (index + 1) }]);
+      await settle(page, 1);
+    }
+    const afterStraddle = await read();
+    if (afterStraddle.pinchActive) throw new Error(`${label}/straddle: a cross-pane pinch started on movement`);
+    assertFrameBounded(before, afterStraddle, label, 'straddle', { maxScroll: 175, maxZoom: 0.06 });
+    await touch('touchEnd', []);
+    await settle(page, 2);
+    const settled = await read();
+    if (settled.pinchActive || settled.dragging) {
+      throw new Error(`${label}/straddle: a refused cross-pane gesture left state behind // ${JSON.stringify(settled)}`);
+    }
+
+    console.log(`PASS ${label}: split-view pinch stays inside one pane and keeps both in register`);
+  } finally {
+    await cdp.detach().catch(() => {});
   }
-
-  // Move both fingers together at almost constant separation: this should pan,
-  // not zoom wildly.
-  const beforeTwoFingerPan = zoomed;
-  for (let i = 0; i < 5; i += 1) {
-    first = { ...first, x: first.x + 6, y: first.y + 6 };
-    await touch('touchMove', [first, second]);
-    await page.waitForTimeout(16);
-    let next = await state();
-    assertStableStep(last, next, 'two-finger-pan-a');
-    last = next;
-
-    second = { ...second, x: second.x + 6, y: second.y + 6 };
-    await touch('touchMove', [first, second]);
-    await page.waitForTimeout(16);
-    next = await state();
-    assertStableStep(last, next, 'two-finger-pan-b');
-    last = next;
-  }
-  const afterTwoFingerPan = await state();
-  if (Math.abs(afterTwoFingerPan.zoom - beforeTwoFingerPan.zoom) > 0.14) {
-    throw new Error(`${profile.name}: two-finger pan changed zoom too much // ${JSON.stringify({ beforeTwoFingerPan, afterTwoFingerPan })}`);
-  }
-
-  // Pinch back inward.
-  const beforeIn = afterTwoFingerPan;
-  for (let i = 0; i < 7; i += 1) {
-    first = { ...first, x: first.x + 4 };
-    await touch('touchMove', [first, second]);
-    await page.waitForTimeout(16);
-    let next = await state();
-    assertStableStep(last, next, 'pinch-in-a');
-    last = next;
-
-    second = { ...second, x: second.x - 4 };
-    await touch('touchMove', [first, second]);
-    await page.waitForTimeout(16);
-    next = await state();
-    assertStableStep(last, next, 'pinch-in-b');
-    last = next;
-  }
-  const zoomedBack = await state();
-  if (zoomedBack.zoom >= beforeIn.zoom - 0.08) {
-    throw new Error(`${profile.name}: pinch-in did not zoom back out // ${JSON.stringify({ beforeIn, zoomedBack })}`);
-  }
-
-  await touch('touchEnd', []);
-  await page.waitForTimeout(60);
-  const released = await state();
-  if (released.pinchActive) throw new Error(`${profile.name}: pinch state stuck after release`);
-
-  console.log(`PASS ${profile.name} gesture matrix: ${profile.mode} / ${profile.map}, zoom ${startZoom.toFixed(2)}→${zoomed.zoom.toFixed(2)}→${zoomedBack.zoom.toFixed(2)}`);
-  await cdp.detach().catch(() => {});
 }
 
 async function runProfile(profile) {
@@ -1159,7 +1516,6 @@ async function runProfile(profile) {
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
 
     await assertControlsReachable(page, 'reconControls', `${profile.name}/recon`);
-    await exerciseAndroidReconGestures(page, context, profile);
 
     const mission = await page.evaluate(() => window.__qa.missionSummary());
     if (!mission) throw new Error(`${profile.name}/recon: no mission on the recon scene`);
@@ -1168,6 +1524,20 @@ async function runProfile(profile) {
     }
     if (mission.mapId !== profile.map) {
       throw new Error(`${profile.name}/recon: expected sector ${profile.map}, got ${mission.mapId}`);
+    }
+
+    if (profile.androidGestureStress) {
+      await exerciseAndroidTouchNavigation(
+        page, context, profile,
+        `${profile.name}/${profile.mode}/${profile.map}`,
+      );
+      // Back to a known view, and to a controller with no gesture left over.
+      await tapControl(page, profile, 'Recon', 'RESET VIEW', `${profile.name}/post-gesture-reset`);
+      await settle(page, 3);
+      const resetState = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+      if (!resetState || resetState.pinchActive || resetState.dragging || resetState.candidate) {
+        throw new Error(`${profile.name}/post-gesture-reset: the camera controls did not come back clean // ${JSON.stringify(resetState)}`);
+      }
     }
 
     // Pause/resume before playing: the timer, the rail and the weather layer
@@ -1240,6 +1610,28 @@ async function runProfile(profile) {
       await tapControl(page, profile, 'Recon', 'SPLIT VIEW', `${profile.name}/split-again`);
       chrome = await page.evaluate(() => window.__qa.reconChrome());
       if (!chrome.splitView) throw new Error(`${context$}: split view could not be re-entered`);
+
+      if (profile.splitViewGestureStress) {
+        await exerciseSplitViewGestures(page, context, profile, `${profile.name}/split`);
+        // Narrow until the second pane is dropped, then prove the single-pane
+        // gesture model still drives the camera on the way back out.
+        await resizeTo(page, profile.rotateTo, `${profile.name}/split-dropped`);
+        const narrowed = await page.evaluate(() => window.__qa.reconChrome());
+        if (narrowed.splitView) throw new Error(`${context$}: split view survived narrowing below its minimum`);
+        await exerciseSinglePaneGestureAfterSplit(page, context, `${profile.name}/split-dropped`);
+        await resizeTo(page, profile.viewport, `${profile.name}/split-restored-again`);
+        await tapControl(page, profile, 'Recon', 'SPLIT VIEW', `${profile.name}/split-final`);
+        chrome = await page.evaluate(() => window.__qa.reconChrome());
+        if (!chrome.splitView) throw new Error(`${context$}: split view could not be re-entered after the gesture pass`);
+        // Hand the mission back at the mission's own framing, not at whatever
+        // the pinch stress left on screen.
+        await tapControl(page, profile, 'Recon', 'RESET VIEW', `${profile.name}/split-gesture-reset`);
+        await settle(page, 3);
+        const restored = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+        if (!restored || restored.pinchActive || restored.dragging || restored.candidate) {
+          throw new Error(`${context$}: split-view gestures did not come back clean // ${JSON.stringify(restored)}`);
+        }
+      }
     }
 
     if (profile.mode === 'COUNT') await playCount(page, profile, context$);
