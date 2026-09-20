@@ -269,19 +269,38 @@ check(
 check(
   recon.includes('pinchPointers(pointers = this.mapPointersDown())')
     && recon.includes('beginPinch(pointers = this.mapPointersDown())')
-    && recon.includes('updatePinch(pointers = this.mapPointersDown())')
+    && recon.includes('stepPinchGesture()')
     && recon.includes('finishPinch(remaining = [])')
     && recon.includes('this.pinchGesture.pointerIds')
     && recon.includes('camera.zoom * scaleRatio'),
   'ReconScene keeps stable touch IDs and applies incremental two-finger transforms',
 );
 check(
-  recon.includes('pinchDistanceDeadZone')
+  /pointermove'[\s\S]*?this\.pinchGesture\.dirty = true;[\s\S]*?this\.panGestureDirty = true;/.test(recon)
+    && /update\(\) \{[\s\S]*?this\.stepPinchGesture\(\);[\s\S]*?this\.stepPanGesture\(\);/.test(recon),
+  'raw Android pointer events only mark gestures dirty; camera transforms are sampled once per game frame',
+);
+check(
+  recon.includes('touchPanStepMax')
+    && recon.includes('pinchDistanceDeadZone')
     && recon.includes('pinchMidpointDeadZone')
     && recon.includes('pinchScaleStepMin')
     && recon.includes('pinchScaleStepMax')
     && recon.includes('pinchPanStepMax'),
-  'Android pinch filters jitter and bounds per-event zoom/pan deltas',
+  'Android pan/pinch filters jitter and bounds per-frame transform deltas',
+);
+check(
+  recon.includes('cameraScrollLimits(camera = this.cameras.main)')
+    && recon.includes('setCameraScrollClamped(camera, scrollX, scrollY)')
+    && (recon.match(/this\.setCameraScrollClamped\(/g) ?? []).length >= 5,
+  'pan, pinch, wheel zoom, resize and split-camera sync share immediate camera-bound clamping',
+);
+check(
+  recon.includes("addEventListener('touchcancel', this.nativeGestureCancel")
+    && recon.includes("addEventListener('pointercancel', this.nativeGestureCancel")
+    && recon.includes("removeEventListener('touchcancel', this.nativeGestureCancel")
+    && recon.includes("removeEventListener('pointercancel', this.nativeGestureCancel"),
+  'Android touch/pointer cancellation clears gesture ownership and removes its DOM listeners on shutdown',
 );
 check(
   !/pointers\.length !== 2 \|\| this\.paused \|\| this\.marking/.test(recon)
