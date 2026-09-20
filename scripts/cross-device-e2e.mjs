@@ -46,6 +46,7 @@ const PROFILES = [
     deviceScaleFactor: 3,
     mode: 'CHANGE',
     map: 'frostline-relay',
+    webkitDomIntroClick: true,
   },
   {
     name: 'android-chromium',
@@ -210,7 +211,13 @@ async function runProfile(profile) {
 
     const introStart = page.locator('.intro-start__button');
     if (await introStart.isVisible().catch(() => false)) {
-      if (profile.hasTouch) {
+      if (profile.webkitDomIntroClick) {
+        // Playwright's headless WebKit build does not consistently deliver
+        // touchscreen taps to DOM buttons. Use WebKit's real click dispatch
+        // here; the production scene separately carries pointer/click/touchend
+        // fallbacks, while the rest of the iPhone profile uses touch input.
+        await introStart.click({ force: true });
+      } else if (profile.hasTouch) {
         const startPoint = await page.evaluate(() => {
           const rect = document.querySelector('.intro-start__button')?.getBoundingClientRect();
           return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
@@ -224,7 +231,9 @@ async function runProfile(profile) {
       await page.waitForTimeout(80);
       const skip = page.locator('.intro-skip.is-visible');
       if (await skip.isVisible().catch(() => false)) {
-        if (profile.hasTouch) {
+        if (profile.webkitDomIntroClick) {
+          await skip.click({ force: true });
+        } else if (profile.hasTouch) {
           const skipPoint = await page.evaluate(() => {
             const rect = document.querySelector('.intro-skip.is-visible')?.getBoundingClientRect();
             return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
