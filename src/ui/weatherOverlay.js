@@ -52,6 +52,7 @@ export function createWeatherOverlay(scene, {
   const particles = buildParticles(seed, condition, reducedMotion);
   let phase = 0;
   let paused = false;
+  const wrap01 = (value) => ((value % 1) + 1) % 1;
 
   const draw = () => {
     if (!graphics?.active) return;
@@ -66,10 +67,10 @@ export function createWeatherOverlay(scene, {
 
     if (condition === ENVIRONMENT_CONDITIONS.RAIN) {
       particles.forEach((particle) => {
-        const yNorm = reducedMotion ? particle.y : (particle.y + phase * particle.speed) % 1;
+        const yNorm = reducedMotion ? particle.y : wrap01(particle.y + phase * particle.speed);
         const xNorm = reducedMotion
           ? particle.x
-          : (particle.x + phase * particle.drift + 2) % 1;
+          : wrap01(particle.x + phase * particle.drift);
         const x = xNorm * width;
         const y = top + yNorm * span;
         graphics.lineStyle(1, 0xf6f6ee, particle.alpha);
@@ -79,9 +80,9 @@ export function createWeatherOverlay(scene, {
     }
 
     particles.forEach((particle) => {
-      const yNorm = reducedMotion ? particle.y : (particle.y + phase * particle.speed) % 1;
+      const yNorm = reducedMotion ? particle.y : wrap01(particle.y + phase * particle.speed);
       const sway = reducedMotion ? 0 : Math.sin((phase + particle.y) * Math.PI * 2) * particle.drift;
-      const xNorm = (particle.x + sway + 2) % 1;
+      const xNorm = wrap01(particle.x + sway);
       graphics.fillStyle(0xf6f6ee, particle.alpha);
       graphics.fillCircle(xNorm * width, top + yNorm * span, particle.size);
     });
@@ -93,7 +94,10 @@ export function createWeatherOverlay(scene, {
       loop: true,
       callback: () => {
         if (paused) return;
-        phase = (phase + 0.018) % 1;
+        // Keep phase continuous. Resetting at 1 caused every particle to snap
+        // backward together roughly every five seconds, which read as a
+        // visible weather-loop seam rather than continuous precipitation.
+        phase += 0.018;
         draw();
       },
     })
