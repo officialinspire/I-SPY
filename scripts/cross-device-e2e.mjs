@@ -35,6 +35,7 @@ const PROFILES = [
     deviceScaleFactor: 2,
     mode: 'COUNT',
     map: 'border-farms',
+    menuTap: { x: 340, y: 293 },
   },
   {
     name: 'iphone-webkit',
@@ -46,6 +47,7 @@ const PROFILES = [
     deviceScaleFactor: 3,
     mode: 'CHANGE',
     map: 'frostline-relay',
+    menuTap: { x: 197, y: 196 },
   },
   {
     name: 'android-chromium',
@@ -58,6 +60,7 @@ const PROFILES = [
     deviceScaleFactor: 2.625,
     mode: 'LOCATE',
     map: 'dustline-sector',
+    menuTap: { x: 206, y: 273 },
   },
 ];
 
@@ -222,10 +225,15 @@ async function runProfile(profile) {
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
     const menuHash = await screenHash(page);
 
-    // MainMenu focus order starts with RANDOM MISSION. This simultaneously
-    // smoke-tests keyboard navigation on every form factor.
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Enter');
+    // Desktop smoke-tests the keyboard focus path. Touch profiles tap the
+    // responsive RANDOM MISSION card directly, exercising Phaser pointer/touch
+    // input on tablet, iPhone-class WebKit and Android-class Chromium.
+    if (profile.hasTouch && profile.menuTap) {
+      await page.touchscreen.tap(profile.menuTap.x, profile.menuTap.y);
+    } else {
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Enter');
+    }
     await page.waitForTimeout(250);
     const briefingHash = await screenHash(page);
     if (briefingHash === menuHash) throw new Error('menu did not transition to mission briefing');
