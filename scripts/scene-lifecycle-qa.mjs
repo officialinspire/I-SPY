@@ -84,6 +84,12 @@ check(
   'viewport sync retries after mobile browser layout settles',
 );
 check(
+  main.includes('canvas.getBoundingClientRect()')
+    && main.includes("canvas.style.width =")
+    && main.includes("canvas.style.height ="),
+  'viewport sync corrects the displayed canvas box when Phaser logical size updates first',
+);
+check(
   intro.includes("addEventListener('touchend', this.onStartPointer")
     && intro.includes("addEventListener('touchend', this.onSkip")
     && intro.includes("removeEventListener('touchend', this.onStartPointer")
@@ -116,5 +122,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 20 mission, gesture, cross-device, weather, and persistence checks.');
+  console.log('I SPY scene lifecycle QA passed: 21 mission, gesture, cross-device, weather, and persistence checks.');
 }
