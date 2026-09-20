@@ -642,7 +642,6 @@ export default class ReconScene extends Phaser.Scene {
     const after = camera.getWorldPoint(appliedMidpoint.x, appliedMidpoint.y);
     camera.scrollX += anchorWorld.x - after.x;
     camera.scrollY += anchorWorld.y - after.y;
-    this.clampCameraScroll(camera);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
 
     // Keep our virtual gesture state aligned with the transform we actually
@@ -1173,16 +1172,6 @@ export default class ReconScene extends Phaser.Scene {
    * the imagery covering the viewport instead; it never restricts a window the
    * map already covers.
    */
-  clampCameraScroll(camera = this.cameras.main) {
-    const visibleWidth = camera.width / Math.max(camera.zoom, 0.001);
-    const visibleHeight = camera.height / Math.max(camera.zoom, 0.001);
-    const maxX = Math.max(0, this.map.width - visibleWidth);
-    const maxY = Math.max(0, this.map.height - visibleHeight);
-    camera.scrollX = Phaser.Math.Clamp(camera.scrollX, 0, maxX);
-    camera.scrollY = Phaser.Math.Clamp(camera.scrollY, 0, maxY);
-    return camera;
-  }
-
   panCameraByScreenDelta(camera, dx, dy) {
     const distance = Math.hypot(dx, dy);
     if (!Number.isFinite(distance) || distance === 0) return;
@@ -1195,7 +1184,6 @@ export default class ReconScene extends Phaser.Scene {
     }
     camera.scrollX -= appliedX / Math.max(camera.zoom, 0.001);
     camera.scrollY -= appliedY / Math.max(camera.zoom, 0.001);
-    this.clampCameraScroll(camera);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
   }
 
@@ -1220,7 +1208,6 @@ export default class ReconScene extends Phaser.Scene {
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
-    this.clampCameraScroll(camera);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
     if (this.candidate) this.drawCandidateMarker();
   }
@@ -1325,7 +1312,6 @@ export default class ReconScene extends Phaser.Scene {
 
     const floor = this.minZoomForCamera(this.cameras.main);
     if (this.cameras.main.zoom < floor) this.cameras.main.setZoom(floor);
-    this.clampCameraScroll(this.cameras.main);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (this.candidate) this.drawCandidateMarker();
 
