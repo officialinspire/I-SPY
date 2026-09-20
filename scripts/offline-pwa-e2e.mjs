@@ -99,7 +99,13 @@ async function proveColdOfflineLaunch() {
   page.on('requestfailed', (request) => {
     const url = new URL(request.url());
     const base = new URL(BASE_URL);
-    if (url.origin === base.origin) failed.push(`${request.resourceType()} ${url.pathname}: ${request.failure()?.errorText}`);
+    if (url.origin !== base.origin) return;
+    // finishIntro() deliberately removes the MP4 source. Chromium reports the
+    // cancelled media request as ERR_ABORTED even when it was served from the
+    // service worker. Treat only that intentional media cancellation as noise.
+    const errorText = request.failure()?.errorText ?? '';
+    if (request.resourceType() === 'media' && errorText.includes('ERR_ABORTED')) return;
+    failed.push(`${request.resourceType()} ${url.pathname}: ${errorText}`);
   });
 
   const url = new URL(BASE_URL);
@@ -120,23 +126,35 @@ async function proveColdOfflineLaunch() {
     await page.evaluate(() => window.__ISPY_QA__?.finishIntro?.());
     await waitForScene(page, 'MainMenu');
 
-    const mediaRange = await page.evaluate(async () => {
+    const mediaRanges = await page.evaluate(async () => {
       const names = await caches.keys();
       const offlineName = names.find((name) => name.startsWith('ispy-offline-'));
       const cache = offlineName ? await caches.open(offlineName) : null;
       const requests = cache ? await cache.keys() : [];
-      const media = requests.find((request) => /\.mp3(?:$|\?)/i.test(request.url));
-      if (!media) return { found: false };
-      const response = await fetch(media.url, { headers: { Range: 'bytes=0-1023' } });
+
+      async function probe(pattern) {
+        const media = requests.find((request) => pattern.test(request.url));
+        if (!media) return { found: false };
+        const response = await fetch(media.url, { headers: { Range: 'bytes=0-1023' } });
+        return {
+          found: true,
+          url: media.url,
+          status: response.status,
+          bytes: (await response.arrayBuffer()).byteLength,
+          contentRange: response.headers.get('content-range'),
+        };
+      }
+
       return {
-        found: true,
-        status: response.status,
-        bytes: (await response.arrayBuffer()).byteLength,
-        contentRange: response.headers.get('content-range'),
+        mp3: await probe(/\.mp3(?:$|\?)/i),
+        mp4: await probe(/\.mp4(?:$|\?)/i),
       };
     });
-    if (!mediaRange.found || mediaRange.status !== 206 || mediaRange.bytes !== 1024 || !mediaRange.contentRange) {
-      throw new Error(`offline media range failed: ${JSON.stringify(mediaRange)}`);
+
+    for (const [kind, probe] of Object.entries(mediaRanges)) {
+      if (!probe.found || probe.status !== 206 || probe.bytes !== 1024 || !probe.contentRange) {
+        throw new Error(`offline ${kind} range failed: ${JSON.stringify(probe)}`);
+      }
     }
 
     const randomPoint = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MainMenu', 'randomCard'));
@@ -153,7 +171,8 @@ async function proveColdOfflineLaunch() {
     if (failed.length) throw new Error(`offline same-origin requests escaped cache: ${failed.join(' | ')}`);
 
     console.log('PASS cold offline restart: service worker -> menu -> briefing -> Recon');
-    console.log(`PASS cached media range: ${mediaRange.contentRange}`);
+    console.log(`PASS cached MP3 range: ${mediaRanges.mp3.contentRange}`);
+    console.log(`PASS cached MP4 range: ${mediaRanges.mp4.contentRange}`);
   } finally {
     await context.close();
   }
