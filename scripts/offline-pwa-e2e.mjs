@@ -9,6 +9,9 @@ const launchOptions = {
   headless: true,
   args: ['--enable-webgl', '--use-angle=swiftshader'],
   viewport: { width: 412, height: 915 },
+  isMobile: true,
+  hasTouch: true,
+  deviceScaleFactor: 2.625,
 };
 
 async function waitForScene(page, key, timeout = 12_000) {
@@ -123,12 +126,12 @@ async function proveColdOfflineLaunch() {
 
     const randomPoint = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MainMenu', 'randomCard'));
     if (!randomPoint) throw new Error('offline RANDOM MISSION control unavailable');
-    await page.mouse.click(randomPoint.x, randomPoint.y);
+    await page.touchscreen.tap(randomPoint.x, randomPoint.y);
     await waitForScene(page, 'MissionBriefing');
 
     const beginPoint = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('MissionBriefing', 'begin'));
     if (!beginPoint) throw new Error('offline ACQUIRE IMAGERY control unavailable');
-    await page.mouse.click(beginPoint.x, beginPoint.y);
+    await page.touchscreen.tap(beginPoint.x, beginPoint.y);
     await waitForScene(page, 'Recon');
 
     if (errors.length) throw new Error(`offline browser errors: ${errors.join(' | ')}`);
