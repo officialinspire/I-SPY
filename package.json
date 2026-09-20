@@ -1,11 +1,11 @@
 {
   "name": "i-spy",
   "private": true,
-  "version": "1.4.1-demo",
+  "version": "1.5.0-demo",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "validate": "node scripts/validate-release.mjs && node scripts/generator-qa.mjs && node scripts/progression-qa.mjs && node scripts/release-candidate-qa.mjs && node scripts/audio-qa.mjs && node scripts/scene-lifecycle-qa.mjs",
+    "validate": "node scripts/validate-release.mjs && node scripts/generator-qa.mjs && node scripts/progression-qa.mjs && node scripts/environment-expansion-qa.mjs && node scripts/release-candidate-qa.mjs && node scripts/audio-qa.mjs && node scripts/scene-lifecycle-qa.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "qa": "node scripts/generator-qa.mjs"
