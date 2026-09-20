@@ -11,6 +11,9 @@
  *   ISPY_E2E_URL             base URL (default http://127.0.0.1:4173/)
  *   ISPY_E2E_ONLY            comma-separated profile names to run
  *   ISPY_E2E_CHROMIUM_PATH   executablePath for the Chromium profiles
+ *   ISPY_E2E_STARVE_FRAMES   ms between animation frames, to rehearse a host
+ *                            that starves the page (one CI runner gave
+ *                            headless WebKit twenty frames in 130 seconds)
  */
 import crypto from 'node:crypto';
 import { chromium, webkit } from 'playwright';
@@ -306,25 +309,67 @@ async function screenHash(page) {
   return hash(await page.screenshot());
 }
 
+/** Frames a transition is given, whatever the wall clock says it took. */
+const SCENE_FRAME_BUDGET = 45;
+/** Hard ceiling, so a genuinely dead page still fails in reasonable time. */
+const SCENE_WALL_CLOCK_CEILING_MS = 150_000;
+
+/**
+ * Waits for a scene, measured in rendered frames as well as in seconds.
+ *
+ * Phaser queues a scene transition and processes it from the game loop, so
+ * how long one takes is a question about frames, not about seconds. A
+ * headless browser can be starved of animation frames by its host — one CI
+ * run rendered twenty frames in a hundred and thirty seconds — and a plain
+ * wall-clock timeout then expires after about three frames and reports a
+ * working transition as a broken one.
+ *
+ * So the wait gives up only when the page has had both its seconds and its
+ * frames. A page getting frames at a normal rate is unaffected; a starved
+ * one is given the frames the transition actually needs, and a dead one
+ * still fails, now with the frame count that says which it was.
+ */
 async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
-  try {
-    await page.waitForFunction(
-      (sceneKey) => window.__qa?.activeScenes().includes(sceneKey),
-      key,
-      { timeout, polling: 100 },
-    );
-  } catch (error) {
-    const state = await page.evaluate(() => ({
-      active: window.__qa?.activeScenes() ?? null,
-      overlays: window.__qa?.domOverlays() ?? null,
-      loop: window.__qa?.loopState() ?? null,
-      scenes: window.__qa?.sceneStatus() ?? null,
-    })).catch((evaluationError) => ({ evaluationFailed: String(evaluationError) }));
-    // A scene that never arrives is usually a scene whose create() threw, and
-    // a throw inside a game step stops the loop for good, so the collected
-    // browser errors are the diagnosis rather than a footnote to it.
-    const reported = errors.length ? errors.join(' | ') : 'no browser errors';
-    throw new Error(`${label}: scene '${key}' never became active // ${JSON.stringify(state)} // ${reported} // ${error.message}`);
+  const startedAt = Date.now();
+  const framesAt = async () => {
+    const loop = await page.evaluate(() => window.__qa?.loopState() ?? null).catch(() => null);
+    return loop?.frame ?? null;
+  };
+  const openingFrame = await framesAt();
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await page.waitForFunction(
+        (sceneKey) => window.__qa?.activeScenes().includes(sceneKey),
+        key,
+        { timeout, polling: 100 },
+      );
+      return;
+    } catch (error) {
+      const elapsed = Date.now() - startedAt;
+      const currentFrame = await framesAt();
+      const rendered = (openingFrame !== null && currentFrame !== null)
+        ? currentFrame - openingFrame
+        : null;
+      // Frames are still arriving, just slowly, and the transition has not
+      // yet had the frames it needs. Keep waiting rather than blaming the
+      // game for the host's frame rate.
+      if (rendered !== null && rendered < SCENE_FRAME_BUDGET && elapsed < SCENE_WALL_CLOCK_CEILING_MS) {
+        continue;
+      }
+
+      const state = await page.evaluate(() => ({
+        active: window.__qa?.activeScenes() ?? null,
+        overlays: window.__qa?.domOverlays() ?? null,
+        loop: window.__qa?.loopState() ?? null,
+        scenes: window.__qa?.sceneStatus() ?? null,
+      })).catch((evaluationError) => ({ evaluationFailed: String(evaluationError) }));
+      // A scene that never arrives is usually a scene whose create() threw,
+      // and a throw inside a game step stops the loop for good, so the
+      // collected browser errors are the diagnosis, not a footnote to it.
+      const reported = errors.length ? errors.join(' | ') : 'no browser errors';
+      throw new Error(`${label}: scene '${key}' never became active after ${rendered ?? '?'} rendered frames in ${elapsed}ms // ${JSON.stringify(state)} // ${reported} // ${error.message}`);
+    }
   }
 }
 
@@ -402,11 +447,40 @@ async function assertControlsReachable(page, reader, label) {
   return controls.length;
 }
 
+/**
+ * Waits for the page to actually render.
+ *
+ * Everything the suite asserts on — a tap being processed, a layout being
+ * re-run after a resize, a queued transition — happens inside a game step,
+ * so "give it a moment" has to be counted in frames. A headless browser
+ * starved of animation frames by its host turns every millisecond-based
+ * pause into no pause at all, and the assertion that follows then reads a
+ * state the game has not reached yet.
+ *
+ * `minMs` is for the things that are genuinely on a clock as well: the
+ * viewport sync re-checks itself over 300ms after a resize.
+ */
+async function settle(page, frames = 3, { minMs = 0, maxMs = 12_000 } = {}) {
+  const startedAt = Date.now();
+  const opening = await page.evaluate(() => window.__qa?.loopState()?.frame ?? null).catch(() => null);
+  if (opening === null) {
+    await page.waitForTimeout(Math.max(minMs, frames * 60));
+    return;
+  }
+  await page.waitForFunction(
+    ([from, wanted]) => ((window.__qa?.loopState()?.frame ?? 0) - from) >= wanted,
+    [opening, frames],
+    { timeout: maxMs, polling: 50 },
+  ).catch(() => { /* a starved page still moves on; the assertion reports it */ });
+  const remaining = minMs - (Date.now() - startedAt);
+  if (remaining > 0) await page.waitForTimeout(remaining);
+}
+
 /** A tap where the device has a finger, a click where it has a pointer. */
 async function tap(page, profile, point) {
   if (profile.hasTouch) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
-  await page.waitForTimeout(90);
+  await settle(page, 2);
 }
 
 async function tapControl(page, profile, sceneKey, label, context) {
@@ -434,7 +508,7 @@ async function dragBy(page, from, dx, dy) {
     await page.mouse.move(from.x + (dx * step) / steps, from.y + (dy * step) / steps);
   }
   await page.mouse.up();
-  await page.waitForTimeout(80);
+  await settle(page, 2);
 }
 
 /**
@@ -567,6 +641,17 @@ async function runProfile(profile) {
     localStorage.removeItem(recordKey);
   }, { settingsKey: SETTINGS_KEY, recordKey: RECORD_KEY });
   await page.addInitScript(PAGE_HELPERS);
+  // Reproduces a host that starves the page of animation frames, which is
+  // what one CI runner did to headless WebKit. The suite has to stay honest
+  // under it: everything it asserts on happens inside a game step.
+  if (process.env.ISPY_E2E_STARVE_FRAMES) {
+    await page.addInitScript((ms) => {
+      window.requestAnimationFrame = (callback) => window.setTimeout(
+        () => callback(performance.now()),
+        ms,
+      );
+    }, Number(process.env.ISPY_E2E_STARVE_FRAMES));
+  }
 
   const url = new URL(BASE_URL);
   url.searchParams.set('qa', '1');
@@ -623,7 +708,7 @@ async function runProfile(profile) {
     await waitForScene(page, 'MainMenu', `${profile.name}/menu`, 20_000, errors);
     const loop = await page.evaluate(() => window.__qa.loopState());
     if (!loop.running) throw new Error(`${profile.name}/menu: the game loop has stopped // ${JSON.stringify(loop)}`);
-    await page.waitForTimeout(250);
+    await settle(page, 3);
     await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
     await assertControlsReachable(page, 'menuControls', `${profile.name}/menu`);
@@ -633,7 +718,7 @@ async function runProfile(profile) {
 
     /* --- Briefing --------------------------------------------------- */
     await waitForScene(page, 'MissionBriefing', `${profile.name}/briefing`, 12_000, errors);
-    await page.waitForTimeout(250);
+    await settle(page, 3);
     await assertViewport(page, profile.viewport, `${profile.name}/briefing`);
     const briefingHash = await screenHash(page);
     if (briefingHash === menuHash) throw new Error('menu did not visually transition to mission briefing');
@@ -642,7 +727,7 @@ async function runProfile(profile) {
 
     /* --- Recon ------------------------------------------------------ */
     await waitForScene(page, 'Recon', `${profile.name}/recon`, 12_000, errors);
-    await page.waitForTimeout(400);
+    await settle(page, 4);
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
 
     await assertControlsReachable(page, 'reconControls', `${profile.name}/recon`);
@@ -669,24 +754,24 @@ async function runProfile(profile) {
     // a single ESC used to toggle the hold an even number of times and read
     // as a dead key, and a single COUNT arrow moved the tally by three.
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(160);
+    await settle(page, 2);
     if (!(await page.evaluate(() => window.__qa.reconChrome())).paused) {
       throw new Error(`${profile.name}/recon: one ESC press did not hold the mission`);
     }
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(160);
+    await settle(page, 2);
     if ((await page.evaluate(() => window.__qa.reconChrome())).paused) {
       throw new Error(`${profile.name}/recon: one ESC press did not release the hold`);
     }
     if (profile.mode === 'COUNT') {
       await page.keyboard.press('ArrowUp');
-      await page.waitForTimeout(160);
+      await settle(page, 2);
       const stepped = await page.evaluate(() => window.__qa.missionSummary());
       if (stepped.answerValue !== 1) {
         throw new Error(`${profile.name}/recon: one arrow press moved the tally to ${stepped.answerValue}`);
       }
       await page.keyboard.press('ArrowDown');
-      await page.waitForTimeout(160);
+      await settle(page, 2);
       const cleared = await page.evaluate(() => window.__qa.missionSummary());
       if (cleared.answerValue !== 0) {
         throw new Error(`${profile.name}/recon: one arrow press left the tally at ${cleared.answerValue}`);
@@ -696,11 +781,11 @@ async function runProfile(profile) {
     // Rotate while the mission is live. This hits the layout, camera, rail,
     // weather and safe-area resize paths under actual rendering.
     await page.setViewportSize(profile.rotateTo);
-    await page.waitForTimeout(420);
+    await settle(page, 4, { minMs: 420 });
     await assertViewport(page, profile.rotateTo, `${profile.name}/rotated-recon`);
     await assertControlsReachable(page, 'reconControls', `${profile.name}/rotated-recon`);
     await page.setViewportSize(profile.viewport);
-    await page.waitForTimeout(420);
+    await settle(page, 4, { minMs: 420 });
     await assertViewport(page, profile.viewport, `${profile.name}/restored-recon`);
 
     /* --- Split view -------------------------------------------------- *
@@ -718,14 +803,14 @@ async function runProfile(profile) {
       // Rotating into a console too narrow for two panes has to drop back
       // to one, in the middle of a live mission, without stranding a mark.
       await page.setViewportSize(profile.rotateTo);
-      await page.waitForTimeout(420);
+      await settle(page, 4, { minMs: 420 });
       chrome = await page.evaluate(() => window.__qa.reconChrome());
       if (chrome.splitView && profile.rotateTo.width < 980) {
         throw new Error(`${context$}: split view survived a resize below its minimum width`);
       }
       await assertControlsReachable(page, 'reconControls', `${profile.name}/split-narrowed`);
       await page.setViewportSize(profile.viewport);
-      await page.waitForTimeout(420);
+      await settle(page, 4, { minMs: 420 });
 
       await tapControl(page, profile, 'Recon', 'SPLIT VIEW', `${profile.name}/split-again`);
       chrome = await page.evaluate(() => window.__qa.reconChrome());
@@ -737,7 +822,7 @@ async function runProfile(profile) {
 
     /* --- Debrief ---------------------------------------------------- */
     await waitForScene(page, 'Results', `${profile.name}/results`, 12_000, errors);
-    await page.waitForTimeout(350);
+    await settle(page, 3);
     await assertViewport(page, profile.viewport, `${profile.name}/results`);
     const results = await page.evaluate(() => window.__qa.resultsSummary());
     if (!results?.success) {
@@ -752,10 +837,10 @@ async function runProfile(profile) {
      * Repeat-mission regressions have reached players from here before.     */
     await tapControl(page, profile, 'Results', 'NEXT MISSION', `${profile.name}/results`);
     await waitForScene(page, 'MissionBriefing', `${profile.name}/briefing-2`, 12_000, errors);
-    await page.waitForTimeout(250);
+    await settle(page, 3);
     await tapControl(page, profile, 'MissionBriefing', 'ACQUIRE IMAGERY', `${profile.name}/briefing-2`);
     await waitForScene(page, 'Recon', `${profile.name}/recon-2`, 12_000, errors);
-    await page.waitForTimeout(400);
+    await settle(page, 4);
     const second = await page.evaluate(() => window.__qa.missionSummary());
     if (!second) throw new Error(`${profile.name}/recon-2: second mission never built`);
     if (second.mode !== profile.mode) {
