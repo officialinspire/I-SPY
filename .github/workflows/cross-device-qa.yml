@@ -1,0 +1,36 @@
+name: Cross-device QA hardening
+on:
+  push:
+    branches: [qa-cross-device-hardening]
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install app dependencies
+        run: npm ci
+      - name: Run deterministic and source QA
+        run: npm run validate
+      - name: Build production bundle
+        run: npm run build
+      - name: Install browser QA runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+      - name: Start production preview
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/ispy-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/ispy-preview.log
+          exit 1
+      - name: Cross-device browser smoke test
+        run: node scripts/cross-device-e2e.mjs
