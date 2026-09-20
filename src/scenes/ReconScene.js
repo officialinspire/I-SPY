@@ -416,8 +416,6 @@ export default class ReconScene extends Phaser.Scene {
     this.dragCamera = null;
     this.dragPointerId = null;
     this.pinchGesture = null;
-    this.controlPressed = false;
-    this.controlReleased = false;
     this.controlPointerIds = new Set();
     this.controlReleasedPointerIds = new Set();
     this.tapPointer = null;
@@ -425,17 +423,14 @@ export default class ReconScene extends Phaser.Scene {
     // A press that lands on a HUD control belongs to that control, not to the
     // map: Phaser emits the game-object events before the scene-level ones.
     this.input.on('gameobjectdown', (pointer) => {
-      this.controlPressed = true;
       this.controlPointerIds.add(pointer.id);
     });
     this.input.on('gameobjectup', (pointer) => {
-      this.controlReleased = true;
       this.controlReleasedPointerIds.add(pointer.id);
     });
 
     this.input.on('pointerdown', (pointer) => {
-      const onControl = this.controlPointerIds.has(pointer.id) || this.controlPressed;
-      this.controlPressed = false;
+      const onControl = this.controlPointerIds.has(pointer.id);
       if (onControl || this.paused || this.missionEnded || this.isGestureBlockedPointer(pointer)) {
         this.tapPointer = null;
         return;
@@ -502,9 +497,7 @@ export default class ReconScene extends Phaser.Scene {
 
     const releasePointer = (pointer) => {
       const onControl = this.controlReleasedPointerIds.has(pointer.id)
-        || this.controlPointerIds.has(pointer.id)
-        || this.controlReleased;
-      this.controlReleased = false;
+        || this.controlPointerIds.has(pointer.id);
       this.controlReleasedPointerIds.delete(pointer.id);
       this.controlPointerIds.delete(pointer.id);
 
