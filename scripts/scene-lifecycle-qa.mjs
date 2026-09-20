@@ -91,10 +91,30 @@ check(
   'intro start/skip carry iPhone Safari touch fallbacks and cleanup',
 );
 
+check(
+  recon.includes('beginPinch(pointers = this.mapPointersDown())')
+    && recon.includes('updatePinch(pointers = this.mapPointersDown())')
+    && recon.includes('finishPinch(remaining = [])')
+    && recon.includes('this.pinchGesture.startZoom * ratio'),
+  'ReconScene owns two-finger pinch as an anchored multiplicative zoom gesture',
+);
+check(
+  !/pointers\.length !== 2 \|\| this\.paused \|\| this\.marking/.test(recon)
+    && recon.includes('this.tapPointer = null;')
+    && recon.includes('this.dragPointerId = null;'),
+  'pinch remains available while marking and cancels tap/pan interpretation',
+);
+check(
+  recon.includes('this.completedTargetIds = []')
+    && recon.includes('CONTACT CONFIRMED //')
+    && recon.includes('this.locateTargets.length > 1'),
+  'generated LOCATE can continue through multiple required contacts before mission completion',
+);
+
 if (failures.length) {
   console.error(`I SPY scene lifecycle QA failed (${failures.length}):`);
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 17 mission, cross-device, weather, and persistence checks.');
+  console.log('I SPY scene lifecycle QA passed: 20 mission, gesture, cross-device, weather, and persistence checks.');
 }
