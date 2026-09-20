@@ -123,6 +123,36 @@ const PAGE_HELPERS = () => {
     };
   };
 
+  /**
+   * A control as two rectangles: the box it draws, and the box it actually
+   * answers presses in.
+   *
+   * They are not the same. A control shorter than the 44px minimum touch
+   * target pads its hit area out to reach it, and Phaser hit-tests that
+   * padded rectangle, awarding any shared pixels to whichever control is
+   * drawn last. Two controls can therefore look separated and still fight
+   * over the same presses, so the drawn box answers "can a finger reach
+   * this" and the hit box answers "does it get the control it aimed at".
+   */
+  const controlRect = (button) => {
+    const bounds = button.background.getBounds();
+    const area = button.background.input?.hitArea;
+    const left = Math.round(bounds.left);
+    const top = Math.round(bounds.top);
+    const right = Math.round(bounds.right);
+    const bottom = Math.round(bounds.bottom);
+    const padX = area ? Math.max(0, (area.width - button.width) / 2) : 0;
+    const padY = area ? Math.max(0, (area.height - button.height) / 2) : 0;
+    return {
+      label: button.text.text,
+      left, top, right, bottom,
+      hit: {
+        left: Math.round(left - padX), top: Math.round(top - padY),
+        right: Math.round(right + padX), bottom: Math.round(bottom + padY),
+      },
+    };
+  };
+
   window.__qa = {
     activeScenes() {
       return game().scene.getScenes(true).map((scene) => scene.scene.key);
@@ -196,14 +226,31 @@ const PAGE_HELPERS = () => {
       if (markable('A')) return 'A';
       return null;
     },
-    /** Where the mission's answer object sits on screen, right now. */
-    targetPoint(passId) {
+    /**
+     * The contacts this mission still wants confirmed.
+     *
+     * A generated LOCATE mission can ask for several, and the debrief only
+     * arrives once every one of them is confirmed — so the suite has to mark
+     * each in turn rather than assuming the mission has a single answer.
+     */
+    pendingTargetIds() {
+      const scene = game().scene.getScene('Recon');
+      if (!scene || !scene.mission) return [];
+      const wanted = (scene.locateTargets ?? []).map((target) => target.id)
+        .filter(Boolean);
+      const ids = wanted.length ? wanted : [scene.mission.targetId].filter(Boolean);
+      const done = new Set(scene.completedTargetIds ?? []);
+      return ids.filter((id) => !done.has(id));
+    },
+    /** Where one of the mission's answer objects sits on screen, right now. */
+    targetPoint(passId, targetId) {
       const scene = game().scene.getScene('Recon');
       if (!scene || !scene.mission) return null;
       const entities = scene.passEntities
         ? scene.passEntities[passId ?? scene.activePass ?? 'A']
         : scene.entities;
-      const entity = entities?.find((candidate) => candidate.id === scene.mission.targetId);
+      const wanted = targetId ?? scene.mission.targetId;
+      const entity = entities?.find((candidate) => candidate.id === wanted);
       if (!entity) return null;
       const camera = (passId === 'B' && scene.splitView && scene.compareCamera)
         ? scene.compareCamera
@@ -215,14 +262,7 @@ const PAGE_HELPERS = () => {
     menuControls() {
       const scene = game().scene.getScene('MainMenu');
       if (!scene) return [];
-      return (scene.buttons ?? []).filter((button) => button.isVisible()).map((button) => {
-        const bounds = button.background.getBounds();
-        return {
-          label: button.text.text,
-          left: Math.round(bounds.left), top: Math.round(bounds.top),
-          right: Math.round(bounds.right), bottom: Math.round(bounds.bottom),
-        };
-      });
+      return (scene.buttons ?? []).filter((button) => button.isVisible()).map(controlRect);
     },
     /** Every visible recon control, with its own rectangle. */
     reconControls() {
@@ -232,14 +272,7 @@ const PAGE_HELPERS = () => {
         ...(scene.commonButtons ?? []), ...(scene.locateButtons ?? []),
         ...(scene.countButtons ?? []), ...(scene.changeButtons ?? []),
       ];
-      return all.filter((button) => button.isVisible()).map((button) => {
-        const bounds = button.background.getBounds();
-        return {
-          label: button.text.text,
-          left: Math.round(bounds.left), top: Math.round(bounds.top),
-          right: Math.round(bounds.right), bottom: Math.round(bounds.bottom),
-        };
-      });
+      return all.filter((button) => button.isVisible()).map(controlRect);
     },
     reconChrome() {
       const scene = game().scene.getScene('Recon');
@@ -455,9 +488,17 @@ async function assertViewport(page, expected, label) {
 
 /**
  * Controls have to be where a finger can reach them, and only one of them
- * can be under any given point. Both have failed on small phones: SETTINGS
- * was composed off the bottom of a 320px console, and the compact recon
- * rails drew RESET VIEW on top of MARK TARGET.
+ * can answer any given point. Both have failed on small phones: SETTINGS was
+ * composed off the bottom of a 320px console, and the compact recon rails
+ * drew RESET VIEW on top of MARK TARGET.
+ *
+ * Reachability is judged on the box a control draws, since that is what the
+ * analyst aims at. Exclusivity is judged on its hit area, which is the box
+ * Phaser actually tests and is larger whenever a short control has padded
+ * itself out to the minimum touch target. Controls that look separated can
+ * still share hit-area pixels, and the shared pixels go to whichever control
+ * is drawn last — so a press on the edge of one runs its neighbour, with
+ * nothing on screen to say why.
  */
 async function assertControlsReachable(page, reader, label) {
   const size = page.viewportSize();
@@ -475,10 +516,12 @@ async function assertControlsReachable(page, reader, label) {
     for (let j = i + 1; j < controls.length; j += 1) {
       const a = controls[i];
       const b = controls[j];
-      const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
-      const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      const boxA = a.hit ?? a;
+      const boxB = b.hit ?? b;
+      const overlapX = Math.min(boxA.right, boxB.right) - Math.max(boxA.left, boxB.left);
+      const overlapY = Math.min(boxA.bottom, boxB.bottom) - Math.max(boxA.top, boxB.top);
       if (overlapX > 2 && overlapY > 2) {
-        throw new Error(`${label}: controls '${a.label}' and '${b.label}' overlap by ${overlapX}x${overlapY} // ${JSON.stringify([a, b])}`);
+        throw new Error(`${label}: controls '${a.label}' and '${b.label}' share ${overlapX}x${overlapY}px of hit area // ${JSON.stringify([a, b])}`);
       }
     }
   }
@@ -512,6 +555,33 @@ async function settle(page, frames = 3, { minMs = 0, maxMs = 12_000 } = {}) {
   ).catch(() => { /* a starved page still moves on; the assertion reports it */ });
   const remaining = minMs - (Date.now() - startedAt);
   if (remaining > 0) await page.waitForTimeout(remaining);
+}
+
+/**
+ * Resize, and wait for the game to have actually taken the new size.
+ *
+ * The app deliberately settles a rotation over several frames — a mobile
+ * browser reports its layout viewport in stages — so the browser having
+ * resized says nothing about the scene having re-laid out. Waiting on a
+ * duration instead of on the size is what made this suite intermittent: a
+ * tap that lands a frame early is read against the old width, and SPLIT
+ * VIEW, which refuses below 980px, simply declines.
+ */
+async function resizeTo(page, size, label) {
+  await page.setViewportSize(size);
+  await settle(page, 4, { minMs: 420 });
+  await page.waitForFunction(
+    ([width, height]) => {
+      const chrome = window.__qa?.reconChrome();
+      return Boolean(chrome) && chrome.width === width && chrome.height === height;
+    },
+    [size.width, size.height],
+    { timeout: 10_000, polling: 50 },
+  ).catch(async () => {
+    const chrome = await page.evaluate(() => window.__qa?.reconChrome()).catch(() => null);
+    throw new Error(`${label}: the scene never took the ${size.width}x${size.height} viewport // ${JSON.stringify(chrome)}`);
+  });
+  await settle(page, 2);
 }
 
 /** A tap where the device has a finger, a click where it has a pointer. */
@@ -554,7 +624,7 @@ async function dragBy(page, from, dx, dy) {
  * HUD strip and of the mode's bottom control rail — so the tap that follows
  * is a tap a player could make.
  */
-async function centreOnTarget(page, profile, passId, context) {
+async function centreOnTarget(page, profile, passId, context, targetId = null) {
   const chrome = await page.evaluate(() => window.__qa.reconChrome());
   const safeTop = 78 + 26;
   const safeBottom = chrome.height - chrome.railHeight - 26;
@@ -565,7 +635,7 @@ async function centreOnTarget(page, profile, passId, context) {
   const centre = { x: (paneLeft + paneRight) / 2, y: (safeTop + safeBottom) / 2 };
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    const target = await page.evaluate((id) => window.__qa.targetPoint(id), passId ?? null);
+    const target = await page.evaluate(([pass, id]) => window.__qa.targetPoint(pass, id), [passId ?? null, targetId]);
     if (!target) throw new Error(`${context}: mission target entity is not on the map`);
     const inside = target.screen.x > paneLeft + 24 && target.screen.x < paneRight - 24
       && target.screen.y > safeTop && target.screen.y < safeBottom;
@@ -578,7 +648,7 @@ async function centreOnTarget(page, profile, passId, context) {
     const paneWidth = paneRight - paneLeft;
     await dragBy(page, centre, clamp(dx, paneWidth * 0.35), clamp(dy, chrome.height * 0.3));
   }
-  const final = await page.evaluate((id) => window.__qa.targetPoint(id), passId ?? null);
+  const final = await page.evaluate(([pass, id]) => window.__qa.targetPoint(pass, id), [passId ?? null, targetId]);
   throw new Error(`${context}: could not bring the target into the workspace // ${JSON.stringify(final)} // ${JSON.stringify(chrome)}`);
 }
 
@@ -603,20 +673,34 @@ async function playLocateOrChange(page, profile, context) {
     }
   }
 
-  await tapControl(page, profile, 'Recon', markLabel, context);
-  const armed = await page.evaluate(() => window.__qa.missionSummary());
-  if (!armed.marking) throw new Error(`${context}: marking did not arm after '${markLabel}'`);
+  // A generated LOCATE mission can ask for more than one contact, and the
+  // debrief only arrives once every one of them is confirmed. CHANGE keeps
+  // its single changed object, which this loop runs exactly once.
+  const pending = isChange
+    ? [null]
+    : await page.evaluate(() => window.__qa.pendingTargetIds());
+  if (!pending.length) throw new Error(`${context}: the mission asks for no contacts`);
 
-  const target = await centreOnTarget(page, profile, passId, context);
-  await tap(page, profile, { x: Math.round(target.screen.x), y: Math.round(target.screen.y) });
+  for (let index = 0; index < pending.length; index += 1) {
+    const targetId = pending[index];
+    const step = pending.length > 1 ? `${context}/contact ${index + 1} of ${pending.length}` : context;
 
-  const marked = await page.evaluate(() => window.__qa.missionSummary());
-  if (!marked.hasCandidate) throw new Error(`${context}: tapping the target placed no mark`);
-  if (!marked.candidateHasEntity) {
-    throw new Error(`${context}: the mark resolved to no object // ${JSON.stringify({ target, marked })}`);
+    await tapControl(page, profile, 'Recon', markLabel, step);
+    const armed = await page.evaluate(() => window.__qa.missionSummary());
+    if (!armed.marking) throw new Error(`${step}: marking did not arm after '${markLabel}'`);
+
+    const target = await centreOnTarget(page, profile, passId, step, targetId);
+    await tap(page, profile, { x: Math.round(target.screen.x), y: Math.round(target.screen.y) });
+
+    const marked = await page.evaluate(() => window.__qa.missionSummary());
+    if (!marked.hasCandidate) throw new Error(`${step}: tapping the target placed no mark`);
+    if (!marked.candidateHasEntity) {
+      throw new Error(`${step}: the mark resolved to no object // ${JSON.stringify({ target, marked })}`);
+    }
+
+    await tapControl(page, profile, 'Recon', 'CONFIRM', step);
+    await settle(page, 6);
   }
-
-  await tapControl(page, profile, 'Recon', 'CONFIRM', context);
 }
 
 async function playCount(page, profile, context) {
@@ -848,12 +932,10 @@ async function runProfile(profile) {
 
     // Rotate while the mission is live. This hits the layout, camera, rail,
     // weather and safe-area resize paths under actual rendering.
-    await page.setViewportSize(profile.rotateTo);
-    await settle(page, 4, { minMs: 420 });
+    await resizeTo(page, profile.rotateTo, `${profile.name}/rotated-recon`);
     await assertViewport(page, profile.rotateTo, `${profile.name}/rotated-recon`);
     await assertControlsReachable(page, 'reconControls', `${profile.name}/rotated-recon`);
-    await page.setViewportSize(profile.viewport);
-    await settle(page, 4, { minMs: 420 });
+    await resizeTo(page, profile.viewport, `${profile.name}/restored-recon`);
     await assertViewport(page, profile.viewport, `${profile.name}/restored-recon`);
 
     /* --- Split view -------------------------------------------------- *
@@ -870,15 +952,13 @@ async function runProfile(profile) {
 
       // Rotating into a console too narrow for two panes has to drop back
       // to one, in the middle of a live mission, without stranding a mark.
-      await page.setViewportSize(profile.rotateTo);
-      await settle(page, 4, { minMs: 420 });
+      await resizeTo(page, profile.rotateTo, `${profile.name}/split-narrowed`);
       chrome = await page.evaluate(() => window.__qa.reconChrome());
       if (chrome.splitView && profile.rotateTo.width < 980) {
         throw new Error(`${context$}: split view survived a resize below its minimum width`);
       }
       await assertControlsReachable(page, 'reconControls', `${profile.name}/split-narrowed`);
-      await page.setViewportSize(profile.viewport);
-      await settle(page, 4, { minMs: 420 });
+      await resizeTo(page, profile.viewport, `${profile.name}/split-restored`);
 
       await tapControl(page, profile, 'Recon', 'SPLIT VIEW', `${profile.name}/split-again`);
       chrome = await page.evaluate(() => window.__qa.reconChrome());

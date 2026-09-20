@@ -53,6 +53,8 @@ The base stays terminal black and charcoal; restrained Cold War equipment color 
 
 Keyboard users get a visible focus ring with Tab/arrow navigation and Enter/Space activation on the menu, briefing, and debrief screens; Recon keeps its existing mission hotkeys. Touch never depends on hover, small controls get expanded hit areas, press state recovers on every release path, and reduced-motion users get the same state changes with no movement.
 
+Expanded hit areas stop at the space their own layout owns: a packed row or column tells `touchPadding()` how much of its gap that control may take, so reaching the minimum target never reaches into the neighbour. This matters because Phaser awards an overlapping hit area to whichever object is drawn last — two controls sharing pixels means pressing one silently runs the other. The phone control rail and the menu console size themselves to the viewport for the same reason, down to a 320px screen, and `scripts/cross-device-e2e.mjs` audits every live control at 320/360/375 CSS px in all three mission modes: no two hit areas may overlap, and none may sit outside the viewport.
+
 ## Main menu
 
 Phase 13B rebuilds the Main Menu as an operations console: a title block, a status bar reading SATELLITE LINK / IMAGE CHANNEL / ANALYST STATION, then PRIMARY TASKING, MISSION ARCHIVE // TRAINING MODES and SYSTEM sections inside a framed console.

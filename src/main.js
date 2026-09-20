@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
+import { registerOfflineSupport } from './pwa/registerServiceWorker.js';
 import './settings/userSettings.js';
 import BootScene from './scenes/BootScene.js';
 import StartIntroScene from './scenes/StartIntroScene.js';
@@ -45,6 +46,7 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+registerOfflineSupport();
 
 /**
  * Automated QA hook. Opt-in through ?qa=1 only, so a player's session never
@@ -66,6 +68,53 @@ if (qaMode) {
         return button?.background ? { x: button.background.x, y: button.background.y } : null;
       },
       finishIntro: () => game.scene.getScene('StartIntro')?.finish?.(),
+      /**
+       * Every live interactive control, as a viewport rectangle.
+       *
+       * Two of these must never overlap and none may sit outside the viewport.
+       * Where two hit areas share a pixel the object drawn last wins it, so an
+       * overlap means a press on one control silently runs another — which is
+       * exactly how a phone-sized rail stops working while still looking fine.
+       */
+      touchTargets: () => {
+        const { width, height } = game.scale.gameSize;
+        const targets = [];
+        game.scene.getScenes(true).forEach((scene) => {
+          scene.children?.list?.forEach((object) => {
+            if (!object.visible || object.alpha === 0) return;
+            const area = object.input?.enabled ? object.input.hitArea : null;
+            if (!area || !Number.isFinite(area.width) || !Number.isFinite(area.height)) return;
+            const rect = {
+              scene: scene.scene.key,
+              name: object.name || object.type,
+              x: object.x - object.displayOriginX + area.x,
+              y: object.y - object.displayOriginY + area.y,
+              width: area.width,
+              height: area.height,
+            };
+            // Modal backdrops are meant to swallow the whole viewport.
+            if (rect.width * rect.height >= width * height * 0.8) return;
+            targets.push(rect);
+          });
+        });
+        return { width, height, targets };
+      },
+      reconState: () => {
+        const scene = game.scene.getScene('Recon');
+        const camera = scene?.cameras?.main;
+        return scene && camera ? {
+          zoom: camera.zoom,
+          scrollX: camera.scrollX,
+          scrollY: camera.scrollY,
+          marking: Boolean(scene.marking),
+          candidate: Boolean(scene.candidate),
+          pinchActive: Boolean(scene.pinchGesture),
+          pinchPointerIds: scene.pinchGesture?.pointerIds ? [...scene.pinchGesture.pointerIds] : [],
+          activeMapPointers: scene.mapPointersDown?.().map((pointer) => pointer.id) ?? [],
+          completedTargets: scene.completedTargetIds?.length ?? 0,
+          requiredTargets: scene.locateTargets?.length ?? 0,
+        } : null;
+      },
     },
   });
 }
@@ -116,10 +165,30 @@ function syncGameViewport() {
   // leaves taps landing somewhere other than where they look. Nothing on the
   // console responds, on whichever engine happened to be given a margin.
   const canvas = game.canvas;
-  if (canvas && (canvas.style.marginLeft !== '0px' || canvas.style.marginTop !== '0px')) {
-    canvas.style.marginLeft = '0px';
-    canvas.style.marginTop = '0px';
-    game.scale.updateBounds();
+  if (canvas) {
+    // ScaleManager can update its logical gameSize before the browser-applied
+    // CSS canvas box catches up during tablet/mobile rotation. In that state a
+    // gameSize-only comparison incorrectly says everything is current while
+    // the player still sees the old landscape canvas. Make the host box the
+    // final authority for the displayed canvas as well.
+    const canvasRect = canvas.getBoundingClientRect();
+    let refitted = false;
+    if (Math.abs(canvasRect.width - width) > 1) {
+      canvas.style.width = `${width}px`;
+      refitted = true;
+    }
+    if (Math.abs(canvasRect.height - height) > 1) {
+      canvas.style.height = `${height}px`;
+      refitted = true;
+    }
+    if (canvas.style.marginLeft !== '0px' || canvas.style.marginTop !== '0px') {
+      canvas.style.marginLeft = '0px';
+      canvas.style.marginTop = '0px';
+      refitted = true;
+    }
+    // Only once something actually moved: re-fitting the canvas every frame
+    // would rebuild the input bounds for nothing.
+    if (refitted) game.scale.updateBounds();
   }
 }
 

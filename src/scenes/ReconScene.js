@@ -12,6 +12,19 @@ import { assessMissionPerformance, applyPerformanceBonus } from '../game/mission
 import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
 import { createWeatherOverlay as createMissionWeatherOverlay } from '../ui/weatherOverlay.js';
 
+/**
+ * Half of a layout gap, less a pixel, as a cap on a control's hit padding.
+ *
+ * A control narrower than the 44px minimum touch target grows its hit area to
+ * reach it, and two grown hit areas that meet are worse than two small ones:
+ * Phaser gives the shared pixels to whichever control is drawn last, so a
+ * press on the edge of one runs its neighbour. A rail hands each control only
+ * the space it actually left free.
+ */
+function hitGap(gap) {
+  return Math.max(0, Math.floor((gap - 1) / 2));
+}
+
 export default class ReconScene extends Phaser.Scene {
   /** Subclasses that are a different scene (ANALYST TRAINING) pass their own key. */
   constructor(key = 'Recon') { super(key); }
@@ -39,6 +52,12 @@ export default class ReconScene extends Phaser.Scene {
     this.resolvingIdentification = false;
     this.marking = false;
     this.candidate = null;
+    this.completedTargetIds = [];
+    this.locateTargets = (!this.isCountMode && !this.isChangeMode)
+      ? (Array.isArray(this.mission.targets) && this.mission.targets.length
+        ? this.mission.targets.map((target) => ({ id: target.id, label: target.label }))
+        : [{ id: this.mission.targetId, label: this.mission.targetLabel }].filter((target) => target.id))
+      : [];
     this.activePass = 'A';
     this.splitView = false;
     this.compareCamera = null;
@@ -56,6 +75,9 @@ export default class ReconScene extends Phaser.Scene {
     this.createUiCamera();
     this.bindInput();
     this.startMissionTimer();
+    this.time.delayedCall(450, () => {
+      if (!this.missionEnded && !this.paused) this.flashStatus('DRAG TO PAN // PINCH OR WHEEL TO ZOOM');
+    });
 
     this.scale.on('resize', this.onResize, this);
     this.events.once('shutdown', () => this.cleanup());
@@ -141,6 +163,7 @@ export default class ReconScene extends Phaser.Scene {
     this.hud.add([this.hudBackground, this.hudBorder, this.objectiveText, this.modeChip,
       this.modeDetail, this.coordText, this.timerText]);
     this.refreshModeStrip();
+    this.refreshLocateObjective();
 
     this.pauseButton = createButton(this, 0, 0, 'PAUSE', () => this.togglePause(), { width: 96, height: 36, fontSize: 13, variant: 'secondary', pressSound: false });
     this.resetButton = createButton(this, 0, 0, 'RESET VIEW', () => this.resetView(), { width: 124, height: 36, fontSize: 12, variant: 'secondary' });
@@ -198,8 +221,15 @@ export default class ReconScene extends Phaser.Scene {
       }
     } else {
       const falseIds = this.falseIdentifications;
-      detail = this.isChangeMode ? `PASS ${this.activePass}` : `FALSE ID ${falseIds}`;
-      if (this.isChangeMode && falseIds > 0) detail += ` \u00b7 FALSE ID ${falseIds}`;
+      if (this.isChangeMode) {
+        detail = `PASS ${this.activePass}`;
+        if (falseIds > 0) detail += ` · FALSE ID ${falseIds}`;
+      } else if ((this.locateTargets?.length ?? 0) > 1) {
+        detail = `CONTACTS ${this.completedTargetIds.length}/${this.locateTargets.length}`;
+        if (falseIds > 0) detail += ` · FALSE ID ${falseIds}`;
+      } else {
+        detail = `FALSE ID ${falseIds}`;
+      }
       if (falseIds > 0) detailTone = UI_TOKENS.text.negative;
     }
     this.modeDetail.setText(detail).setColor(detailTone);
@@ -209,6 +239,25 @@ export default class ReconScene extends Phaser.Scene {
     // The grid readout tails the strip, clear of the utility buttons that sit
     // in the HUD's right-hand corner.
     this.coordText?.setPosition(detail ? detailX + this.modeDetail.width + 12 : detailX, rowY);
+  }
+
+  refreshLocateObjective() {
+    if (this.isCountMode || this.isChangeMode || !this.objectiveText) return;
+    if ((this.locateTargets?.length ?? 0) <= 1) {
+      this.objectiveText.setText(this.mission.objective);
+      return;
+    }
+
+    const completed = new Set(this.completedTargetIds);
+    const pending = this.locateTargets.filter((target) => !completed.has(target.id));
+    if (!pending.length) {
+      this.objectiveText.setText(`ALL PRIORITY CONTACTS CONFIRMED // ${this.locateTargets.length}/${this.locateTargets.length}`);
+      return;
+    }
+    const labels = pending.map((target) => target.label).join(' + ');
+    this.objectiveText.setText(
+      `LOCATE PRIORITY CONTACT${pending.length === 1 ? '' : 'S'}: ${labels} // ${this.completedTargetIds.length}/${this.locateTargets.length} CONFIRMED`,
+    );
   }
 
   createLocateControls() {
@@ -377,8 +426,9 @@ export default class ReconScene extends Phaser.Scene {
   bindInput() {
     this.dragging = false;
     this.paused = false;
-    this.pinchDistance = null;
     this.dragCamera = null;
+    this.dragPointerId = null;
+    this.pinchGesture = null;
     this.controlPressed = false;
     this.controlReleased = false;
     this.tapPointer = null;
@@ -395,27 +445,56 @@ export default class ReconScene extends Phaser.Scene {
         this.tapPointer = null;
         return;
       }
-      if (this.tapPointer) {
-        // Second finger down: this gesture is a pinch, so it is not a tap.
-        this.tapPointer = null;
-        this.dragging = false;
+
+      const active = this.mapPointersDown();
+      if (active.length >= 2) {
+        // Two fingers own the gesture exclusively. Any pending tap/pan is
+        // cancelled before zoom begins, so a pinch cannot accidentally mark.
+        this.beginPinch(active);
         return;
       }
+
       const context = this.getPointerContext(pointer);
       this.dragging = true;
+      this.dragPointerId = pointer.id;
       this.dragCamera = context.camera;
       this.lastPointer = { x: pointer.x, y: pointer.y };
       this.tapPointer = { id: pointer.id, x: pointer.x, y: pointer.y, travel: 0 };
     });
+
     this.input.on('pointermove', (pointer) => {
       if (!this.paused) this.updateCoordinates(pointer);
+      if (this.paused || this.missionEnded) return;
+
+      const active = this.mapPointersDown();
+      if (this.pinchGesture) {
+        this.updatePinch(active);
+        return;
+      }
+      if (active.length >= 2) {
+        this.beginPinch(active);
+        this.updatePinch(active);
+        return;
+      }
+
       if (this.tapPointer && pointer.id === this.tapPointer.id) {
         this.tapPointer.travel = Math.max(
           this.tapPointer.travel,
           Phaser.Math.Distance.Between(this.tapPointer.x, this.tapPointer.y, pointer.x, pointer.y),
         );
       }
-      if (!this.dragging || !pointer.isDown || this.paused) return;
+      if (!this.dragging || pointer.id !== this.dragPointerId || !pointer.isDown) return;
+
+      // Inside the tap window the imagery is held still. A finger never lands
+      // perfectly still, and panning those few pixels used to slide the map out
+      // from under the tap that was about to mark it.
+      if (this.tapPointer
+        && pointer.id === this.tapPointer.id
+        && this.tapPointer.travel <= this.dragThreshold(pointer)) {
+        this.lastPointer = { x: pointer.x, y: pointer.y };
+        return;
+      }
+
       const camera = this.dragCamera ?? this.cameras.main;
       camera.scrollX -= (pointer.x - this.lastPointer.x) / camera.zoom;
       camera.scrollY -= (pointer.y - this.lastPointer.y) / camera.zoom;
@@ -423,31 +502,30 @@ export default class ReconScene extends Phaser.Scene {
       this.lastPointer = { x: pointer.x, y: pointer.y };
       if (this.candidate) this.drawCandidateMarker();
     });
+
     this.input.on('pointerup', (pointer) => {
       const onControl = this.controlReleased;
       this.controlReleased = false;
+
+      if (this.pinchGesture) {
+        const remaining = this.mapPointersDown().filter((item) => item.id !== pointer.id);
+        this.finishPinch(remaining);
+        return;
+      }
+
       const tap = this.tapPointer
         && pointer.id === this.tapPointer.id
-        && this.tapPointer.travel <= GAME_CONFIG.recon.dragThreshold;
+        && this.tapPointer.travel <= this.dragThreshold(pointer);
       this.tapPointer = null;
       this.dragging = false;
       this.dragCamera = null;
-      this.pinchDistance = null;
+      this.dragPointerId = null;
       if (tap && !onControl) this.handleMapTap(pointer);
     });
+
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
       this.zoomAt(pointer, deltaY > 0 ? -GAME_CONFIG.recon.zoomStep : GAME_CONFIG.recon.zoomStep);
-    });
-    this.input.on('pointermove', () => {
-      const pointers = this.input.manager.pointers.filter((pointer) => pointer.isDown);
-      if (pointers.length !== 2 || this.paused || this.marking) { this.pinchDistance = null; return; }
-      const distance = Phaser.Math.Distance.Between(pointers[0].x, pointers[0].y, pointers[1].x, pointers[1].y);
-      if (this.pinchDistance !== null) {
-        const midpoint = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
-        this.zoomAt(midpoint, (distance - this.pinchDistance) * 0.0035);
-      }
-      this.pinchDistance = distance;
     });
 
     // Both handlers are guarded against Phaser re-delivering one press: the
@@ -457,6 +535,134 @@ export default class ReconScene extends Phaser.Scene {
       if (!this.isCountMode && this.candidate) this.cancelCandidate(); else this.togglePause();
     }));
     this.input.keyboard?.on('keydown', oncePerKeyEvent('recon-key', (event) => this.handleKeyboard(event)));
+  }
+
+  /**
+   * How far a press may wander and still count as a tap rather than a pan.
+   *
+   * A mouse sits where it is put. A finger does not: its contact patch shifts
+   * a handful of pixels between touchstart and touchend, and at the 6px mouse
+   * threshold a normal phone tap was read as a drag, so marking a target
+   * simply did nothing. Touch gets a slop comparable to the platform's own.
+   */
+  dragThreshold(pointer) {
+    return pointer?.wasTouch ? GAME_CONFIG.recon.touchDragThreshold : GAME_CONFIG.recon.dragThreshold;
+  }
+
+  mapPointersDown() {
+    return this.input.manager.pointers.filter((pointer) => pointer.isDown && !this.isHudPoint(pointer));
+  }
+
+  pinchPointers(pointers = this.mapPointersDown()) {
+    if (!this.pinchGesture?.pointerIds?.length) return pointers.slice(0, 2);
+    const byId = new Map(pointers.map((pointer) => [pointer.id, pointer]));
+    return this.pinchGesture.pointerIds.map((id) => byId.get(id)).filter(Boolean);
+  }
+
+  beginPinch(pointers = this.mapPointersDown()) {
+    if (pointers.length < 2 || this.paused || this.missionEnded) return false;
+    const [first, second] = pointers.slice(0, 2);
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const camera = this.getPointerContext(midpoint).camera;
+    const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
+
+    this.pinchGesture = {
+      pointerIds: [first.id, second.id],
+      lastDistance: distance,
+      lastMidpoint: midpoint,
+      camera,
+    };
+    this.tapPointer = null;
+    this.dragging = false;
+    this.dragCamera = null;
+    this.dragPointerId = null;
+    return true;
+  }
+
+  updatePinch(pointers = this.mapPointersDown()) {
+    if (this.paused || this.missionEnded) return false;
+    if (!this.pinchGesture) {
+      if (!this.beginPinch(pointers)) return false;
+    }
+
+    const pair = this.pinchPointers(pointers);
+    if (pair.length < 2) return false;
+    const [first, second] = pair;
+    const camera = this.pinchGesture.camera;
+    const rawMidpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const rawDistance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
+    const previousMidpoint = this.pinchGesture.lastMidpoint;
+    const previousDistance = Math.max(1, this.pinchGesture.lastDistance);
+
+    // Android can report the two fingers on alternating pointer events. Apply
+    // only a bounded frame-to-frame transform so one noisy event cannot throw
+    // the camera across the map or jump several zoom levels.
+    const distanceDelta = rawDistance - previousDistance;
+    let scaleRatio = 1;
+    if (Math.abs(distanceDelta) >= GAME_CONFIG.recon.pinchDistanceDeadZone) {
+      scaleRatio = Phaser.Math.Clamp(
+        rawDistance / previousDistance,
+        GAME_CONFIG.recon.pinchScaleStepMin,
+        GAME_CONFIG.recon.pinchScaleStepMax,
+      );
+    }
+
+    let midpointDx = rawMidpoint.x - previousMidpoint.x;
+    let midpointDy = rawMidpoint.y - previousMidpoint.y;
+    const midpointDistance = Math.hypot(midpointDx, midpointDy);
+    if (midpointDistance < GAME_CONFIG.recon.pinchMidpointDeadZone) {
+      midpointDx = 0;
+      midpointDy = 0;
+    } else if (midpointDistance > GAME_CONFIG.recon.pinchPanStepMax) {
+      const factor = GAME_CONFIG.recon.pinchPanStepMax / midpointDistance;
+      midpointDx *= factor;
+      midpointDy *= factor;
+    }
+    const appliedMidpoint = {
+      x: previousMidpoint.x + midpointDx,
+      y: previousMidpoint.y + midpointDy,
+    };
+
+    const anchorWorld = camera.getWorldPoint(previousMidpoint.x, previousMidpoint.y);
+    const nextZoom = Phaser.Math.Clamp(
+      camera.zoom * scaleRatio,
+      this.minZoomForCamera(camera),
+      GAME_CONFIG.recon.maxZoom,
+    );
+    camera.setZoom(nextZoom);
+    const after = camera.getWorldPoint(appliedMidpoint.x, appliedMidpoint.y);
+    camera.scrollX += anchorWorld.x - after.x;
+    camera.scrollY += anchorWorld.y - after.y;
+
+    // Keep our virtual gesture state aligned with the transform we actually
+    // applied, not with a possibly-spurious raw Android sample. Large real
+    // movements catch up over subsequent events smoothly instead of snapping.
+    if (scaleRatio === 1) this.pinchGesture.lastDistance = rawDistance;
+    else this.pinchGesture.lastDistance = previousDistance * scaleRatio;
+    this.pinchGesture.lastMidpoint = appliedMidpoint;
+
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
+    if (this.candidate) this.drawCandidateMarker();
+    return true;
+  }
+
+  finishPinch(remaining = []) {
+    this.pinchGesture = null;
+    this.tapPointer = null;
+    this.dragging = false;
+    this.dragCamera = null;
+    this.dragPointerId = null;
+
+    // Continuing with one finger after lifting the other should feel like one
+    // continuous gesture, not a camera jump.
+    if (remaining.length === 1 && !this.paused && !this.missionEnded) {
+      const pointer = remaining[0];
+      const context = this.getPointerContext(pointer);
+      this.dragging = true;
+      this.dragPointerId = pointer.id;
+      this.dragCamera = context.camera;
+      this.lastPointer = { x: pointer.x, y: pointer.y };
+    }
   }
 
   /** A tap on the imagery only marks while marking is armed. */
@@ -567,11 +773,15 @@ export default class ReconScene extends Phaser.Scene {
     const widths = entries.map((entry) => Math.max(1, Math.round(entry.width * scale)));
     const used = widths.reduce((total, value) => total + value, 0);
     const gap = entries.length > 1 ? Math.max(minGap, (available - used) / slots) : 0;
+    // Separating the drawn controls is only half the job: a short control also
+    // pads its hit area out to the minimum touch target, and that padding has
+    // to stop inside the gap this rail just left.
+    const pad = hitGap(gap);
 
     let cursor = margin;
     entries.forEach((entry, index) => {
       const entryWidth = widths[index];
-      entry.place(Math.round(cursor + entryWidth / 2), entryWidth);
+      entry.place(Math.round(cursor + entryWidth / 2), entryWidth, pad);
       cursor += entryWidth + gap;
     });
   }
@@ -690,15 +900,40 @@ export default class ReconScene extends Phaser.Scene {
     const mark = { x: this.candidate.x, y: this.candidate.y, passId: this.candidate.passId };
     const result = this.isChangeMode
       ? validateChangeIdentification(this.mission, this.candidate.entity, this.candidate.passId)
-      : validateIdentification(this.mission, this.candidate.entity);
+      : validateIdentification({ ...this.mission, completedTargetIds: this.completedTargetIds }, this.candidate.entity);
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.marking = false;
     this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
     this.markButton.setSelected(false);
     if (result.correct) {
-      this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'CONFIRMED');
+      if (!this.isChangeMode && this.locateTargets.length > 1) {
+        if (!this.completedTargetIds.includes(result.entity.id)) this.completedTargetIds.push(result.entity.id);
+        const complete = this.completedTargetIds.length >= this.locateTargets.length;
+        this.onIdentificationResolved(result, mark);
+
+        if (!complete) {
+          this.candidate = null;
+          this.marking = false;
+          this.markerTone = 'pending';
+          this.confirmButton.setVisible(false);
+          this.cancelButton.setVisible(false);
+          this.markButton.setLabel('MARK TARGET').setSelected(false);
+          this.resolvingIdentification = false;
+          this.refreshLocateObjective();
+          this.refreshModeStrip();
+          this.flashStatus(`CONTACT CONFIRMED // ${this.completedTargetIds.length}/${this.locateTargets.length} // CONTINUE SEARCH`);
+          this.time.delayedCall(500, () => {
+            if (!this.candidate && !this.missionEnded) this.selectionGraphics.clear();
+          });
+          return;
+        }
+      }
+
+      this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'MISSION CONTACTS CONFIRMED');
       this.onIdentificationResolved(result, mark);
+      this.refreshLocateObjective();
+      this.refreshModeStrip();
       this.time.delayedCall(350, () => this.finishMission(true));
       return;
     }
@@ -934,11 +1169,18 @@ export default class ReconScene extends Phaser.Scene {
       GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom);
   }
 
+  minZoomForCamera(camera = this.cameras.main) {
+    return this.minZoomForViewport(
+      camera?.width ?? this.scale.gameSize.width,
+      camera?.height ?? this.scale.gameSize.height,
+    );
+  }
+
   zoomAt(screenPoint, delta) {
     const context = this.getPointerContext(screenPoint);
     const camera = context.camera;
     const before = camera.getWorldPoint(screenPoint.x, screenPoint.y);
-    camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, this.minZoomForViewport(), GAME_CONFIG.recon.maxZoom));
+    camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, this.minZoomForCamera(camera), GAME_CONFIG.recon.maxZoom));
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
@@ -974,6 +1216,10 @@ export default class ReconScene extends Phaser.Scene {
     if (this.missionEnded) return;
     this.paused = !this.paused;
     this.dragging = false;
+    this.dragPointerId = null;
+    this.dragCamera = null;
+    this.tapPointer = null;
+    this.pinchGesture = null;
     if (this.paused) this.pauseStartedAt = this.time.now;
     else if (this.pauseStartedAt) {
       this.totalPausedMs = (this.totalPausedMs ?? 0) + (this.time.now - this.pauseStartedAt);
@@ -1066,20 +1312,23 @@ export default class ReconScene extends Phaser.Scene {
               const stepper = Math.round(stepperWidth * shrink);
               const tally = Math.round(tallyWidth * shrink);
               const step = (stepper + tally) / 2 + moduleGap * shrink;
-              this.decrementButton.resize({ width: stepper }).setPosition(centre - step, controlY);
+              // The steppers bracket the readout on the module's own gap, so
+              // that gap, not the rail's, is what bounds their hit padding.
+              const innerPad = hitGap(moduleGap * shrink);
+              this.decrementButton.resize({ width: stepper, hitPaddingX: innerPad }).setPosition(centre - step, controlY);
               this.tallyFrame.setSize(tally, 44).setPosition(centre, controlY);
               this.answerText.setFontSize(26).setPosition(centre, controlY);
-              this.incrementButton.resize({ width: stepper }).setPosition(centre + step, controlY);
+              this.incrementButton.resize({ width: stepper, hitPaddingX: innerPad }).setPosition(centre + step, controlY);
               this.adjustCaption.setPosition(centre, captionY).setVisible(height >= 420);
             },
           },
           {
             width: submitWidth,
-            place: (centre, placed) => {
+            place: (centre, placed, pad) => {
               // The label has to stay inside its own button when the rail
               // has compressed it, so the type steps down with the width.
               this.submitCountButton
-                .resize({ width: placed, fontSize: placed < 118 ? 11 : 13 })
+                .resize({ width: placed, fontSize: placed < 118 ? 11 : 13, hitPaddingX: pad })
                 .setPosition(centre, controlY);
               this.submitCaption.setPosition(centre, captionY).setVisible(height >= 420);
             },
@@ -1100,8 +1349,8 @@ export default class ReconScene extends Phaser.Scene {
 
       if (compact) {
         this.placeRail([
-          { width: 124, place: (centre, placed) => this.resetButton.resize({ width: placed }).setPosition(centre, height - 26) },
-          { width: 96, place: (centre, placed) => this.pauseButton.resize({ width: placed }).setPosition(centre, height - 26) },
+          { width: 124, place: (centre, placed, pad) => this.resetButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 26) },
+          { width: 96, place: (centre, placed, pad) => this.pauseButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 26) },
         ], { width, margin: Math.max(16, width * 0.12), minGap: 12 });
       } else {
         this.resetButton.resize({ width: 124 }).setPosition(width - 181, 48);
@@ -1118,9 +1367,12 @@ export default class ReconScene extends Phaser.Scene {
       const segmentPairWidth = segmentWidth * 2 + segmentGap;
       const placeSegments = (centre, placed) => {
         const half = (placed - segmentGap) / 2;
-        this.passAButton.resize({ width: Math.round(half) })
+        // They read as one segmented control, so the seam between them is the
+        // gap that bounds their padding, not the rail's.
+        const seamPad = hitGap(segmentGap);
+        this.passAButton.resize({ width: Math.round(half), hitPaddingX: seamPad })
           .setPosition(Math.round(centre - half / 2 - segmentGap / 2), controlY);
-        this.passBButton.resize({ width: Math.round(half) })
+        this.passBButton.resize({ width: Math.round(half), hitPaddingX: seamPad })
           .setPosition(Math.round(centre + half / 2 + segmentGap / 2), controlY);
         this.passCaption.setPosition(centre, controlY - 32).setVisible(!split && height >= 420);
       };
@@ -1129,7 +1381,7 @@ export default class ReconScene extends Phaser.Scene {
         // MARK and the A/B segments share one narrow rail. Below roughly
         // 390px the fixed offsets put them on top of each other.
         this.placeRail([
-          { width: 128, place: (centre, placed) => this.markButton.resize({ width: placed }).setPosition(centre, controlY) },
+          { width: 128, place: (centre, placed, pad) => this.markButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, controlY) },
           { width: segmentPairWidth, place: placeSegments },
         ], { width, margin: 16, minGap: 12 });
       } else {
@@ -1147,8 +1399,8 @@ export default class ReconScene extends Phaser.Scene {
         this.pauseButton.resize({ width: 96 }).setPosition(width - 58, 48);
       } else {
         this.placeRail([
-          { width: 124, place: (centre, placed) => this.resetButton.resize({ width: placed }).setPosition(centre, height - 26) },
-          { width: 96, place: (centre, placed) => this.pauseButton.resize({ width: placed }).setPosition(centre, height - 26) },
+          { width: 124, place: (centre, placed, pad) => this.resetButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 26) },
+          { width: 96, place: (centre, placed, pad) => this.pauseButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 26) },
         ], { width, margin: Math.max(16, width * 0.12), minGap: 12 });
       }
       this.confirmButton.setPosition(split ? usableWidth / 2 - 60 : width / 2 - 60, height - (compact ? 132 : 82));
@@ -1160,9 +1412,9 @@ export default class ReconScene extends Phaser.Scene {
       // of the row at their own smaller sizes.
       if (compact) {
         this.placeRail([
-          { width: 150, place: (centre, placed) => this.markButton.resize({ width: placed }).setPosition(centre, height - 34) },
-          { width: 104, place: (centre, placed) => this.resetButton.resize({ width: placed }).setPosition(centre, height - 34) },
-          { width: 84, place: (centre, placed) => this.pauseButton.resize({ width: placed }).setPosition(centre, height - 34) },
+          { width: 150, place: (centre, placed, pad) => this.markButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 34) },
+          { width: 104, place: (centre, placed, pad) => this.resetButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 34) },
+          { width: 84, place: (centre, placed, pad) => this.pauseButton.resize({ width: placed, hitPaddingX: pad }).setPosition(centre, height - 34) },
         ], { width, margin: 14, minGap: 10 });
       } else {
         this.markButton.resize({ width: 170 }).setPosition(width - 340, 48);

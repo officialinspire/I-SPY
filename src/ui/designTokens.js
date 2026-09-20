@@ -187,9 +187,18 @@ export function resolveVariant(name) {
   return BUTTON_VARIANTS[name] ?? BUTTON_VARIANTS[DEFAULT_BUTTON_VARIANT];
 }
 
-/** Extra hit padding needed to reach the ~44px minimum touch target. */
-export function touchPadding(size) {
+/**
+ * Extra hit padding needed to reach the ~44px minimum touch target.
+ *
+ * `limit` is how much room the control's own layout has to give on each side.
+ * A padded hit area that reaches into the neighbouring control is worse than a
+ * small one: the two overlap, the topmost wins, and a press near the seam runs
+ * the wrong action. So a packed row or column passes half its gap here and the
+ * padding grows only into space nothing else owns.
+ */
+export function touchPadding(size, limit = UI_TOKENS.metrics.maxHitPadding) {
   const deficit = UI_TOKENS.metrics.minTouchTarget - size;
   if (deficit <= 0) return 0;
-  return Math.min(UI_TOKENS.metrics.maxHitPadding, Math.ceil(deficit / 2));
+  const ceiling = Math.max(0, Math.min(UI_TOKENS.metrics.maxHitPadding, limit));
+  return Math.min(ceiling, Math.ceil(deficit / 2));
 }

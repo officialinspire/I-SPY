@@ -95,6 +95,8 @@ for (const entry of listReconMaps()) {
       assert(mission.mapId === entry.id, 'sector honoured', `${where} produced ${mission.mapId}`);
       const validation = validateGeneratedMission(mission, entry.id);
       assert(validation.valid, 'mission validates', `${where} ${validation.errors.join(' ')}`);
+      assert(mission.timeLimitSeconds >= 180 && mission.timeLimitSeconds <= 300,
+        'generated mission pacing stays inside 3–5 minute window', `${where} limit ${mission.timeLimitSeconds}`);
 
       const worldOperations = mission.worldOperations ?? [];
       const passBOperations = mission.passBOperations ?? [];
@@ -129,6 +131,18 @@ for (const entry of listReconMaps()) {
         assert(Boolean(target), 'LOCATE target exists', where);
         assert(Boolean(target) && !target.hidden, 'LOCATE target is visible', where);
         assert(Boolean(target?.selectable), 'LOCATE target is selectable', where);
+
+        if (mission.generated) {
+          assert(Array.isArray(mission.targetIds) && mission.targetIds.length === 2,
+            'generated LOCATE carries two priority contacts', where);
+          assert(new Set(mission.targetIds ?? []).size === (mission.targetIds?.length ?? 0),
+            'generated LOCATE priority contacts are unique', where);
+          for (const id of mission.targetIds ?? []) {
+            const contact = passA.find((item) => item.id === id);
+            assert(Boolean(contact) && !contact.hidden && contact.selectable,
+              'every generated LOCATE contact is visible/selectable', `${where} target ${id}`);
+          }
+        }
       }
 
       if (mode === 'COUNT') {

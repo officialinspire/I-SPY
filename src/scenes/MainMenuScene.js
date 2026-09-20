@@ -125,6 +125,19 @@ function compressTier(tier, factor) {
   return next;
 }
 
+/**
+ * Half of a layout gap, less a pixel, for a stacked control's hit padding.
+ *
+ * A control shorter than the 44px minimum touch target grows its hit area to
+ * reach it, and two grown hit areas that meet are worse than two small ones:
+ * where they overlap, Phaser gives the press to whichever control is drawn
+ * last, so a press on the bottom edge of a row runs the row beneath it. Each
+ * stacked control may take only the space its own layout left free.
+ */
+function hitGap(gap) {
+  return Math.max(0, Math.floor((gap - 1) / 2));
+}
+
 /** Gap between the tasking card and the sector row it is tied to. */
 function sectorGap(tier) {
   return Math.round(tier.sectionGap * 0.4);
@@ -963,6 +976,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
     const primary = placeSection(this.primarySectionLabel, primaryBlockHeight(tier));
     const primaryWidth = stackCards ? innerWidth : Math.min(innerWidth, Math.max(420, innerWidth * 0.62));
+    const stackPad = hitGap(sectorGap(tier));
     this.randomCard
       .resize({
         width: primaryWidth,
@@ -973,10 +987,11 @@ export default class MainMenuScene extends Phaser.Scene {
         padding: stackCards ? 14 : 18,
         showDescription: tier.showDescriptions,
         showIcon: tier.showIcons,
+        hitPaddingY: stackPad,
       })
       .setPosition(innerLeft + primaryWidth / 2, primary.bodyTop + tier.primaryHeight / 2);
     this.sectorButton
-      .resize({ width: primaryWidth, height: tier.sectorHeight, fontSize: tier.sectorFont })
+      .resize({ width: primaryWidth, height: tier.sectorHeight, fontSize: tier.sectorFont, hitPaddingY: stackPad })
       .setPosition(innerLeft + primaryWidth / 2,
         primary.bodyTop + tier.primaryHeight + sectorGap(tier) + tier.sectorHeight / 2);
 
@@ -998,6 +1013,7 @@ export default class MainMenuScene extends Phaser.Scene {
             padding: 14,
             showDescription: tier.showDescriptions,
             showIcon: tier.showIcons,
+            hitPaddingY: hitGap(rowGap),
           })
           .setPosition(innerLeft + innerWidth / 2, archive.bodyTop + tier.cardHeight / 2 + index * (tier.cardHeight + rowGap));
       });
@@ -1014,6 +1030,8 @@ export default class MainMenuScene extends Phaser.Scene {
             padding: 14,
             showDescription: tier.showDescriptions,
             showIcon: tier.showIcons,
+            hitPaddingX: hitGap(columnGap),
+            hitPaddingY: stackPad,
           })
           .setPosition(innerLeft + cardWidth / 2 + index * (cardWidth + columnGap), archive.bodyTop + tier.cardHeight / 2);
       });
@@ -1026,7 +1044,13 @@ export default class MainMenuScene extends Phaser.Scene {
       const column = index % systemCols;
       const row = Math.floor(index / systemCols);
       button
-        .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+        .resize({
+          width: systemWidth,
+          height: tier.systemHeight,
+          fontSize: tier.systemFont,
+          hitPaddingX: hitGap(SYSTEM_GAP),
+          hitPaddingY: hitGap(systemRowGap),
+        })
         .setPosition(
           innerLeft + systemWidth / 2 + column * (systemWidth + SYSTEM_GAP),
           system.bodyTop + tier.systemHeight / 2 + row * (tier.systemHeight + systemRowGap),

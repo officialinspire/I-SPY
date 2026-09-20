@@ -6,7 +6,11 @@ import { oncePerKeyEvent } from '../src/ui/keyboardEvents.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const failures = [];
-const check = (condition, message) => { if (!condition) failures.push(message); };
+let total = 0;
+const check = (condition, message) => {
+  total += 1;
+  if (!condition) failures.push(message);
+};
 
 const recon = read('src/scenes/ReconScene.js');
 const briefing = read('src/scenes/MissionBriefingScene.js');
@@ -18,6 +22,9 @@ const focusGroup = read('src/ui/focusGroup.js');
 const guide = read('src/scenes/IdentificationGuideScene.js');
 const main = read('src/main.js');
 const menu = read('src/scenes/MainMenuScene.js');
+const styles = read('src/styles.css');
+const button = read('src/ui/createButton.js');
+const tokens = read('src/ui/designTokens.js');
 
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.missionEnded = false;[\s\S]*?this\.resolvingIdentification = false;/.test(recon),
@@ -88,6 +95,12 @@ check(
   'viewport sync retries after mobile browser layout settles',
 );
 check(
+  main.includes('canvas.getBoundingClientRect()')
+    && main.includes("canvas.style.width =")
+    && main.includes("canvas.style.height ="),
+  'viewport sync corrects the displayed canvas box when Phaser logical size updates first',
+);
+check(
   intro.includes("addEventListener('touchend', this.onStartPointer")
     && intro.includes("addEventListener('touchend', this.onSkip")
     && intro.includes("removeEventListener('touchend', this.onStartPointer")
@@ -132,8 +145,9 @@ check(
   'viewport sync also follows the Screen Orientation API, which some engines report a rotation through alone',
 );
 check(
-  /canvas\.style\.marginTop = '0px';\s*game\.scale\.updateBounds\(\);/.test(main),
-  'clearing the centring margins tells the scale manager the canvas moved, so pointer input is not left behind',
+  /canvas\.style\.marginTop = '0px';\s*refitted = true;/.test(main)
+    && /if \(refitted\) game\.scale\.updateBounds\(\);/.test(main),
+  'moving or resizing the canvas tells the scale manager, so pointer input is not left behind',
 );
 
 /* --- Console layout -------------------------------------------------- *
@@ -251,10 +265,76 @@ check(
   'the debrief payload does not overwrite the scene data manager',
 );
 
+check(
+  recon.includes('pinchPointers(pointers = this.mapPointersDown())')
+    && recon.includes('beginPinch(pointers = this.mapPointersDown())')
+    && recon.includes('updatePinch(pointers = this.mapPointersDown())')
+    && recon.includes('finishPinch(remaining = [])')
+    && recon.includes('this.pinchGesture.pointerIds')
+    && recon.includes('camera.zoom * scaleRatio'),
+  'ReconScene keeps stable touch IDs and applies incremental two-finger transforms',
+);
+check(
+  recon.includes('pinchDistanceDeadZone')
+    && recon.includes('pinchMidpointDeadZone')
+    && recon.includes('pinchScaleStepMin')
+    && recon.includes('pinchScaleStepMax')
+    && recon.includes('pinchPanStepMax'),
+  'Android pinch filters jitter and bounds per-event zoom/pan deltas',
+);
+check(
+  !/pointers\.length !== 2 \|\| this\.paused \|\| this\.marking/.test(recon)
+    && recon.includes('this.tapPointer = null;')
+    && recon.includes('this.dragPointerId = null;'),
+  'pinch remains available while marking and cancels tap/pan interpretation',
+);
+check(
+  recon.includes('this.completedTargetIds = []')
+    && recon.includes('CONTACT CONFIRMED //')
+    && recon.includes('this.locateTargets.length > 1'),
+  'generated LOCATE can continue through multiple required contacts before mission completion',
+);
+
+/* --- Touch targets ---------------------------------------------------- *
+ * A control shorter than the 44px minimum grows its hit area to reach it.
+ * Two grown hit areas that meet are worse than two small ones: Phaser gives
+ * the shared pixels to whichever control is drawn last, so a press on the
+ * edge of one silently ran its neighbour. Every packed row and column tells
+ * the button how much of its gap the padding may take.                      */
+check(
+  /export function touchPadding\(size, limit = UI_TOKENS\.metrics\.maxHitPadding\)/.test(tokens)
+    && tokens.includes('Math.min(UI_TOKENS.metrics.maxHitPadding, limit)'),
+  'hit padding is capped by the room its own layout says it has',
+);
+check(
+  button.includes('hitPaddingX: options.hitPaddingX ?? UI_TOKENS.metrics.maxHitPadding')
+    && button.includes('touchPadding(size.width, size.hitPaddingX)')
+    && button.includes('touchPadding(size.height, size.hitPaddingY)'),
+  'the shared button takes a per-axis hit padding limit and applies it on every resize',
+);
+check(
+  recon.includes('const pad = hitGap(gap);')
+    && recon.includes('entry.place(Math.round(cursor + entryWidth / 2), entryWidth, pad)')
+    && (recon.match(/hitPaddingX: pad/g) ?? []).length >= 5,
+  'every rail control is padded only into the gap the rail left it',
+);
+check(
+  menu.includes('const stackPad = hitGap(sectorGap(tier));')
+    && (menu.match(/hitPadding[XY]: (stackPad|hitGap\()/g) ?? []).length >= 6,
+  'every stacked console control is padded only into the gap below it',
+);
+
+check(
+  /#app\s*\{[\s\S]*?touch-action:\s*none;/.test(styles)
+    && /canvas\s*\{[\s\S]*?touch-action:\s*none;/.test(styles)
+    && /canvas\s*\{[\s\S]*?-webkit-touch-callout:\s*none;/.test(styles),
+  'game host and canvas explicitly suppress browser-native Android touch gestures',
+);
+
 if (failures.length) {
   console.error(`I SPY scene lifecycle QA failed (${failures.length}):`);
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 43 mission, start-gate, viewport, console-layout, recon-rail, split-view, keyboard, weather and persistence checks.');
+  console.log(`I SPY scene lifecycle QA passed: ${total} mission, start-gate, viewport, console-layout, recon-rail, touch-target, split-view, keyboard, weather and persistence checks.`);
 }

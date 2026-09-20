@@ -26,9 +26,20 @@ export function createLocateMission(mapSource) {
 export function validateIdentification(mission, entity) {
   if (!entity) return { correct: false, reason: 'NO IDENTIFIABLE OBJECT AT MARK' };
   if (!entity.selectable) return { correct: false, reason: 'OBJECT NOT VALID FOR IDENTIFICATION' };
+
+  // Generated LOCATE taskings may carry a short list of priority contacts.
+  // Authored/single-target missions keep the original targetId contract.
+  const targetIds = Array.isArray(mission.targetIds) && mission.targetIds.length
+    ? mission.targetIds
+    : [mission.targetId].filter(Boolean);
+  const completed = new Set(mission.completedTargetIds ?? []);
+  const required = targetIds.includes(entity.id);
+  const alreadyConfirmed = completed.has(entity.id);
+  const correct = required && !alreadyConfirmed;
+
   return {
-    correct: entity.id === mission.targetId,
-    reason: entity.id === mission.targetId ? 'CONFIRMED' : 'UNVERIFIED',
+    correct,
+    reason: correct ? 'CONFIRMED' : alreadyConfirmed ? 'ALREADY CONFIRMED' : 'UNVERIFIED',
     entity,
   };
 }

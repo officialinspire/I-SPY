@@ -234,14 +234,28 @@ function createLocateGenerated(rng, seed, map) {
   const candidates = entities.filter((entity) => entity.selectable
     && ['military_vehicle', 'strategic_installation'].includes(entity.category)
     && compatibleZones(entity, zones).length > 0);
-  const target = pick(rng, candidates);
-  if (!target) throw new Error('No valid LOCATE target candidates are available.');
+  if (candidates.length < 2) throw new Error('LOCATE needs at least two valid priority-contact candidates.');
 
-  const targetZone = pick(rng, compatibleZones(target, zones));
-  const targetPosition = placementInZone(rng, targetZone, target);
-  const operations = [{ type: 'move_entity', entityId: target.id, ...targetPosition }];
+  // A generated LOCATE mission is now a short search sequence rather than a
+  // one-click spot check. Two independent contacts keeps a normal round in the
+  // 2–5 minute band without changing the single-target authored/training flow.
+  const targetPool = [...candidates];
+  const targets = [];
+  while (targets.length < 2 && targetPool.length) {
+    targets.push(targetPool.splice(Math.floor(rng() * targetPool.length), 1)[0]);
+  }
 
-  const decoyCandidates = entities.filter((entity) => entity.id !== target.id
+  const operations = [];
+  const targetPositions = [];
+  targets.forEach((target) => {
+    const targetZone = pick(rng, compatibleZones(target, zones));
+    const targetPosition = placementInZone(rng, targetZone, target);
+    targetPositions.push(targetPosition);
+    operations.push({ type: 'move_entity', entityId: target.id, ...targetPosition });
+  });
+
+  const targetIds = new Set(targets.map((target) => target.id));
+  const decoyCandidates = entities.filter((entity) => !targetIds.has(entity.id)
     && entity.selectable && compatibleZones(entity, zones).length > 0);
   const decoyCount = generatedDecoyCount(rng, map, decoyCandidates.length);
   for (let index = 0; index < decoyCount; index += 1) {
@@ -250,9 +264,13 @@ function createLocateGenerated(rng, seed, map) {
     operations.push({ type: 'move_entity', entityId: decoy.id, ...placementInZone(rng, zone, decoy) });
   }
 
-  operations.push(...addClues(rng, map, targetPosition,
-    integer(rng, GAME_CONFIG.generator.cluesMin, GAME_CONFIG.generator.cluesMax)));
-  const objective = pick(rng, LOCATE_OBJECTIVES)(target.label);
+  targets.forEach((target, index) => {
+    operations.push(...addClues(rng, map, targetPositions[index],
+      integer(rng, GAME_CONFIG.generator.cluesMin, GAME_CONFIG.generator.cluesMax)));
+  });
+
+  const targetLabels = targets.map((target) => target.label);
+  const objective = `LOCATE AND IDENTIFY BOTH PRIORITY CONTACTS: ${targetLabels.join(' + ')}.`;
   return {
     id: `GEN-LOCATE-${hashSeed(seed).toString(16).toUpperCase()}`,
     operation: pick(rng, ['OPERATION COLD LENS', 'OPERATION WATCHTOWER', 'OPERATION SILENT ORBIT']),
@@ -261,8 +279,10 @@ function createLocateGenerated(rng, seed, map) {
     mapId: map.id,
     mode: 'LOCATE',
     objective,
-    targetId: target.id,
-    targetLabel: target.label,
+    targetId: targets[0].id,
+    targetLabel: targetLabels.join(' + '),
+    targetIds: targets.map((target) => target.id),
+    targets: targets.map((target) => ({ id: target.id, label: target.label })),
     worldOperations: operations,
     timeLimitSeconds: generatedTimeLimit(rng, map),
     visualModifiers: visualModifiers(rng, map),
@@ -289,7 +309,8 @@ function createCountGenerated(rng, seed, map) {
   if (!plan) throw new Error('No COUNT target/zone combination has at least two compatible objects.');
 
   const pool = [...plan.matching];
-  const selectedCount = integer(rng, MIN_GENERATED_COUNT, Math.min(4, pool.length));
+  const minimumCount = Math.min(pool.length, Math.max(MIN_GENERATED_COUNT, 3));
+  const selectedCount = integer(rng, minimumCount, Math.min(5, pool.length));
   const selectedTargets = [];
   while (selectedTargets.length < selectedCount && pool.length) {
     selectedTargets.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
@@ -430,6 +451,23 @@ function createChangeGenerated(rng, seed, map) {
     }
   }
 
+  // Add a small amount of unchanged context traffic. These contacts move to
+  // their generated position in both passes, so they make the plate denser
+  // without creating a second answer or a misleading extra change.
+  const contextPool = entities.filter((entity) => entity.selectable
+    && entity.id !== targetId
+    && compatibleZones(entity, zones).length > 0);
+  const contextCount = Math.min(contextPool.length, difficultyProfile(map).level >= 3 ? 2 : 1);
+  for (let index = 0; index < contextCount; index += 1) {
+    const decoy = contextPool.splice(Math.floor(rng() * contextPool.length), 1)[0];
+    const zone = pick(rng, compatibleZones(decoy, zones));
+    worldOperations.push({
+      type: 'move_entity',
+      entityId: decoy.id,
+      ...placementInZone(rng, zone, decoy, index, Math.max(1, contextCount)),
+    });
+  }
+
   const firstHour = integer(rng, 0, 22);
   const firstMinute = integer(rng, 0, 44);
   const interval = integer(rng, 8, 15);
@@ -495,8 +533,17 @@ export function validateGeneratedMission(mission, mapSource) {
   errors.push(...overlapErrors(passA, worldOperations, 'PASS A'));
 
   if (mission.mode === 'LOCATE') {
-    const target = passA.find((entity) => entity.id === mission.targetId);
-    if (!target || target.hidden || !target.selectable) errors.push('LOCATE target is not visible/selectable after generation.');
+    const ids = Array.isArray(mission.targetIds) && mission.targetIds.length
+      ? mission.targetIds
+      : [mission.targetId].filter(Boolean);
+    if (!ids.length) errors.push('LOCATE mission has no targets.');
+    if (mission.generated && ids.length < 2) errors.push('Generated LOCATE mission needs at least two priority contacts.');
+    for (const id of ids) {
+      const target = passA.find((entity) => entity.id === id);
+      if (!target || target.hidden || !target.selectable) {
+        errors.push(`LOCATE target '${id}' is not visible/selectable after generation.`);
+      }
+    }
   }
 
   if (mission.mode === 'COUNT') {
