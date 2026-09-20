@@ -236,6 +236,10 @@ export default class ReconScene extends Phaser.Scene {
 
     const completed = new Set(this.completedTargetIds);
     const pending = this.locateTargets.filter((target) => !completed.has(target.id));
+    if (!pending.length) {
+      this.objectiveText.setText(`ALL PRIORITY CONTACTS CONFIRMED // ${this.locateTargets.length}/${this.locateTargets.length}`);
+      return;
+    }
     const labels = pending.map((target) => target.label).join(' + ');
     this.objectiveText.setText(
       `LOCATE PRIORITY CONTACT${pending.length === 1 ? '' : 'S'}: ${labels} // ${this.completedTargetIds.length}/${this.locateTargets.length} CONFIRMED`,
