@@ -304,8 +304,8 @@ check(
 check(
   recon.includes('panCameraByScreenDelta(camera, dx, dy)')
     && recon.includes('GAME_CONFIG.recon.panStepMax')
-    && recon.includes('clampCameraScroll(camera)'),
-  'one-finger pan is step-bounded and clamped to map bounds',
+    && !recon.includes('clampCameraScroll(camera'),
+  'one-finger pan is step-bounded while Phaser remains the single camera-bounds authority',
 );
 check(
   recon.includes('const floor = this.minZoomForCamera(this.cameras.main)')
