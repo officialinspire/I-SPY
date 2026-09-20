@@ -1000,7 +1000,16 @@ async function exerciseAndroidTouchNavigation(page, context, label) {
 
     // Cancellation must release every captured touch. A stale pinch surviving
     // touchcancel is exactly the kind of state that poisons the next gesture.
-    await touch('touchCancel', []);
+    await page.evaluate((pointerId) => {
+      const canvas = document.querySelector('canvas');
+      canvas.dispatchEvent(new PointerEvent('pointercancel', {
+        pointerId,
+        pointerType: 'touch',
+        isPrimary: false,
+        bubbles: true,
+      }));
+    }, first.id);
+    await touch('touchEnd', []);
     await settle(page, 2);
     const cancelled = await read();
     if (cancelled.pinchActive || cancelled.dragging || cancelled.panGestureDirty) {
@@ -1247,6 +1256,12 @@ async function runProfile(profile) {
 
     if (profile.androidGestureStress) {
       await exerciseAndroidTouchNavigation(page, context, `${profile.name}/${profile.mode}/${profile.map}`);
+      await tapControl(page, profile, 'Recon', 'RESET VIEW', `${profile.name}/post-gesture-reset`);
+      await settle(page, 3);
+      const resetState = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+      if (!resetState || resetState.pinchActive || resetState.dragging || resetState.candidate) {
+        throw new Error(`${profile.name}/post-gesture-reset: camera controls did not return to a clean state // ${JSON.stringify(resetState)}`);
+      }
     }
 
     // Pause/resume before playing: the timer, the rail and the weather layer
