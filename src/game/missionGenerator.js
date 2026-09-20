@@ -5,6 +5,7 @@ import { createLocateMission } from './locateMission.js';
 import { createCountMission } from './countMission.js';
 import { createChangeDetectionMission, CHANGE_TYPES } from './changeDetectionMission.js';
 import { createMissionDirective } from './missionPerformance.js';
+import { withMissionCondition } from './environmentConditions.js';
 
 const MODES = Object.freeze(['LOCATE', 'COUNT', 'CHANGE']);
 const CLUE_SPRITES = Object.freeze(['tire_tracks', 'track_marks', 'disturbed_soil', 'cut_vegetation', 'crates', 'barrels', 'camouflage_net']);
@@ -522,13 +523,13 @@ export function validateGeneratedMission(mission, mapSource) {
 
 function fallbackMission(mode, seed, map) {
   const fallback = mode === 'COUNT' ? createCountMission(map) : mode === 'CHANGE' ? createChangeDetectionMission(map) : createLocateMission(map);
-  return {
+  return withMissionCondition({
     ...fallback,
     generated: false,
     seed,
     directive: createMissionDirective(seed),
     generationWarning: 'Generator exhausted validation attempts; using authored fallback.',
-  };
+  }, seed);
 }
 
 /**
@@ -567,7 +568,7 @@ export function createGeneratedMission({ seed = randomSeed(), mode = null, map: 
     }
     mission.generationAttempt = attempt + 1;
     const validation = validateGeneratedMission(mission, map);
-    if (validation.valid) return { ...mission, directive: createMissionDirective(seed) };
+    if (validation.valid) return withMissionCondition({ ...mission, directive: createMissionDirective(seed) }, seed);
   }
   return fallbackMission(normalizedMode ?? 'LOCATE', seed, map);
 }
