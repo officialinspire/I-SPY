@@ -5,6 +5,7 @@ import { createLocateMission } from './locateMission.js';
 import { createCountMission } from './countMission.js';
 import { createChangeDetectionMission, CHANGE_TYPES } from './changeDetectionMission.js';
 import { createMissionDirective } from './missionPerformance.js';
+import { isConditionAllowed, withMissionCondition } from './environmentConditions.js';
 
 const MODES = Object.freeze(['LOCATE', 'COUNT', 'CHANGE']);
 const CLUE_SPRITES = Object.freeze(['tire_tracks', 'track_marks', 'disturbed_soil', 'cut_vegetation', 'crates', 'barrels', 'camouflage_net']);
@@ -479,6 +480,8 @@ export function validateGeneratedMission(mission, mapSource) {
   const errors = [];
   if (!mission || !MODES.includes(mission.mode)) return { valid: false, errors: ['Generated mission mode is invalid.'] };
   if (!mission.seed) errors.push('Generated mission is missing a seed.');
+  if (!mission.condition) errors.push('Generated mission is missing an environmental condition.');
+  else if (!isConditionAllowed(mission.mapId, mission.condition)) errors.push(`Environmental condition '${mission.condition}' is not allowed in sector '${mission.mapId}'.`);
   if (!Number.isFinite(mission.timeLimitSeconds) || mission.timeLimitSeconds <= 0) errors.push('Generated mission time limit is invalid.');
   for (const operation of [...(mission.worldOperations ?? []), ...(mission.passBOperations ?? [])]) {
     if (!operationBoundsValid(operation, map)) errors.push(`Operation '${operation.type ?? 'unknown'}' exceeds map bounds.`);
@@ -522,13 +525,13 @@ export function validateGeneratedMission(mission, mapSource) {
 
 function fallbackMission(mode, seed, map) {
   const fallback = mode === 'COUNT' ? createCountMission(map) : mode === 'CHANGE' ? createChangeDetectionMission(map) : createLocateMission(map);
-  return {
+  return withMissionCondition({
     ...fallback,
     generated: false,
     seed,
     directive: createMissionDirective(seed),
     generationWarning: 'Generator exhausted validation attempts; using authored fallback.',
-  };
+  }, seed);
 }
 
 /**
@@ -565,6 +568,7 @@ export function createGeneratedMission({ seed = randomSeed(), mode = null, map: 
     } catch (error) {
       continue;
     }
+    mission = withMissionCondition(mission, seed);
     mission.generationAttempt = attempt + 1;
     const validation = validateGeneratedMission(mission, map);
     if (validation.valid) return { ...mission, directive: createMissionDirective(seed) };

@@ -1,5 +1,6 @@
 import { GAME_CONFIG } from '../runtime-config.js';
 import { resolveReconMap } from '../world/mapRegistry.js';
+import { withMissionCondition } from './environmentConditions.js';
 
 /**
  * The authored LOCATE tasking. Its sector and map id come from the registry
@@ -8,7 +9,7 @@ import { resolveReconMap } from '../world/mapRegistry.js';
  */
 export function createLocateMission(mapSource) {
   const map = resolveReconMap(mapSource);
-  return {
+  return withMissionCondition({
     id: 'OP-NIGHT-WATCH-001',
     operation: 'OPERATION NIGHT WATCH',
     satellitePass: '03:42 ZULU',
@@ -19,7 +20,7 @@ export function createLocateMission(mapSource) {
     targetId: 'radar-01',
     targetLabel: 'RADAR INSTALLATION',
     timeLimitSeconds: GAME_CONFIG.locate.timeLimitSeconds,
-  };
+  });
 }
 
 export function validateIdentification(mission, entity) {
