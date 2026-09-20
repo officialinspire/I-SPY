@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
+import { registerOfflineSupport } from './pwa/registerServiceWorker.js';
 import './settings/userSettings.js';
 import BootScene from './scenes/BootScene.js';
 import StartIntroScene from './scenes/StartIntroScene.js';
@@ -45,6 +46,7 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+registerOfflineSupport();
 
 const qaMode = new URLSearchParams(window.location.search).get('qa') === '1';
 if (qaMode) {
