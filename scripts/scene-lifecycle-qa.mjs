@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { oncePerKeyEvent } from '../src/ui/keyboardEvents.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -13,6 +14,8 @@ const results = read('src/scenes/ResultsScene.js');
 const enhanced = read('src/scenes/EnhancedReconScene.js');
 const weather = read('src/ui/weatherOverlay.js');
 const intro = read('src/scenes/StartIntroScene.js');
+const focusGroup = read('src/ui/focusGroup.js');
+const guide = read('src/scenes/IdentificationGuideScene.js');
 const main = read('src/main.js');
 const menu = read('src/scenes/MainMenuScene.js');
 
@@ -175,6 +178,53 @@ check(
   'disableSplitView bails out safely when the camera manager is already gone',
 );
 
+/* --- Keyboard delivery ------------------------------------------------ *
+ * Phaser processes its whole key queue on every new key event and clears it
+ * only at the next game step, and its own duplicate guard only looks one
+ * event back. More than two key events inside a frame therefore re-deliver
+ * the earlier ones: one press moved a COUNT tally by three or five, and ESC
+ * toggled the hold an even number of times and looked like a dead key.     */
+{
+  let runs = 0;
+  const handler = oncePerKeyEvent('qa', () => { runs += 1; });
+  const event = { key: 'ArrowUp' };
+  handler(event);
+  handler(event);
+  handler(event);
+  check(runs === 1, `a re-delivered key event runs its handler once, not ${runs}`);
+
+  let second = 0;
+  oncePerKeyEvent('qa-other', () => { second += 1; })(event);
+  check(second === 1, 'a second handler still sees a key event the first one has taken');
+
+  let fresh = 0;
+  const counter = oncePerKeyEvent('qa-fresh', () => { fresh += 1; });
+  counter({ key: 'ArrowUp' });
+  counter({ key: 'ArrowUp' });
+  check(fresh === 2, `two separate presses run the handler twice, not ${fresh}`);
+
+  check(
+    Object.keys(event).length === 1,
+    'the guard stamps events without making the mark enumerable',
+  );
+}
+check(
+  /keydown-ESC', oncePerKeyEvent\('recon-esc'/.test(recon)
+    && /'keydown', oncePerKeyEvent\('recon-key'/.test(recon),
+  'both recon key handlers are guarded against re-delivery',
+);
+check(
+  /keydown-ESC', oncePerKeyEvent\('menu-esc'/.test(menu)
+    && /keydown-ESC', oncePerKeyEvent\('guide-esc'/.test(guide),
+  'the console and the guide guard their ESC handlers',
+);
+check(
+  focusGroup.includes('const onKeyDownOnce = oncePerKeyEvent(')
+    && focusGroup.includes("scene.input.keyboard?.on('keydown', onKeyDownOnce)")
+    && focusGroup.includes("scene.input.keyboard?.off('keydown', onKeyDownOnce)"),
+  'the focus ring guards its key handler and detaches the same function it attached',
+);
+
 /* --- Scene data ------------------------------------------------------ */
 check(
   !/^\s*this\.data = data;/m.test(results) && results.includes('this.debrief = data;'),
@@ -186,5 +236,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 32 repeat-mission, start-gate, viewport, console-layout, recon-rail, split-view and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 39 repeat-mission, start-gate, viewport, console-layout, recon-rail, split-view, keyboard and debrief-idempotency checks.');
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { createTerminalChrome } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
@@ -189,7 +190,7 @@ export default class IdentificationGuideScene extends Phaser.Scene {
   }
 
   bindInput() {
-    this.input.keyboard?.on('keydown-ESC', () => this.scene.start('MainMenu'));
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('guide-esc', () => this.scene.start('MainMenu')));
     // The wheel belongs to whatever the pointer is over: rolling it while
     // reading the detail panel must not scroll the grid behind the cursor.
     this.input.on('wheel', (pointer, objects, deltaX, deltaY) => {

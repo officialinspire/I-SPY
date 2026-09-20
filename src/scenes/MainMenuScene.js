@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../runtime-config.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome, prefersReducedMotion } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { SPRITE_SHEETS } from '../assets/spriteManifest.js';
 import { createLocateMission } from '../game/locateMission.js';
@@ -509,11 +510,11 @@ export default class MainMenuScene extends Phaser.Scene {
     }).setOrigin(1, 0.5).setDepth(70).setVisible(false);
 
     this.noticeBackdrop.on('pointerdown', () => this.hideNotice());
-    this.input.keyboard?.on('keydown-ESC', () => {
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('menu-esc', () => {
       if (this.orientationOpen) this.dismissOrientation();
       else if (this.noticeOpen) this.hideNotice();
       else if (this.settingsOpen) this.closeSettings();
-    });
+    }));
   }
 
   showNotice() {

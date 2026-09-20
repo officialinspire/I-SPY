@@ -4,6 +4,7 @@ import { createButton } from '../ui/createButton.js';
 import { UI_TOKENS, hexToNumber } from '../ui/designTokens.js';
 import { createAuthoredReconMap, applyReconOperations, entityNearPoint } from '../world/authoredReconMap.js';
 import { drawCandidateReticle } from '../ui/reconInteraction.js';
+import { oncePerKeyEvent } from '../ui/keyboardEvents.js';
 import { createLocateMission, validateIdentification, calculateLocateScore } from '../game/locateMission.js';
 import { validateCountAnswer, calculateCountScore } from '../game/countMission.js';
 import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
@@ -449,10 +450,13 @@ export default class ReconScene extends Phaser.Scene {
       this.pinchDistance = distance;
     });
 
-    this.input.keyboard?.on('keydown-ESC', () => {
+    // Both handlers are guarded against Phaser re-delivering one press: the
+    // hold used to toggle an even number of times and look like a dead key,
+    // and a COUNT stepper used to move the tally by three or five at once.
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('recon-esc', () => {
       if (!this.isCountMode && this.candidate) this.cancelCandidate(); else this.togglePause();
-    });
-    this.input.keyboard?.on('keydown', (event) => this.handleKeyboard(event));
+    }));
+    this.input.keyboard?.on('keydown', oncePerKeyEvent('recon-key', (event) => this.handleKeyboard(event)));
   }
 
   /** A tap on the imagery only marks while marking is armed. */

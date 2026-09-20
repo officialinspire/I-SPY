@@ -613,6 +613,34 @@ async function runProfile(profile) {
     const resumed = await page.evaluate(() => window.__qa.reconChrome());
     if (resumed.paused) throw new Error(`${profile.name}/recon: RESUME did not release the hold`);
 
+    // One key press is one action. Phaser re-delivers queued key events, so
+    // a single ESC used to toggle the hold an even number of times and read
+    // as a dead key, and a single COUNT arrow moved the tally by three.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(160);
+    if (!(await page.evaluate(() => window.__qa.reconChrome())).paused) {
+      throw new Error(`${profile.name}/recon: one ESC press did not hold the mission`);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(160);
+    if ((await page.evaluate(() => window.__qa.reconChrome())).paused) {
+      throw new Error(`${profile.name}/recon: one ESC press did not release the hold`);
+    }
+    if (profile.mode === 'COUNT') {
+      await page.keyboard.press('ArrowUp');
+      await page.waitForTimeout(160);
+      const stepped = await page.evaluate(() => window.__qa.missionSummary());
+      if (stepped.answerValue !== 1) {
+        throw new Error(`${profile.name}/recon: one arrow press moved the tally to ${stepped.answerValue}`);
+      }
+      await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(160);
+      const cleared = await page.evaluate(() => window.__qa.missionSummary());
+      if (cleared.answerValue !== 0) {
+        throw new Error(`${profile.name}/recon: one arrow press left the tally at ${cleared.answerValue}`);
+      }
+    }
+
     // Rotate while the mission is live. This hits the layout, camera, rail,
     // weather and safe-area resize paths under actual rendering.
     await page.setViewportSize(profile.rotateTo);
