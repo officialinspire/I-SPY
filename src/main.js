@@ -108,6 +108,14 @@ function syncGameViewport() {
 
   const canvas = game.canvas;
   if (canvas) {
+    // ScaleManager can update its logical gameSize before the browser-applied
+    // CSS canvas box catches up during tablet/mobile rotation. In that state a
+    // gameSize-only comparison incorrectly says everything is current while
+    // the player still sees the old landscape canvas. Make the host box the
+    // final authority for the displayed canvas as well.
+    const canvasRect = canvas.getBoundingClientRect();
+    if (Math.abs(canvasRect.width - width) > 1) canvas.style.width = `${width}px`;
+    if (Math.abs(canvasRect.height - height) > 1) canvas.style.height = `${height}px`;
     canvas.style.marginLeft = '0px';
     canvas.style.marginTop = '0px';
   }
