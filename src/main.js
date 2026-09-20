@@ -44,4 +44,38 @@ const config = {
   scene: [BootScene, StartIntroScene, MainMenuScene, MissionBriefingScene, EnhancedReconScene, TrainingScene, IdentificationGuideScene, ResultsScene, AnalystRecordScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+/**
+ * Phaser.Scale.RESIZE follows the host in normal desktop resizes, but mobile
+ * browsers can update the visual/layout viewport during rotation without the
+ * canvas receiving the final host dimensions. Observe the safe-area-aware
+ * #app box directly and make that box authoritative.
+ */
+const gameHost = document.getElementById('app');
+let viewportSyncFrame = null;
+
+function syncGameViewport() {
+  viewportSyncFrame = null;
+  if (!gameHost || !game.scale) return;
+  const rect = gameHost.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const current = game.scale.gameSize;
+  if (Math.round(current?.width ?? 0) === width && Math.round(current?.height ?? 0) === height) return;
+  game.scale.resize(width, height);
+}
+
+function queueViewportSync() {
+  if (viewportSyncFrame !== null) return;
+  viewportSyncFrame = requestAnimationFrame(syncGameViewport);
+}
+
+if (typeof ResizeObserver !== 'undefined' && gameHost) {
+  const hostObserver = new ResizeObserver(queueViewportSync);
+  hostObserver.observe(gameHost);
+}
+window.addEventListener('resize', queueViewportSync, { passive: true });
+window.addEventListener('orientationchange', queueViewportSync, { passive: true });
+window.visualViewport?.addEventListener('resize', queueViewportSync, { passive: true });
+queueViewportSync();
