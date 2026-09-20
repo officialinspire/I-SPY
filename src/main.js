@@ -61,6 +61,37 @@ if (qaMode) {
         return button?.background ? { x: button.background.x, y: button.background.y } : null;
       },
       finishIntro: () => game.scene.getScene('StartIntro')?.finish?.(),
+      /**
+       * Every live interactive control, as a viewport rectangle.
+       *
+       * Two of these must never overlap and none may sit outside the viewport.
+       * Where two hit areas share a pixel the object drawn last wins it, so an
+       * overlap means a press on one control silently runs another — which is
+       * exactly how a phone-sized rail stops working while still looking fine.
+       */
+      touchTargets: () => {
+        const { width, height } = game.scale.gameSize;
+        const targets = [];
+        game.scene.getScenes(true).forEach((scene) => {
+          scene.children?.list?.forEach((object) => {
+            if (!object.visible || object.alpha === 0) return;
+            const area = object.input?.enabled ? object.input.hitArea : null;
+            if (!area || !Number.isFinite(area.width) || !Number.isFinite(area.height)) return;
+            const rect = {
+              scene: scene.scene.key,
+              name: object.name || object.type,
+              x: object.x - object.displayOriginX + area.x,
+              y: object.y - object.displayOriginY + area.y,
+              width: area.width,
+              height: area.height,
+            };
+            // Modal backdrops are meant to swallow the whole viewport.
+            if (rect.width * rect.height >= width * height * 0.8) return;
+            targets.push(rect);
+          });
+        });
+        return { width, height, targets };
+      },
       reconState: () => {
         const scene = game.scene.getScene('Recon');
         const camera = scene?.cameras?.main;

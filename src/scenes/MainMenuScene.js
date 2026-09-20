@@ -112,19 +112,42 @@ const SYSTEM_LABEL_CHARS = 'IDENTIFICATION GUIDE'.length;
  * tier's font — four across on a desktop, two by two on a tablet, one per row
  * on a phone. Measuring the label rather than the viewport is what keeps a
  * short landscape window from folding to two tall rows it has no height for.
+ *
+ * `fold` is the last resort, set only when no tier fits the screen at all: the
+ * block goes two across with smaller labels rather than running off the bottom.
  */
-function systemColumns(tier, innerWidth, count) {
+function systemColumns(tier, innerWidth, count, fold = false) {
   // Courier advances at roughly 0.6em, plus the button's own padding.
   const needed = SYSTEM_LABEL_CHARS * tier.systemFont * 0.6 + 28;
-  for (const columns of [4, 2, 1]) {
+  for (const columns of [4, 2]) {
     if (columns > count) continue;
     if ((innerWidth - SYSTEM_GAP * (columns - 1)) / columns >= needed) return columns;
   }
+  // Nothing fits the height even at the smallest tier: fold to two columns and
+  // let the labels shrink. A phone short enough to reach here (a 320px screen,
+  // or a taller one once the browser chrome is subtracted) used to push ANALYST
+  // RECORD and SETTINGS off the bottom of the console entirely, where nothing
+  // scrolls and no press can reach them.
+  if (fold && count > 2) return 2;
   return 1;
 }
 
-function systemBlockHeight(tier, innerWidth, count) {
-  const rows = Math.ceil(count / systemColumns(tier, innerWidth, count));
+/**
+ * Half of a layout gap, less a pixel, for a stacked control's hit padding.
+ * Two padded hit areas then always leave a seam instead of meeting.
+ */
+function hitGap(gap) {
+  return Math.max(0, Math.floor((gap - 1) / 2));
+}
+
+/** Label size that fits a SYSTEM cell, never smaller than the legible floor. */
+function systemFont(tier, cellWidth) {
+  const fitted = Math.floor((cellWidth - 28) / (SYSTEM_LABEL_CHARS * 0.6));
+  return Phaser.Math.Clamp(fitted, 8, tier.systemFont);
+}
+
+function systemBlockHeight(tier, innerWidth, count, fold = false) {
+  const rows = Math.ceil(count / systemColumns(tier, innerWidth, count, fold));
   return rows * tier.systemHeight + (rows - 1) * sectorGap(tier);
 }
 
@@ -809,15 +832,15 @@ export default class MainMenuScene extends Phaser.Scene {
   }
 
   /** Height of the whole composition at a tier, used to pick and centre it. */
-  composedHeight(tier, stackCards, framePad, innerWidth) {
+  composedHeight(tier, stackCards, framePad, innerWidth, fold = false) {
     const headerHeight = tier.titleFont * 1.05 + (tier.showSubtitle ? tier.subtitleFont + 12 : 0);
-    const bodyHeight = this.measureTier(tier, stackCards, innerWidth) + framePad * 2;
+    const bodyHeight = this.measureTier(tier, stackCards, innerWidth, fold) + framePad * 2;
     const readoutHeight = tier.showReadout ? tier.readoutFont + 18 : 0;
     return { headerHeight, bodyHeight, readoutHeight, total: headerHeight + tier.headerGap + bodyHeight + readoutHeight };
   }
 
   /** Height the console body needs at a given tier, used to pick that tier. */
-  measureTier(tier, stackCards, innerWidth) {
+  measureTier(tier, stackCards, innerWidth, fold = false) {
     const archiveHeight = stackCards
       ? tier.cardHeight * 3 + tier.sectionGap * 0.4 * 2
       : tier.cardHeight;
@@ -825,7 +848,7 @@ export default class MainMenuScene extends Phaser.Scene {
     return tier.statusFont + tier.labelGap + 6
       + sectionBlock(primaryBlockHeight(tier)) + tier.sectionGap
       + sectionBlock(archiveHeight) + tier.sectionGap
-      + sectionBlock(systemBlockHeight(tier, innerWidth, this.systemButtons.length));
+      + sectionBlock(systemBlockHeight(tier, innerWidth, this.systemButtons.length, fold));
   }
 
   layout(gameSize) {
@@ -854,9 +877,15 @@ export default class MainMenuScene extends Phaser.Scene {
     // Pick the richest tier that fits, then centre the composition in the
     // space that is left so tall screens do not hang everything off the top.
     const available = height - topSafe - bottomSafe - brandingSlot;
-    const tier = TIERS.find((candidate) => this.composedHeight(candidate, stackCards, framePadX, innerWidth).total <= available)
-      ?? TIERS[TIERS.length - 1];
-    const composed = this.composedHeight(tier, stackCards, framePadX, innerWidth);
+    const fitsIn = (candidate, folded) =>
+      this.composedHeight(candidate, stackCards, framePadX, innerWidth, folded).total <= available;
+    let fold = false;
+    let tier = TIERS.find((candidate) => fitsIn(candidate, false));
+    if (!tier) {
+      fold = true;
+      tier = TIERS.find((candidate) => fitsIn(candidate, true)) ?? TIERS[TIERS.length - 1];
+    }
+    const composed = this.composedHeight(tier, stackCards, framePadX, innerWidth, fold);
     const startY = topSafe + Math.max(0, (available - composed.total) * 0.42);
 
     this.title.setFontSize(tier.titleFont).setPosition(width / 2, startY + tier.titleFont * 0.55);
@@ -888,6 +917,11 @@ export default class MainMenuScene extends Phaser.Scene {
 
     const primary = placeSection(this.primarySectionLabel, primaryBlockHeight(tier));
     const primaryWidth = stackCards ? innerWidth : Math.min(innerWidth, Math.max(420, innerWidth * 0.62));
+    // Every stacked control caps its hit padding at half of the gap below it.
+    // Reaching the 44px minimum matters, but not at the cost of overlapping the
+    // next control: where two hit areas meet, the one drawn last wins, so a
+    // press on the bottom edge of a row used to run the row beneath it.
+    const stackPad = hitGap(sectorGap(tier));
     this.randomCard
       .resize({
         width: primaryWidth,
@@ -898,10 +932,11 @@ export default class MainMenuScene extends Phaser.Scene {
         padding: stackCards ? 14 : 18,
         showDescription: tier.showDescriptions,
         showIcon: tier.showIcons,
+        hitPaddingY: stackPad,
       })
       .setPosition(innerLeft + primaryWidth / 2, primary.bodyTop + tier.primaryHeight / 2);
     this.sectorButton
-      .resize({ width: primaryWidth, height: tier.sectorHeight, fontSize: tier.sectorFont })
+      .resize({ width: primaryWidth, height: tier.sectorHeight, fontSize: tier.sectorFont, hitPaddingY: stackPad })
       .setPosition(innerLeft + primaryWidth / 2,
         primary.bodyTop + tier.primaryHeight + sectorGap(tier) + tier.sectorHeight / 2);
 
@@ -923,6 +958,7 @@ export default class MainMenuScene extends Phaser.Scene {
             padding: 14,
             showDescription: tier.showDescriptions,
             showIcon: tier.showIcons,
+            hitPaddingY: hitGap(rowGap),
           })
           .setPosition(innerLeft + innerWidth / 2, archive.bodyTop + tier.cardHeight / 2 + index * (tier.cardHeight + rowGap));
       });
@@ -939,19 +975,29 @@ export default class MainMenuScene extends Phaser.Scene {
             padding: 14,
             showDescription: tier.showDescriptions,
             showIcon: tier.showIcons,
+            hitPaddingX: hitGap(columnGap),
+            hitPaddingY: stackPad,
           })
           .setPosition(innerLeft + cardWidth / 2 + index * (cardWidth + columnGap), archive.bodyTop + tier.cardHeight / 2);
       });
     }
-    const system = placeSection(this.systemSectionLabel, systemBlockHeight(tier, innerWidth, this.systemButtons.length));
-    const systemCols = systemColumns(tier, innerWidth, this.systemButtons.length);
+    const system = placeSection(this.systemSectionLabel,
+      systemBlockHeight(tier, innerWidth, this.systemButtons.length, fold));
+    const systemCols = systemColumns(tier, innerWidth, this.systemButtons.length, fold);
     const systemWidth = (innerWidth - SYSTEM_GAP * (systemCols - 1)) / systemCols;
     const systemRowGap = sectorGap(tier);
+    const systemLabelFont = systemFont(tier, systemWidth);
     this.systemButtons.forEach((button, index) => {
       const column = index % systemCols;
       const row = Math.floor(index / systemCols);
       button
-        .resize({ width: systemWidth, height: tier.systemHeight, fontSize: tier.systemFont })
+        .resize({
+          width: systemWidth,
+          height: tier.systemHeight,
+          fontSize: systemLabelFont,
+          hitPaddingX: hitGap(SYSTEM_GAP),
+          hitPaddingY: hitGap(systemRowGap),
+        })
         .setPosition(
           innerLeft + systemWidth / 2 + column * (systemWidth + SYSTEM_GAP),
           system.bodyTop + tier.systemHeight / 2 + row * (tier.systemHeight + systemRowGap),

@@ -13,7 +13,7 @@ export const GAME_CONFIG=Object.freeze({
   presentation:{bootDurationMs:1250,acquisitionDelayMs:520,typewriterCharsPerSecond:130,classification:'RESTRICTED // TRAINING USE'},
   rendering:{maxDevicePixelRatio:2,spriteRasterScale:2},
   sprites:{frameSize:64,authoredPalette:['#0b0b0b','#333333','#bdbdbd','#f6f6ee']},
-  recon:{defaultMapId:'woodland-corridor-7',minZoom:0.45,maxZoom:2.4,zoomStep:0.12,dragThreshold:6,pinchDistanceDeadZone:1.5,pinchMidpointDeadZone:0.75,pinchScaleStepMin:0.9,pinchScaleStepMax:1.1,pinchPanStepMax:48,hudHeight:78,defaultZoom:0.75,cautionSeconds:30,criticalSeconds:15},
+  recon:{defaultMapId:'woodland-corridor-7',minZoom:0.45,maxZoom:2.4,zoomStep:0.12,dragThreshold:6,touchDragThreshold:14,pinchDistanceDeadZone:1.5,pinchMidpointDeadZone:0.75,pinchScaleStepMin:0.9,pinchScaleStepMax:1.1,pinchPanStepMax:48,hudHeight:78,defaultZoom:0.75,cautionSeconds:30,criticalSeconds:15},
   locate:{timeLimitSeconds:240,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:2,perfectBonus:500}},
   count:{timeLimitSeconds:240,maxAnswer:99,scoring:{correctAnswer:1000,incorrectSubmissionPenalty:300,timeBonusPerSecond:2,perfectBonus:500}},
   change:{timeLimitSeconds:240,splitViewMinWidth:980,scoring:{correctIdentification:1000,falseIdentificationPenalty:250,timeBonusPerSecond:2,perfectBonus:500}},
