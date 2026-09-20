@@ -7,6 +7,7 @@ import {
   getMapEntities,
 } from '../world/reconMapSchema.js';
 import { resolveReconMap } from '../world/mapRegistry.js';
+import { withMissionCondition } from './environmentConditions.js';
 
 // The region helpers live with the schema so the release validator can read
 // them without pulling in bundled map data; re-exported here because this is
@@ -21,7 +22,7 @@ export function createCountMission(mapSource) {
   const region = getCountRegion(map);
   const expectedCount = countEntitiesInRegion(entities, region, targetCategory);
 
-  return {
+  return withMissionCondition({
     id: 'OP-TALLY-SHEET-001',
     operation: 'OPERATION TALLY SHEET',
     satellitePass: '04:17 ZULU',
@@ -34,7 +35,7 @@ export function createCountMission(mapSource) {
     region,
     expectedCount,
     timeLimitSeconds: GAME_CONFIG.count.timeLimitSeconds,
-  };
+  });
 }
 
 export function validateCountAnswer(mission, answer) {
