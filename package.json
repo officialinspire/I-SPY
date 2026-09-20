@@ -1,14 +1,15 @@
 {
   "name": "i-spy",
   "private": true,
-  "version": "1.6.2-demo",
+  "version": "1.7.0-demo",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "validate": "node scripts/validate-release.mjs && node scripts/generator-qa.mjs && node scripts/progression-qa.mjs && node scripts/environment-expansion-qa.mjs && node scripts/release-candidate-qa.mjs && node scripts/audio-qa.mjs && node scripts/scene-lifecycle-qa.mjs",
-    "build": "vite build",
+    "validate": "node scripts/validate-release.mjs && node scripts/generator-qa.mjs && node scripts/progression-qa.mjs && node scripts/environment-expansion-qa.mjs && node scripts/release-candidate-qa.mjs && node scripts/audio-qa.mjs && node scripts/scene-lifecycle-qa.mjs && node scripts/pwa-source-qa.mjs",
+    "build": "vite build && node scripts/build-pwa.mjs && node scripts/validate-pwa-build.mjs",
     "preview": "vite preview",
-    "qa": "node scripts/generator-qa.mjs"
+    "qa": "node scripts/generator-qa.mjs",
+    "qa:offline": "node scripts/offline-pwa-e2e.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
