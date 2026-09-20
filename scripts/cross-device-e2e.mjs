@@ -150,6 +150,75 @@ async function activateAcquireImagery(page, profile) {
   }
 }
 
+async function exerciseAndroidReconGestures(page, context) {
+  const cdp = await context.newCDPSession(page);
+  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', {
+    type,
+    touchPoints: points.map((point) => ({
+      x: point.x,
+      y: point.y,
+      id: point.id,
+      radiusX: 2,
+      radiusY: 2,
+      force: 1,
+    })),
+  });
+
+  const initial = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  if (!initial) throw new Error('Android gesture QA could not read Recon state');
+
+  // One-finger pan.
+  await touch('touchStart', [{ id: 1, x: 206, y: 420 }]);
+  await touch('touchMove', [{ id: 1, x: 270, y: 475 }]);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(120);
+  const panned = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  const panDistance = Math.hypot(panned.scrollX - initial.scrollX, panned.scrollY - initial.scrollY);
+  if (panDistance < 20) throw new Error(`one-finger pan did not move the camera: ${JSON.stringify({ initial, panned })}`);
+
+  // Arm marking, then pinch. Pinch must remain available while marking is
+  // armed and must never turn into an accidental candidate selection.
+  const markPoint = await page.evaluate(() => window.__ISPY_QA__?.buttonCenter('Recon', 'markButton'));
+  if (!markPoint) throw new Error('MARK TARGET control unavailable for Android gesture QA');
+  await page.touchscreen.tap(markPoint.x, markPoint.y);
+  await page.waitForTimeout(100);
+  const armed = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  if (!armed?.marking) throw new Error(`marking did not arm before pinch: ${JSON.stringify(armed)}`);
+
+  await touch('touchStart', [
+    { id: 11, x: 160, y: 430 },
+    { id: 12, x: 252, y: 430 },
+  ]);
+  await touch('touchMove', [
+    { id: 11, x: 105, y: 430 },
+    { id: 12, x: 307, y: 430 },
+  ]);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(160);
+
+  const pinched = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  if (!(pinched.zoom > armed.zoom + 0.08)) {
+    throw new Error(`two-finger pinch did not zoom in: ${JSON.stringify({ armed, pinched })}`);
+  }
+  if (!pinched.marking || pinched.candidate) {
+    throw new Error(`pinch corrupted targeting state: ${JSON.stringify(pinched)}`);
+  }
+
+  // After a completed pinch, another one-finger drag must pan normally and
+  // must still not be mistaken for a target tap.
+  await touch('touchStart', [{ id: 21, x: 206, y: 440 }]);
+  await touch('touchMove', [{ id: 21, x: 245, y: 500 }]);
+  await touch('touchEnd', []);
+  await page.waitForTimeout(120);
+  const postPinchPan = await page.evaluate(() => window.__ISPY_QA__?.reconState?.());
+  const secondPan = Math.hypot(postPinchPan.scrollX - pinched.scrollX, postPinchPan.scrollY - pinched.scrollY);
+  if (secondPan < 15 || postPinchPan.candidate) {
+    throw new Error(`post-pinch pan failed or created a mark: ${JSON.stringify({ pinched, postPinchPan })}`);
+  }
+
+  console.log(`PASS android gestures: pan ${Math.round(panDistance)}px-world, pinch ${armed.zoom.toFixed(2)}→${pinched.zoom.toFixed(2)}, pan resumes`);
+}
+
 async function runProfile(profile) {
   const browser = await profile.engine.launch({ headless: true, ...(profile.launchOptions ?? {}) });
   const context = await browser.newContext({
@@ -301,6 +370,10 @@ async function runProfile(profile) {
     if (reconHash === briefingHash) throw new Error('briefing did not visually transition to recon');
 
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
+
+    if (profile.name === 'android-chromium') {
+      await exerciseAndroidReconGestures(page, context);
+    }
 
     // ESC pause/resume is a low-risk way to exercise the recon input and
     // lifecycle state machine without solving the mission in automation.
