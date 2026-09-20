@@ -773,15 +773,40 @@ export default class ReconScene extends Phaser.Scene {
     const mark = { x: this.candidate.x, y: this.candidate.y, passId: this.candidate.passId };
     const result = this.isChangeMode
       ? validateChangeIdentification(this.mission, this.candidate.entity, this.candidate.passId)
-      : validateIdentification(this.mission, this.candidate.entity);
+      : validateIdentification({ ...this.mission, completedTargetIds: this.completedTargetIds }, this.candidate.entity);
     this.confirmButton.setVisible(false);
     this.cancelButton.setVisible(false);
     this.marking = false;
     this.markButton.setLabel(this.isChangeMode ? 'MARK CHANGE' : 'MARK TARGET');
     this.markButton.setSelected(false);
     if (result.correct) {
-      this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'CONFIRMED');
+      if (!this.isChangeMode && this.locateTargets.length > 1) {
+        if (!this.completedTargetIds.includes(result.entity.id)) this.completedTargetIds.push(result.entity.id);
+        const complete = this.completedTargetIds.length >= this.locateTargets.length;
+        this.onIdentificationResolved(result, mark);
+
+        if (!complete) {
+          this.candidate = null;
+          this.marking = false;
+          this.markerTone = 'pending';
+          this.confirmButton.setVisible(false);
+          this.cancelButton.setVisible(false);
+          this.markButton.setLabel('MARK TARGET').setSelected(false);
+          this.resolvingIdentification = false;
+          this.refreshLocateObjective();
+          this.refreshModeStrip();
+          this.flashStatus(`CONTACT CONFIRMED // ${this.completedTargetIds.length}/${this.locateTargets.length} // CONTINUE SEARCH`);
+          this.time.delayedCall(500, () => {
+            if (!this.candidate && !this.missionEnded) this.selectionGraphics.clear();
+          });
+          return;
+        }
+      }
+
+      this.flashStatus(this.isChangeMode ? 'CHANGE CONFIRMED' : 'MISSION CONTACTS CONFIRMED');
       this.onIdentificationResolved(result, mark);
+      this.refreshLocateObjective();
+      this.refreshModeStrip();
       this.time.delayedCall(350, () => this.finishMission(true));
       return;
     }
@@ -1008,11 +1033,18 @@ export default class ReconScene extends Phaser.Scene {
       GAME_CONFIG.recon.minZoom, GAME_CONFIG.recon.maxZoom);
   }
 
+  minZoomForCamera(camera = this.cameras.main) {
+    return this.minZoomForViewport(
+      camera?.width ?? this.scale.gameSize.width,
+      camera?.height ?? this.scale.gameSize.height,
+    );
+  }
+
   zoomAt(screenPoint, delta) {
     const context = this.getPointerContext(screenPoint);
     const camera = context.camera;
     const before = camera.getWorldPoint(screenPoint.x, screenPoint.y);
-    camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, this.minZoomForViewport(), GAME_CONFIG.recon.maxZoom));
+    camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, this.minZoomForCamera(camera), GAME_CONFIG.recon.maxZoom));
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
@@ -1048,6 +1080,10 @@ export default class ReconScene extends Phaser.Scene {
     if (this.missionEnded) return;
     this.paused = !this.paused;
     this.dragging = false;
+    this.dragPointerId = null;
+    this.dragCamera = null;
+    this.tapPointer = null;
+    this.pinchGesture = null;
     if (this.paused) this.pauseStartedAt = this.time.now;
     else if (this.pauseStartedAt) {
       this.totalPausedMs = (this.totalPausedMs ?? 0) + (this.time.now - this.pauseStartedAt);
