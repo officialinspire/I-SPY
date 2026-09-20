@@ -57,8 +57,10 @@ export default class StartIntroScene extends Phaser.Scene {
     // pointerdown is one path for mouse, pen, and touch and remains inside the
     // browser's trusted gesture stack when video.play() is called.
     this.startButton.addEventListener('pointerdown', this.onStartPointer);
+    this.startButton.addEventListener('touchend', this.onStartPointer, { passive: false });
     this.startButton.addEventListener('click', this.onStartPointer);
     this.skipButton.addEventListener('pointerdown', this.onSkip);
+    this.skipButton.addEventListener('touchend', this.onSkip, { passive: false });
     document.addEventListener('keydown', this.onKey);
     this.onVideoFinished = () => this.finish();
     this.video.addEventListener('ended', this.onVideoFinished, { once: true });
@@ -98,8 +100,10 @@ export default class StartIntroScene extends Phaser.Scene {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this.onKey);
     this.startButton?.removeEventListener('pointerdown', this.onStartPointer);
+    this.startButton?.removeEventListener('touchend', this.onStartPointer);
     this.startButton?.removeEventListener('click', this.onStartPointer);
     this.skipButton?.removeEventListener('pointerdown', this.onSkip);
+    this.skipButton?.removeEventListener('touchend', this.onSkip);
     this.video?.removeEventListener('ended', this.onVideoFinished);
     this.video?.removeEventListener('error', this.onVideoFinished);
     this.video?.removeAttribute('src');
