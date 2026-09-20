@@ -47,5 +47,9 @@ jobs:
           done
           cat /tmp/ispy-preview.log
           exit 1
+      # Under a virtual display. Headless WebKit on this runner has been seen
+      # rendering twenty-two animation frames in four minutes, which starves
+      # the game of the steps every scene transition and input is processed
+      # in, and makes a working build look like a broken one.
       - name: Cross-device browser QA
-        run: node scripts/cross-device-e2e.mjs
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" node scripts/cross-device-e2e.mjs

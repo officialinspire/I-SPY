@@ -311,8 +311,14 @@ async function screenHash(page) {
 
 /** Frames a transition is given, whatever the wall clock says it took. */
 const SCENE_FRAME_BUDGET = 45;
-/** Hard ceiling, so a genuinely dead page still fails in reasonable time. */
-const SCENE_WALL_CLOCK_CEILING_MS = 150_000;
+/**
+ * How long the page may render nothing at all before it counts as dead.
+ *
+ * A ceiling on total elapsed time punishes a slow page for its host's frame
+ * rate. What actually distinguishes a dead page from a crawling one is
+ * whether any frames are still arriving, so that is what is measured.
+ */
+const NO_PROGRESS_CEILING_MS = 60_000;
 
 /**
  * Waits for a scene, measured in rendered frames as well as in seconds.
@@ -337,6 +343,9 @@ async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
   };
   const openingFrame = await framesAt();
 
+  let lastFrame = openingFrame;
+  let lastProgressAt = Date.now();
+
   for (let attempt = 0; ; attempt += 1) {
     try {
       await page.waitForFunction(
@@ -351,10 +360,25 @@ async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
       const rendered = (openingFrame !== null && currentFrame !== null)
         ? currentFrame - openingFrame
         : null;
+      if (currentFrame !== null && currentFrame !== lastFrame) {
+        lastFrame = currentFrame;
+        lastProgressAt = Date.now();
+      }
+
+      // The predicate polls inside the page, so on a page that is barely
+      // running it can time out in the same breath as the scene arriving.
+      // Never report a failure without looking once more, directly.
+      const arrived = await page.evaluate(
+        (sceneKey) => window.__qa?.activeScenes().includes(sceneKey) ?? false,
+        key,
+      ).catch(() => false);
+      if (arrived) return;
+
       // Frames are still arriving, just slowly, and the transition has not
       // yet had the frames it needs. Keep waiting rather than blaming the
       // game for the host's frame rate.
-      if (rendered !== null && rendered < SCENE_FRAME_BUDGET && elapsed < SCENE_WALL_CLOCK_CEILING_MS) {
+      const stalledFor = Date.now() - lastProgressAt;
+      if (rendered !== null && rendered < SCENE_FRAME_BUDGET && stalledFor < NO_PROGRESS_CEILING_MS) {
         continue;
       }
 
@@ -368,7 +392,7 @@ async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
       // and a throw inside a game step stops the loop for good, so the
       // collected browser errors are the diagnosis, not a footnote to it.
       const reported = errors.length ? errors.join(' | ') : 'no browser errors';
-      throw new Error(`${label}: scene '${key}' never became active after ${rendered ?? '?'} rendered frames in ${elapsed}ms // ${JSON.stringify(state)} // ${reported} // ${error.message}`);
+      throw new Error(`${label}: scene '${key}' never became active after ${rendered ?? '?'} rendered frames in ${elapsed}ms (${stalledFor}ms since the last frame) // ${JSON.stringify(state)} // ${reported} // ${error.message}`);
     }
   }
 }
@@ -683,6 +707,12 @@ async function runProfile(profile) {
      * media: it is the one trusted gesture that unlocks audio for the
      * session, and a device that cannot decode the MP4 used to have it
      * dismissed for it, which left music and SFX locked for the whole run. */
+    // Boot hands over to the gate on a timer the game runs from its own
+    // loop, so how long that takes is frames, not seconds. Sequencing on the
+    // scene rather than on the DOM keeps the handover deterministic on every
+    // engine, and gives a slow host the frames it needs to get there.
+    await waitForScene(page, 'StartIntro', `${profile.name}/intro`, 20_000, errors);
+
     const startButton = page.locator('.intro-start__button');
     try {
       await startButton.waitFor({ state: 'visible', timeout: 15_000 });
@@ -695,16 +725,11 @@ async function runProfile(profile) {
           bootDetail: document.getElementById('boot-detail')?.textContent ?? null,
           overlays: window.__qa?.domOverlays() ?? null,
           scenes: window.__qa?.activeScenes() ?? null,
+          loop: window.__qa?.loopState() ?? null,
         };
       }).catch(() => ({ evaluationFailed: true }));
       throw new Error(`start gate never appeared // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
     }
-
-    // The gate's DOM is appended during StartIntro's create(), so the button
-    // can be on screen fractionally before the scene is the running one.
-    // Sequencing on the scene rather than on its DOM keeps the handover
-    // deterministic on every engine.
-    await waitForScene(page, 'StartIntro', `${profile.name}/intro`, 12_000, errors);
 
     if (profile.domIntroUnreachable) {
       // Headless Playwright WebKit does not deliver synthesized touch or click
