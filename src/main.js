@@ -61,6 +61,20 @@ if (qaMode) {
         return button?.background ? { x: button.background.x, y: button.background.y } : null;
       },
       finishIntro: () => game.scene.getScene('StartIntro')?.finish?.(),
+      reconState: () => {
+        const scene = game.scene.getScene('Recon');
+        const camera = scene?.cameras?.main;
+        return scene && camera ? {
+          zoom: camera.zoom,
+          scrollX: camera.scrollX,
+          scrollY: camera.scrollY,
+          marking: Boolean(scene.marking),
+          candidate: Boolean(scene.candidate),
+          pinchActive: Boolean(scene.pinchGesture),
+          completedTargets: scene.completedTargetIds?.length ?? 0,
+          requiredTargets: scene.locateTargets?.length ?? 0,
+        } : null;
+      },
     },
   });
 }
