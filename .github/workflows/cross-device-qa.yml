@@ -2,6 +2,9 @@ name: Cross-device QA hardening
 on:
   push:
     branches: [qa-cross-device-hardening]
+    paths:
+      - '.qa/cross-device-trigger.txt'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
