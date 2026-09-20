@@ -453,15 +453,15 @@ export default class ReconScene extends Phaser.Scene {
       if (this.paused || this.missionEnded) return;
 
       const active = this.mapPointersDown();
-      if (active.length >= 2) {
-        if (!this.pinchGesture) this.beginPinch(active);
+      if (this.pinchGesture) {
         this.updatePinch(active);
         return;
       }
-
-      // pointerup rebases the remaining finger after a pinch. Until then, do
-      // not interpret an in-between pointermove as a giant one-finger pan.
-      if (this.pinchGesture) return;
+      if (active.length >= 2) {
+        this.beginPinch(active);
+        this.updatePinch(active);
+        return;
+      }
 
       if (this.tapPointer && pointer.id === this.tapPointer.id) {
         this.tapPointer.travel = Math.max(
@@ -514,19 +514,24 @@ export default class ReconScene extends Phaser.Scene {
     return this.input.manager.pointers.filter((pointer) => pointer.isDown && !this.isHudPoint(pointer));
   }
 
+  pinchPointers(pointers = this.mapPointersDown()) {
+    if (!this.pinchGesture?.pointerIds?.length) return pointers.slice(0, 2);
+    const byId = new Map(pointers.map((pointer) => [pointer.id, pointer]));
+    return this.pinchGesture.pointerIds.map((id) => byId.get(id)).filter(Boolean);
+  }
+
   beginPinch(pointers = this.mapPointersDown()) {
     if (pointers.length < 2 || this.paused || this.missionEnded) return false;
-    const [first, second] = pointers;
+    const [first, second] = pointers.slice(0, 2);
     const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
     const camera = this.getPointerContext(midpoint).camera;
     const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
 
     this.pinchGesture = {
       pointerIds: [first.id, second.id],
-      startDistance: distance,
-      startZoom: camera.zoom,
+      lastDistance: distance,
+      lastMidpoint: midpoint,
       camera,
-      anchorWorld: camera.getWorldPoint(midpoint.x, midpoint.y),
     };
     this.tapPointer = null;
     this.dragging = false;
@@ -536,25 +541,67 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   updatePinch(pointers = this.mapPointersDown()) {
-    if (pointers.length < 2 || this.paused || this.missionEnded) return false;
-    if (!this.pinchGesture) this.beginPinch(pointers);
-    if (!this.pinchGesture) return false;
+    if (this.paused || this.missionEnded) return false;
+    if (!this.pinchGesture) {
+      if (!this.beginPinch(pointers)) return false;
+    }
 
-    const [first, second] = pointers;
-    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-    const distance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
+    const pair = this.pinchPointers(pointers);
+    if (pair.length < 2) return false;
+    const [first, second] = pair;
     const camera = this.pinchGesture.camera;
-    const ratio = distance / Math.max(1, this.pinchGesture.startDistance);
+    const rawMidpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const rawDistance = Math.max(1, Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y));
+    const previousMidpoint = this.pinchGesture.lastMidpoint;
+    const previousDistance = Math.max(1, this.pinchGesture.lastDistance);
+
+    // Android can report the two fingers on alternating pointer events. Apply
+    // only a bounded frame-to-frame transform so one noisy event cannot throw
+    // the camera across the map or jump several zoom levels.
+    const distanceDelta = rawDistance - previousDistance;
+    let scaleRatio = 1;
+    if (Math.abs(distanceDelta) >= GAME_CONFIG.recon.pinchDistanceDeadZone) {
+      scaleRatio = Phaser.Math.Clamp(
+        rawDistance / previousDistance,
+        GAME_CONFIG.recon.pinchScaleStepMin,
+        GAME_CONFIG.recon.pinchScaleStepMax,
+      );
+    }
+
+    let midpointDx = rawMidpoint.x - previousMidpoint.x;
+    let midpointDy = rawMidpoint.y - previousMidpoint.y;
+    const midpointDistance = Math.hypot(midpointDx, midpointDy);
+    if (midpointDistance < GAME_CONFIG.recon.pinchMidpointDeadZone) {
+      midpointDx = 0;
+      midpointDy = 0;
+    } else if (midpointDistance > GAME_CONFIG.recon.pinchPanStepMax) {
+      const factor = GAME_CONFIG.recon.pinchPanStepMax / midpointDistance;
+      midpointDx *= factor;
+      midpointDy *= factor;
+    }
+    const appliedMidpoint = {
+      x: previousMidpoint.x + midpointDx,
+      y: previousMidpoint.y + midpointDy,
+    };
+
+    const anchorWorld = camera.getWorldPoint(previousMidpoint.x, previousMidpoint.y);
     const nextZoom = Phaser.Math.Clamp(
-      this.pinchGesture.startZoom * ratio,
+      camera.zoom * scaleRatio,
       this.minZoomForCamera(camera),
       GAME_CONFIG.recon.maxZoom,
     );
-
     camera.setZoom(nextZoom);
-    const after = camera.getWorldPoint(midpoint.x, midpoint.y);
-    camera.scrollX += this.pinchGesture.anchorWorld.x - after.x;
-    camera.scrollY += this.pinchGesture.anchorWorld.y - after.y;
+    const after = camera.getWorldPoint(appliedMidpoint.x, appliedMidpoint.y);
+    camera.scrollX += anchorWorld.x - after.x;
+    camera.scrollY += anchorWorld.y - after.y;
+
+    // Keep our virtual gesture state aligned with the transform we actually
+    // applied, not with a possibly-spurious raw Android sample. Large real
+    // movements catch up over subsequent events smoothly instead of snapping.
+    if (scaleRatio === 1) this.pinchGesture.lastDistance = rawDistance;
+    else this.pinchGesture.lastDistance = previousDistance * scaleRatio;
+    this.pinchGesture.lastMidpoint = appliedMidpoint;
+
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
     if (this.candidate) this.drawCandidateMarker();
     return true;
