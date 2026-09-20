@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="384" viewBox="0 0 256 384" shape-rendering="crispEdges">
+  <!-- I SPY Phase 18A supplemental environment sheet. 4x6 / 64px cells. Four-tone only. -->
+  <defs><clipPath id="cell"><rect width="64" height="64"/></clipPath></defs>
+  <rect width="256" height="384" fill="none"/>
+
+  <!-- urban_pavement -->
+  <g transform="translate(0 0)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#333333"/>
+    <path d="M0 16h64v2H0M0 44h64v2H0M18 0v64M46 0v64" stroke="#0B0B0B" stroke-width="1"/>
+    <path d="M4 7h8v2H4m18 24h10v2H22m25-20h9v2h-9M8 53h13v2H8m31 0h6v2h-6" fill="#BDBDBD"/>
+    <path d="M12 20h4v1h-4m28 9h7v1h-7m8 20h5v1h-5" fill="#F6F6EE"/>
+  </g>
+
+  <!-- urban_sidewalk -->
+  <g transform="translate(64 0)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#BDBDBD"/>
+    <path d="M0 0h64v8H0M0 56h64v8H0" fill="#333333"/>
+    <path d="M0 9h64v2H0M0 53h64v2H0M16 11v42M32 11v42M48 11v42" stroke="#333333" stroke-width="1"/>
+    <path d="M2 2h12v2H2m28 58h11v2H30" fill="#0B0B0B"/>
+  </g>
+
+  <!-- urban_alley -->
+  <g transform="translate(128 0)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#333333"/>
+    <path d="M0 0h12v64H0M52 0h12v64H52" fill="#0B0B0B"/>
+    <path d="M12 0h4v64h-4M48 0h4v64h-4" fill="#BDBDBD"/>
+    <path d="M24 9h14v3H24m-6 14h9v2h-9m19 12h10v3H37M20 53h13v2H20" fill="#0B0B0B"/>
+    <path d="M30 18h4v2h-4m-7 30h5v1h-5" fill="#F6F6EE"/>
+  </g>
+
+  <!-- urban_rubble -->
+  <g transform="translate(192 0)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#BDBDBD"/>
+    <path d="M4 47l8-18 9 5 8-19 10 16 7-9 13 25z" fill="#333333"/>
+    <path d="M8 47l8-10 8 6 7-17 7 11 10-8 9 18z" fill="#0B0B0B"/>
+    <path d="M14 33h8v4h-8m18-16h7v5h-7m11 17h9v3h-9" fill="#F6F6EE"/>
+    <path d="M6 52h52v5H6z" fill="#333333"/>
+  </g>
+
+  <!-- apartment_block -->
+  <g transform="translate(0 64)" clip-path="url(#cell)">
+    <path d="M7 11h48v45H7z" fill="#0B0B0B" transform="translate(3 3)"/>
+    <rect x="6" y="9" width="48" height="45" fill="#333333"/>
+    <path d="M8 11h44v7H8z" fill="#BDBDBD"/>
+    <g fill="#0B0B0B"><rect x="11" y="22" width="8" height="7"/><rect x="23" y="22" width="8" height="7"/><rect x="35" y="22" width="8" height="7"/><rect x="11" y="33" width="8" height="7"/><rect x="23" y="33" width="8" height="7"/><rect x="35" y="33" width="8" height="7"/><rect x="25" y="43" width="10" height="11"/></g>
+    <g fill="#F6F6EE"><rect x="12" y="23" width="6" height="2"/><rect x="24" y="23" width="6" height="2"/><rect x="36" y="23" width="6" height="2"/></g>
+  </g>
+
+  <!-- admin_block -->
+  <g transform="translate(64 64)" clip-path="url(#cell)">
+    <path d="M9 16h46v39H9z" fill="#0B0B0B" transform="translate(3 3)"/>
+    <rect x="8" y="14" width="46" height="39" fill="#333333"/>
+    <path d="M10 16h42v6H10zM12 26h38v4H12z" fill="#BDBDBD"/>
+    <g fill="#0B0B0B"><rect x="13" y="33" width="7" height="7"/><rect x="24" y="33" width="7" height="7"/><rect x="35" y="33" width="7" height="7"/><rect x="26" y="42" width="10" height="11"/></g>
+    <rect x="44" y="10" width="4" height="8" fill="#0B0B0B"/>
+  </g>
+
+  <!-- garage_workshop -->
+  <g transform="translate(128 64)" clip-path="url(#cell)">
+    <path d="M7 21h50v34H7z" fill="#0B0B0B" transform="translate(3 3)"/>
+    <rect x="6" y="19" width="50" height="34" fill="#333333"/>
+    <path d="M8 18l10-7h30l8 7z" fill="#BDBDBD"/>
+    <rect x="12" y="27" width="25" height="26" fill="#0B0B0B"/>
+    <path d="M14 29h21v4H14zM14 39h21v2H14z" fill="#BDBDBD"/>
+    <rect x="42" y="28" width="8" height="8" fill="#0B0B0B"/>
+    <rect x="43" y="29" width="6" height="2" fill="#F6F6EE"/>
+  </g>
+
+  <!-- dense_warehouse -->
+  <g transform="translate(192 64)" clip-path="url(#cell)">
+    <path d="M5 15h54v41H5z" fill="#0B0B0B" transform="translate(3 3)"/>
+    <rect x="4" y="13" width="54" height="41" fill="#333333"/>
+    <path d="M6 15h50v7H6z" fill="#BDBDBD"/>
+    <g fill="#0B0B0B"><rect x="9" y="27" width="13" height="23"/><rect x="25" y="27" width="13" height="23"/><rect x="41" y="27" width="12" height="23"/></g>
+    <path d="M10 29h11v3H10m16 0h11v3H26m16 0h10v3H42" fill="#BDBDBD"/>
+    <path d="M8 18h46M8 20h46" stroke="#F6F6EE" stroke-width="1"/>
+  </g>
+
+  <!-- damaged_building -->
+  <g transform="translate(0 128)" clip-path="url(#cell)">
+    <path d="M8 12h47v44H8z" fill="#0B0B0B" transform="translate(3 3)"/>
+    <path d="M7 10h46v44H7V31l9-6 7 6 8-13 8 9 14-6V10z" fill="#333333"/>
+    <path d="M9 12h42v6H9z" fill="#BDBDBD"/>
+    <path d="M12 35h9v9h-9m27-7h8v8h-8M26 43h9v11h-9" fill="#0B0B0B"/>
+    <path d="M15 21l8 8 7-12 9 9" stroke="#F6F6EE" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- concrete_barrier -->
+  <g transform="translate(64 128)" clip-path="url(#cell)">
+    <path d="M5 31h54l-5 18H10z" fill="#0B0B0B" transform="translate(2 3)"/>
+    <path d="M4 28h54l-5 18H9z" fill="#BDBDBD"/>
+    <path d="M8 31h46l-1 5H7z" fill="#F6F6EE"/>
+    <path d="M14 28l5 18M31 28l2 18M47 28l-3 18" stroke="#333333" stroke-width="2"/>
+  </g>
+
+  <!-- streetlight -->
+  <g transform="translate(128 128)" clip-path="url(#cell)">
+    <ellipse cx="34" cy="51" rx="11" ry="5" fill="#0B0B0B"/>
+    <rect x="29" y="16" width="5" height="36" fill="#333333"/>
+    <path d="M31 17h18v4H31z" fill="#333333"/>
+    <path d="M45 18h11v8H45z" fill="#0B0B0B"/>
+    <path d="M47 19h7v3h-7z" fill="#F6F6EE"/>
+    <rect x="30" y="18" width="2" height="20" fill="#BDBDBD"/>
+  </g>
+
+  <!-- utility_pole -->
+  <g transform="translate(192 128)" clip-path="url(#cell)">
+    <ellipse cx="34" cy="52" rx="10" ry="5" fill="#0B0B0B"/>
+    <rect x="29" y="13" width="6" height="39" fill="#333333"/>
+    <rect x="15" y="17" width="35" height="5" fill="#333333"/>
+    <circle cx="19" cy="24" r="4" fill="#0B0B0B"/><circle cx="32" cy="24" r="4" fill="#0B0B0B"/><circle cx="46" cy="24" r="4" fill="#0B0B0B"/>
+    <circle cx="19" cy="23" r="2" fill="#F6F6EE"/><circle cx="32" cy="23" r="2" fill="#F6F6EE"/><circle cx="46" cy="23" r="2" fill="#F6F6EE"/>
+  </g>
+
+  <!-- desert_sand -->
+  <g transform="translate(0 192)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#F6F6EE"/>
+    <path d="M0 15c11-4 19-3 29 1 12 4 21 3 35-2v8c-13 5-24 6-36 2-10-3-18-3-28 1zM0 44c10-3 18-2 27 1 12 4 23 3 37-2v8c-13 4-25 5-37 1-9-3-17-3-27 0z" fill="#BDBDBD"/>
+    <path d="M7 20h9v2H7m22 28h10v2H29m19-30h8v2h-8" fill="#333333"/>
+  </g>
+
+  <!-- desert_rocky -->
+  <g transform="translate(64 192)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#BDBDBD"/>
+    <path d="M4 18l8-10 11 3 5 11-9 7-12-3zM34 11l12-6 11 9-3 11-12 4-9-8zM14 42l10-8 12 6-2 13-13 5zM44 42l8-7 9 6-2 12-11 3z" fill="#333333"/>
+    <path d="M7 17l6-6 7 2-8 4zM37 13l9-5 7 5-10 3zM17 43l7-5 8 3-8 5z" fill="#F6F6EE"/>
+  </g>
+
+  <!-- desert_dune -->
+  <g transform="translate(128 192)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#F6F6EE"/>
+    <path d="M0 48c11-20 24-30 39-31 9 0 17 4 25 11v29H0z" fill="#BDBDBD"/>
+    <path d="M0 51c17-14 33-20 48-18 6 1 11 3 16 6v18H0z" fill="#333333"/>
+    <path d="M7 43c12-13 24-19 37-19" stroke="#F6F6EE" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- desert_wadi -->
+  <g transform="translate(192 192)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#BDBDBD"/>
+    <path d="M8 0c8 12 8 20 1 29S5 48 16 64h24c-11-15-12-26-4-35S45 12 38 0z" fill="#333333"/>
+    <path d="M14 0c7 12 6 20 0 29s-5 18 5 35h12c-9-16-9-27-2-36S38 11 32 0z" fill="#0B0B0B"/>
+    <path d="M18 7h8v2h-8m-3 29h10v2H15m7 17h8v2h-8" fill="#F6F6EE"/>
+  </g>
+
+  <!-- dry_scrub -->
+  <g transform="translate(0 256)" clip-path="url(#cell)">
+    <path d="M31 52V29M31 37l-12-9M31 39l13-12M31 45l-17 3M31 46l18 4" stroke="#0B0B0B" stroke-width="5"/>
+    <path d="M31 51V30M31 36l-10-8M31 39l11-11M31 44l-15 3M31 45l16 4" stroke="#333333" stroke-width="2"/>
+    <path d="M22 27l-6-3m28 3l6-4M15 48l-7 2m39-1l8 3" stroke="#BDBDBD" stroke-width="2"/>
+  </g>
+
+  <!-- dead_shrub -->
+  <g transform="translate(64 256)" clip-path="url(#cell)">
+    <path d="M32 52V22M32 29l-9-8M32 34l10-12M32 39l-14-6M32 43l15-7" stroke="#333333" stroke-width="4"/>
+    <path d="M24 21l-5-6m24 6l5-7M18 33l-7-3m36 6l8-4" stroke="#0B0B0B" stroke-width="3"/>
+    <path d="M22 52h20l5 5H17z" fill="#0B0B0B"/>
+  </g>
+
+  <!-- rock_outcrop -->
+  <g transform="translate(128 256)" clip-path="url(#cell)">
+    <path d="M5 49l9-23 11-10 10 8 9-14 15 39z" fill="#0B0B0B"/>
+    <path d="M7 46l9-20 9-8 10 10 9-13 12 31z" fill="#333333"/>
+    <path d="M15 30l10-9 6 7-12 5m20-4l6-9 5 11z" fill="#BDBDBD"/>
+    <path d="M8 46h48v5H8z" fill="#F6F6EE"/>
+  </g>
+
+  <!-- desert_road -->
+  <g transform="translate(192 256)" clip-path="url(#cell)">
+    <rect width="64" height="64" fill="#F6F6EE"/>
+    <path d="M0 19h64v29H0z" fill="#333333"/>
+    <path d="M0 21h64v3H0M0 43h64v3H0" fill="#0B0B0B"/>
+    <path d="M5 32h12v2H5m10 0h12v2H25m22 0h12v2H47" fill="#BDBDBD"/>
+  </g>
+
+  <!-- desert_checkpoint -->
+  <g transform="translate(0 320)" clip-path="url(#cell)">
+    <path d="M7 31h50v6H7z" fill="#0B0B0B"/>
+    <path d="M10 28h45v5H10z" fill="#BDBDBD"/>
+    <path d="M14 26v20M49 26v20" stroke="#333333" stroke-width="5"/>
+    <path d="M10 30l9 3 9-3 9 3 9-3 9 3" stroke="#F6F6EE" stroke-width="2" fill="none"/>
+    <rect x="44" y="13" width="12" height="11" fill="#333333"/><rect x="46" y="15" width="8" height="3" fill="#F6F6EE"/>
+  </g>
+
+  <!-- desert_shelter -->
+  <g transform="translate(64 320)" clip-path="url(#cell)">
+    <path d="M8 45l11-23h27l10 23z" fill="#0B0B0B" transform="translate(2 3)"/>
+    <path d="M7 42l11-22h27l10 22z" fill="#333333"/>
+    <path d="M11 39l10-16h21l9 16z" fill="#BDBDBD"/>
+    <path d="M27 27h10v15H27z" fill="#0B0B0B"/>
+    <path d="M15 42h36v5H15z" fill="#0B0B0B"/>
+  </g>
+
+  <!-- desert_fuel_site -->
+  <g transform="translate(128 320)" clip-path="url(#cell)">
+    <ellipse cx="21" cy="36" rx="11" ry="15" fill="#0B0B0B"/><ellipse cx="20" cy="33" rx="11" ry="15" fill="#333333"/>
+    <ellipse cx="20" cy="21" rx="10" ry="5" fill="#BDBDBD"/>
+    <ellipse cx="45" cy="38" rx="11" ry="14" fill="#0B0B0B"/><ellipse cx="44" cy="35" rx="11" ry="14" fill="#333333"/>
+    <ellipse cx="44" cy="24" rx="10" ry="5" fill="#BDBDBD"/>
+    <path d="M20 18v-6h24v9" stroke="#0B0B0B" stroke-width="3" fill="none"/>
+    <path d="M9 51h47v4H9z" fill="#F6F6EE"/>
+  </g>
+
+  <!-- desert_ruin -->
+  <g transform="translate(192 320)" clip-path="url(#cell)">
+    <path d="M8 18h45v38H8z" fill="#0B0B0B" transform="translate(3 3)"/>
+    <path d="M7 16h44v38H7V33l8-8 8 7 8-12 8 8 12-7V16z" fill="#333333"/>
+    <path d="M9 18h40v5H9z" fill="#BDBDBD"/>
+    <path d="M13 37h9v9h-9m20-4h9v12h-9" fill="#0B0B0B"/>
+    <path d="M15 26l8 6 8-12 8 8" stroke="#F6F6EE" stroke-width="2" fill="none"/>
+  </g>
+</svg>
