@@ -1140,8 +1140,7 @@ export default class ReconScene extends Phaser.Scene {
     if (!this.splitView || !this.compareCamera) return;
     const target = sourceCamera === this.compareCamera ? this.cameras.main : this.compareCamera;
     target.setZoom(sourceCamera.zoom);
-    target.scrollX = sourceCamera.scrollX;
-    target.scrollY = sourceCamera.scrollY;
+    this.setCameraScrollClamped(target, sourceCamera.scrollX, sourceCamera.scrollY);
   }
 
   startMissionTimer() {
@@ -1236,14 +1235,34 @@ export default class ReconScene extends Phaser.Scene {
     );
   }
 
+  cameraScrollLimits(camera = this.cameras.main) {
+    const zoom = Math.max(0.05, camera?.zoom ?? 1);
+    const visibleWidth = (camera?.width ?? this.scale.gameSize.width) / zoom;
+    const visibleHeight = (camera?.height ?? this.scale.gameSize.height) / zoom;
+    return {
+      maxX: Math.max(0, this.map.width - visibleWidth),
+      maxY: Math.max(0, this.map.height - visibleHeight),
+    };
+  }
+
+  setCameraScrollClamped(camera, scrollX, scrollY) {
+    const { maxX, maxY } = this.cameraScrollLimits(camera);
+    camera.scrollX = Phaser.Math.Clamp(scrollX, 0, maxX);
+    camera.scrollY = Phaser.Math.Clamp(scrollY, 0, maxY);
+    return camera;
+  }
+
   zoomAt(screenPoint, delta) {
     const context = this.getPointerContext(screenPoint);
     const camera = context.camera;
     const before = camera.getWorldPoint(screenPoint.x, screenPoint.y);
     camera.setZoom(Phaser.Math.Clamp(camera.zoom + delta, this.minZoomForCamera(camera), GAME_CONFIG.recon.maxZoom));
     const after = camera.getWorldPoint(screenPoint.x, screenPoint.y);
-    camera.scrollX += before.x - after.x;
-    camera.scrollY += before.y - after.y;
+    this.setCameraScrollClamped(
+      camera,
+      camera.scrollX + before.x - after.x,
+      camera.scrollY + before.y - after.y,
+    );
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(camera);
     if (this.candidate) this.drawCandidateMarker();
   }
@@ -1266,6 +1285,7 @@ export default class ReconScene extends Phaser.Scene {
     }
     this.cameras.main.setZoom(Phaser.Math.Clamp(view.zoom ?? GAME_CONFIG.recon.defaultZoom, this.minZoomForViewport(), GAME_CONFIG.recon.maxZoom));
     this.cameras.main.centerOn(view.x ?? this.map.width / 2, view.y ?? this.map.height / 2);
+    this.setCameraScrollClamped(this.cameras.main, this.cameras.main.scrollX, this.cameras.main.scrollY);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (showMessage) this.flashStatus('VIEW RECENTERED');
   }
@@ -1278,6 +1298,7 @@ export default class ReconScene extends Phaser.Scene {
     this.dragging = false;
     this.dragPointerId = null;
     this.dragCamera = null;
+    this.panGestureDirty = false;
     this.tapPointer = null;
     this.pinchGesture = null;
     if (this.paused) this.pauseStartedAt = this.time.now;
@@ -1325,9 +1346,10 @@ export default class ReconScene extends Phaser.Scene {
     const floor = this.minZoomForViewport(width, height);
     if (this.cameras.main.zoom < floor) {
       this.cameras.main.setZoom(floor);
-      if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
       if (this.candidate) this.drawCandidateMarker();
     }
+    this.setCameraScrollClamped(this.cameras.main, this.cameras.main.scrollX, this.cameras.main.scrollY);
+    if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     this.hudBackground.width = width;
     this.hudBorder.width = width;
     // One HUD strip spans the viewport, so the readout stays at its right
