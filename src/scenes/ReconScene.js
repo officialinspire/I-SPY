@@ -492,13 +492,18 @@ export default class ReconScene extends Phaser.Scene {
 
       if (this.pinchGesture) {
         const remaining = this.mapPointersDown().filter((item) => item.id !== pointer.id);
+        // A quick pinch can move and release between two rendered frames.
+        // pointerup already marks this contact as no longer down, so sample the
+        // released pointer explicitly before throwing the gesture state away.
+        if (this.pinchGesture.dirty) this.stepPinchGesture([pointer, ...remaining]);
         this.finishPinch(remaining);
         return;
       }
 
       // Flush the last pan sample before deciding whether this release was a
-      // tap. Android can deliver pointerup before the next game frame.
-      if (this.panGestureDirty && pointer.id === this.dragPointerId) this.stepPanGesture();
+      // tap. Android can deliver pointerup before the next game frame, and the
+      // released pointer is already isDown=false by the time this runs.
+      if (this.panGestureDirty && pointer.id === this.dragPointerId) this.stepPanGesture(pointer);
 
       const tap = allowTap
         && this.tapPointer
@@ -566,13 +571,14 @@ export default class ReconScene extends Phaser.Scene {
     this.tapPointer = null;
   }
 
-  stepPanGesture() {
+  stepPanGesture(pointerOverride = null) {
     if (!this.dragging || this.pinchGesture || this.paused || this.missionEnded) {
       this.panGestureDirty = false;
       return false;
     }
-    const pointer = this.input.manager.pointers.find((item) => item.id === this.dragPointerId);
-    if (!pointer?.isDown || !this.lastPointer) {
+    const pointer = pointerOverride
+      ?? this.input.manager.pointers.find((item) => item.id === this.dragPointerId);
+    if (!pointer || (!pointerOverride && !pointer.isDown) || !this.lastPointer) {
       this.panGestureDirty = false;
       return false;
     }
@@ -644,11 +650,11 @@ export default class ReconScene extends Phaser.Scene {
     return true;
   }
 
-  stepPinchGesture() {
+  stepPinchGesture(pointers = this.mapPointersDown()) {
     if (!this.pinchGesture || this.paused || this.missionEnded) return false;
     this.pinchGesture.dirty = false;
 
-    const pair = this.pinchPointers();
+    const pair = this.pinchPointers(pointers);
     if (pair.length < 2) return false;
     const [first, second] = pair;
     const camera = this.pinchGesture.camera;
