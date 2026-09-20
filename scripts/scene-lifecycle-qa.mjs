@@ -12,6 +12,9 @@ const briefing = read('src/scenes/MissionBriefingScene.js');
 const results = read('src/scenes/ResultsScene.js');
 const enhanced = read('src/scenes/EnhancedReconScene.js');
 const weather = read('src/ui/weatherOverlay.js');
+const intro = read('src/scenes/StartIntroScene.js');
+const main = read('src/main.js');
+const menu = read('src/scenes/MainMenuScene.js');
 
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.missionEnded = false;[\s\S]*?this\.resolvingIdentification = false;/.test(recon),
@@ -71,10 +74,78 @@ check(
   'mission briefing surfaces the environmental condition',
 );
 
+/* --- Start gate ----------------------------------------------------- *
+ * The gate is the session's only trusted user gesture. A device that
+ * cannot decode or download the intro used to have the gate dismissed for
+ * it, which skipped that gesture and left music and SFX locked for the
+ * whole run.                                                             */
+check(
+  /onVideoUnavailable = \(\) => \{\s*this\.videoUsable = false;\s*if \(this\.started\) this\.finish\(\);/.test(intro),
+  'an intro media failure before START marks the video unusable instead of dismissing the gate',
+);
+check(
+  /beginIntro\(\) \{[\s\S]*?unlockAudio\(\);[\s\S]*?this\.sound\.unlock\(\);[\s\S]*?musicManager\.unlock\(\);[\s\S]*?unlockSamples\(\);[\s\S]*?if \(!this\.videoUsable/.test(intro),
+  'START unlocks every audio channel before it decides whether the intro can play',
+);
+check(
+  intro.includes('PLAYBACK_WATCHDOG_MS') && /this\.watchdog = window\.setTimeout/.test(intro),
+  'a requested intro that never starts playing still hands the analyst the console',
+);
+check(
+  intro.includes("this.skipButton.addEventListener('click', this.onSkip)")
+    && intro.includes("this.skipButton?.removeEventListener('click', this.onSkip)"),
+  'SKIP INTRO answers click as well as pointerdown, and removes both',
+);
+
+/* --- Viewport ------------------------------------------------------- *
+ * RESIZE mode can record a new parent size and then refresh against the
+ * old one, leaving a rotated phone rendering the previous orientation's
+ * canvas with nothing left to correct it.                                */
+check(
+  main.includes('game.scale.setParentSize(width, height)')
+    && /Math\.abs\(gameSize\.width - width\) <= 1 && Math\.abs\(gameSize\.height - height\) <= 1/.test(main),
+  'the app re-syncs the canvas only when it no longer matches the space it fills',
+);
+check(
+  ['resize', 'orientationchange'].every((event) => main.includes(`addEventListener('${event}', requestViewportSync)`))
+    && main.includes('new ResizeObserver(requestViewportSync)')
+    && main.includes('window.visualViewport?.addEventListener'),
+  'viewport sync listens to resize, orientation, visual viewport and the parent element',
+);
+
+/* --- Console layout -------------------------------------------------- *
+ * A screen shorter than the smallest density tier used to compose past
+ * the bottom edge, which put SYSTEM controls where nothing could reach
+ * them.                                                                  */
+check(
+  /for \(let pass = 0; pass < 4 && composed\.total > available; pass \+= 1\)/.test(menu)
+    && menu.includes('compressTier(tier, available / composed.total)'),
+  'the console compresses its smallest tier rather than composing off-screen',
+);
+check(
+  menu.includes('COMPRESSION_FLOORS') && /systemHeight: 30, systemFont: 8/.test(menu),
+  'compression stops at floors that keep controls legible and tappable',
+);
+check(
+  menu.includes('this.systemLabelRatio = this.measureSystemLabelRatio()')
+    && menu.includes('systemColumns(tier, innerWidth, this.systemButtons.length, this.systemLabelRatio)'),
+  'SYSTEM column count is measured from the rendered label, not estimated',
+);
+check(
+  menu.includes('const shortConsole = height < 470;') && menu.includes('const stackCards = !shortConsole'),
+  'a short console keeps the tasking cards on one row instead of stacking them',
+);
+
+/* --- Scene data ------------------------------------------------------ */
+check(
+  !/^\s*this\.data = data;/m.test(results) && results.includes('this.debrief = data;'),
+  'the debrief payload does not overwrite the scene data manager',
+);
+
 if (failures.length) {
   console.error(`I SPY scene lifecycle QA failed (${failures.length}):`);
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 14 repeat-mission, weather-lifecycle, and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 26 repeat-mission, start-gate, viewport, console-layout and debrief-idempotency checks.');
 }

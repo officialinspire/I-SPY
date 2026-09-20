@@ -14,7 +14,9 @@ export default class ResultsScene extends Phaser.Scene {
   constructor() { super('Results'); }
 
   create(data = {}) {
-    this.data = data;
+    // Not `this.data`: Phaser's DataManager plugin already owns that property
+    // on every scene, and overwriting it hides the scene's own data store.
+    this.debrief = data;
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
     const success = data.success === true;
     const mission = data.mission ?? createLocateMission();
@@ -178,7 +180,7 @@ export default class ResultsScene extends Phaser.Scene {
     // The debrief is measured before the panel is drawn, so the panel can be
     // sized to the debrief instead of stretching to the bottom of the window
     // and leaving a deep empty box under the last ledger line.
-    const extendedDebrief = Boolean(this.data?.mission?.operationSeries);
+    const extendedDebrief = Boolean(this.debrief?.mission?.operationSeries);
     const baseBodyFont = short ? (compact ? 9 : 10) : (compact ? 11 : 13);
     this.body
       .setFontSize(extendedDebrief ? Math.max(7, baseBodyFont - 2) : baseBodyFont)
@@ -197,7 +199,7 @@ export default class ResultsScene extends Phaser.Scene {
     this.body.setPosition(panelLeft + paddingX, bodyTop);
 
     this.panelGraphics.clear();
-    const statusAccent = hexToNumber(this.data?.success === true ? UI_TOKENS.color.phosphor : UI_TOKENS.color.rust);
+    const statusAccent = hexToNumber(this.debrief?.success === true ? UI_TOKENS.color.phosphor : UI_TOKENS.color.rust);
     this.panelGraphics.fillStyle(hexToNumber(UI_TOKENS.surface.panel), UI_TOKENS.surface.panelAlpha).fillRect(panelLeft, panelTop, panelWidth, panelHeight);
     this.panelGraphics.lineStyle(1, hexToNumber(UI_TOKENS.surface.panelBorder), UI_TOKENS.surface.panelBorderAlpha).strokeRect(panelLeft, panelTop, panelWidth, panelHeight);
     this.panelGraphics.lineStyle(2, statusAccent, 0.7).lineBetween(panelLeft, panelTop + 48, panelLeft + panelWidth, panelTop + 48);
