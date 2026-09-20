@@ -1,0 +1,62 @@
+name: PWA offline QA
+
+on:
+  push:
+    branches: [pwa-offline-support]
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'public/**'
+      - 'src/main.js'
+      - 'src/pwa/**'
+      - 'src/runtime-config.js'
+      - 'scripts/build-pwa.mjs'
+      - 'scripts/validate-pwa-build.mjs'
+      - 'scripts/pwa-source-qa.mjs'
+      - 'scripts/offline-pwa-e2e.mjs'
+      - '.github/workflows/pwa-offline-qa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Run release and PWA source validation
+        run: npm run validate
+
+      - name: Build production PWA
+        run: npm run build
+
+      - name: Install Chromium for offline browser QA
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start production preview
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/ispy-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/ispy-preview.log
+          exit 1
+
+      - name: Prove cold offline restart and gameplay
+        run: npm run qa:offline
