@@ -9,6 +9,7 @@ import { validateCountAnswer, calculateCountScore } from '../game/countMission.j
 import { validateChangeIdentification, calculateChangeScore } from '../game/changeDetectionMission.js';
 import { assessMissionPerformance, applyPerformanceBonus } from '../game/missionPerformance.js';
 import { musicManager, MUSIC_STATES } from '../audio/musicManager.js';
+import { createWeatherOverlay as createMissionWeatherOverlay } from '../ui/weatherOverlay.js';
 
 export default class ReconScene extends Phaser.Scene {
   /** Subclasses that are a different scene (ANALYST TRAINING) pass their own key. */
@@ -49,6 +50,7 @@ export default class ReconScene extends Phaser.Scene {
     this.createGridOverlay();
     this.createMissionOverlay();
     this.createAtmosphereOverlay();
+    this.createWeatherOverlay();
     this.createSelectionOverlay();
     this.createUiCamera();
     this.bindInput();
@@ -305,6 +307,19 @@ export default class ReconScene extends Phaser.Scene {
   createAtmosphereOverlay() {
     this.atmosphereGraphics = this.add.graphics().setScrollFactor(0).setDepth(930);
     this.redrawAtmosphere(this.scale.gameSize.width, this.scale.gameSize.height);
+  }
+
+  createWeatherOverlay() {
+    this.weatherOverlay?.destroy();
+    this.weatherOverlay = createMissionWeatherOverlay(this, {
+      mission: this.mission,
+      reducedMotion: this.reducedMotion === true,
+      getBounds: (width, height) => {
+        const top = GAME_CONFIG.recon.hudHeight + 4;
+        const bottom = Math.max(top + 1, height - this.railHeight(width) - 4);
+        return { top, bottom };
+      },
+    });
   }
 
   redrawAtmosphere(width, height) {
@@ -774,7 +789,7 @@ export default class ReconScene extends Phaser.Scene {
 
   getUiObjects() {
     const objects = [this.hud, this.statusText, this.answerText, this.passStatusText, this.atmosphereGraphics,
-      this.tallyFrame, this.adjustCaption, this.submitCaption, this.passCaption];
+      this.weatherOverlay?.graphics, this.tallyFrame, this.adjustCaption, this.submitCaption, this.passCaption];
     const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
     buttons.forEach((button) => objects.push(...button.getObjects()));
     return objects.filter(Boolean);
@@ -920,6 +935,7 @@ export default class ReconScene extends Phaser.Scene {
     }
     this.pauseButton.setLabel(this.paused ? 'RESUME' : 'PAUSE').setVariant(this.paused ? 'warning' : 'secondary');
     this.setMissionControlsEnabled(!this.paused);
+    this.weatherOverlay?.setPaused(this.paused);
     this.refreshModeStrip();
     this.flashStatus(this.paused ? 'RECON PAUSED // ESC TO RESUME' : 'RECON RESUMED');
   }
@@ -967,6 +983,7 @@ export default class ReconScene extends Phaser.Scene {
     const readoutRight = width - 16;
     this.timerText.setPosition(readoutRight, 11);
     if (!this.splitView) this.redrawAtmosphere(width, height);
+    this.weatherOverlay?.resize();
     const compact = width < 680;
 
     if (this.isChangeMode && this.splitView && width < GAME_CONFIG.change.splitViewMinWidth) {
@@ -1063,6 +1080,8 @@ export default class ReconScene extends Phaser.Scene {
   cleanup() {
     this.timerEvent?.remove(false);
     this.statusTimer?.remove(false);
+    this.weatherOverlay?.destroy();
+    this.weatherOverlay = null;
     if (this.splitView) this.disableSplitView(false);
     this.scale.off('resize', this.onResize, this);
     this.input.removeAllListeners();
