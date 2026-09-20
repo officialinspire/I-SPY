@@ -264,6 +264,28 @@ const PAGE_HELPERS = () => {
     domOverlays() {
       return [...document.getElementById('app').children].map((node) => node.tagName.toLowerCase());
     },
+    /**
+     * Whether the game is still stepping.
+     *
+     * A throw inside a step stops Phaser's animation-frame loop for good:
+     * queued scene transitions are never processed, so the symptom is a
+     * scene that simply never arrives. Reporting the loop separates that
+     * from a scene that is merely slow to build.
+     */
+    loopState() {
+      const loop = game().loop;
+      return {
+        running: loop?.running ?? null,
+        time: Math.round(loop?.time ?? 0),
+        frame: loop?.frame ?? null,
+        fps: Math.round(loop?.actualFps ?? 0),
+        isPaused: game().isPaused ?? null,
+      };
+    },
+    /** Every scene and the state Phaser has it in. */
+    sceneStatus() {
+      return game().scene.scenes.map((scene) => `${scene.scene.key}:${scene.sys.settings.status}`);
+    },
   };
 };
 
@@ -284,7 +306,7 @@ async function screenHash(page) {
   return hash(await page.screenshot());
 }
 
-async function waitForScene(page, key, label, timeout = 12_000) {
+async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
   try {
     await page.waitForFunction(
       (sceneKey) => window.__qa?.activeScenes().includes(sceneKey),
@@ -295,8 +317,14 @@ async function waitForScene(page, key, label, timeout = 12_000) {
     const state = await page.evaluate(() => ({
       active: window.__qa?.activeScenes() ?? null,
       overlays: window.__qa?.domOverlays() ?? null,
-    })).catch(() => null);
-    throw new Error(`${label}: scene '${key}' never became active // ${JSON.stringify(state)} // ${error.message}`);
+      loop: window.__qa?.loopState() ?? null,
+      scenes: window.__qa?.sceneStatus() ?? null,
+    })).catch((evaluationError) => ({ evaluationFailed: String(evaluationError) }));
+    // A scene that never arrives is usually a scene whose create() threw, and
+    // a throw inside a game step stops the loop for good, so the collected
+    // browser errors are the diagnosis rather than a footnote to it.
+    const reported = errors.length ? errors.join(' | ') : 'no browser errors';
+    throw new Error(`${label}: scene '${key}' never became active // ${JSON.stringify(state)} // ${reported} // ${error.message}`);
   }
 }
 
@@ -573,6 +601,12 @@ async function runProfile(profile) {
       throw new Error(`start gate never appeared // ${JSON.stringify(diagnostic)} // ${errors.join(' | ')} // ${error.message}`);
     }
 
+    // The gate's DOM is appended during StartIntro's create(), so the button
+    // can be on screen fractionally before the scene is the running one.
+    // Sequencing on the scene rather than on its DOM keeps the handover
+    // deterministic on every engine.
+    await waitForScene(page, 'StartIntro', `${profile.name}/intro`, 12_000, errors);
+
     if (profile.domIntroUnreachable) {
       // Headless Playwright WebKit does not deliver synthesized touch or click
       // events to this DOM media gate, so the gate is only asserted to exist
@@ -586,7 +620,9 @@ async function runProfile(profile) {
     }
 
     /* --- Menu ------------------------------------------------------- */
-    await waitForScene(page, 'MainMenu', `${profile.name}/menu`, 20_000);
+    await waitForScene(page, 'MainMenu', `${profile.name}/menu`, 20_000, errors);
+    const loop = await page.evaluate(() => window.__qa.loopState());
+    if (!loop.running) throw new Error(`${profile.name}/menu: the game loop has stopped // ${JSON.stringify(loop)}`);
     await page.waitForTimeout(250);
     await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
@@ -596,7 +632,7 @@ async function runProfile(profile) {
     await tapControl(page, profile, 'MainMenu', 'RANDOM MISSION', `${profile.name}/menu`);
 
     /* --- Briefing --------------------------------------------------- */
-    await waitForScene(page, 'MissionBriefing', `${profile.name}/briefing`);
+    await waitForScene(page, 'MissionBriefing', `${profile.name}/briefing`, 12_000, errors);
     await page.waitForTimeout(250);
     await assertViewport(page, profile.viewport, `${profile.name}/briefing`);
     const briefingHash = await screenHash(page);
@@ -605,7 +641,7 @@ async function runProfile(profile) {
     await tapControl(page, profile, 'MissionBriefing', 'ACQUIRE IMAGERY', `${profile.name}/briefing`);
 
     /* --- Recon ------------------------------------------------------ */
-    await waitForScene(page, 'Recon', `${profile.name}/recon`);
+    await waitForScene(page, 'Recon', `${profile.name}/recon`, 12_000, errors);
     await page.waitForTimeout(400);
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
 
@@ -700,7 +736,7 @@ async function runProfile(profile) {
     else await playLocateOrChange(page, profile, context$);
 
     /* --- Debrief ---------------------------------------------------- */
-    await waitForScene(page, 'Results', `${profile.name}/results`);
+    await waitForScene(page, 'Results', `${profile.name}/results`, 12_000, errors);
     await page.waitForTimeout(350);
     await assertViewport(page, profile.viewport, `${profile.name}/results`);
     const results = await page.evaluate(() => window.__qa.resultsSummary());
@@ -715,10 +751,10 @@ async function runProfile(profile) {
      * A completed debrief has to hand the analyst a fresh, playable task.
      * Repeat-mission regressions have reached players from here before.     */
     await tapControl(page, profile, 'Results', 'NEXT MISSION', `${profile.name}/results`);
-    await waitForScene(page, 'MissionBriefing', `${profile.name}/briefing-2`);
+    await waitForScene(page, 'MissionBriefing', `${profile.name}/briefing-2`, 12_000, errors);
     await page.waitForTimeout(250);
     await tapControl(page, profile, 'MissionBriefing', 'ACQUIRE IMAGERY', `${profile.name}/briefing-2`);
-    await waitForScene(page, 'Recon', `${profile.name}/recon-2`);
+    await waitForScene(page, 'Recon', `${profile.name}/recon-2`, 12_000, errors);
     await page.waitForTimeout(400);
     const second = await page.evaluate(() => window.__qa.missionSummary());
     if (!second) throw new Error(`${profile.name}/recon-2: second mission never built`);
