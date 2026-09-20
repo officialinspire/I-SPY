@@ -13,6 +13,29 @@ import { feedback, unlockAudio } from '../audio/feedback.js';
 const HOVER_TICK_INTERVAL_MS = 90;
 let lastHoverTickAt = 0;
 
+/**
+ * The control currently holding a press, and the pointer holding it.
+ *
+ * Only one control can be armed at a time. Two arming together is a palm, a
+ * second thumb or a phone registering a stray contact — never an intention,
+ * because nothing on this console is operated with two controls at once. The
+ * lock is released by the pointer that took it, and a lock whose pointer is
+ * no longer down is treated as stale and taken over, so a control destroyed
+ * or hidden mid-press can never leave the console unpressable.
+ */
+let armLock = null;
+
+function lockHeldByAnother(token) {
+  if (!armLock || armLock.token === token) return false;
+  if (armLock.pointer?.isDown) return true;
+  armLock = null;
+  return false;
+}
+
+function releaseLock(token) {
+  if (armLock?.token === token) armLock = null;
+}
+
 function hoverTick() {
   const now = globalThis.performance?.now?.() ?? Date.now();
   if (now - lastHoverTickAt < HOVER_TICK_INTERVAL_MS) return;
@@ -302,6 +325,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   const releasePress = () => {
     armedPointerId = null;
+    releaseLock(background);
     if (!status.pressed) return;
     status.pressed = false;
     applyVisual();
@@ -309,6 +333,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   const clearPointerState = () => {
     armedPointerId = null;
+    releaseLock(background);
     if (!status.hovered && !status.pressed) return;
     status.hovered = false;
     status.pressed = false;
@@ -333,8 +358,22 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     hoverTick();
     options.onHover?.(true);
   });
-  background.on('pointerout', () => {
+  /**
+   * A press belongs to the pointer that made it.
+   *
+   * These release paths exist to rescue a press that ended somewhere this
+   * control never heard about. They used to fire for any pointer, which on a
+   * touch screen means any other finger: a second thumb brushing the screen
+   * and lifting disarmed the control the analyst was deliberately holding,
+   * and the press then did nothing when they let go. Measured with two
+   * fingers on the recon rail: releasing the second one cancelled the first.
+   */
+  const ownsPress = (pointer) => armedPointerId === null || armedPointerId === (pointer?.id ?? 0);
+
+  background.on('pointerout', (pointer) => {
+    if (!ownsPress(pointer)) return;
     armedPointerId = null;
+    releaseLock(background);
     status.hovered = false;
     status.pressed = false;
     applyVisual();
@@ -354,6 +393,10 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   background.on('pointerdown', (pointer) => {
     unlockAudio();
     if (!status.enabled || !pointerAllowed(pointer)) return;
+    // A second control pressed while one is already held belongs to a finger
+    // the analyst did not mean to put down.
+    if (lockHeldByAnother(background)) return;
+    armLock = { token: background, pointer };
     armedPointerId = pointer?.id ?? 0;
     status.focused = false;
     status.pressed = true;
@@ -364,6 +407,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     // a drag (scrolling a grid) must not activate when the finger lifts.
     const armed = armedPointerId !== null && armedPointerId === (pointer?.id ?? 0) && pointerAllowed(pointer);
     armedPointerId = null;
+    releaseLock(background);
     status.pressed = false;
     if (pointer?.wasTouch) status.hovered = false;
     applyVisual();
@@ -373,7 +417,10 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   background.on('pointercancel', clearPointerState);
 
   // Safety nets: pointer released off-canvas, or the pointer left the game.
-  const onSceneRelease = () => releasePress();
+  const onSceneRelease = (pointer) => {
+    if (!ownsPress(pointer)) return;
+    releasePress();
+  };
   const onGameOut = () => clearPointerState();
   scene.input.on('pointerup', onSceneRelease);
   scene.input.on('pointerupoutside', onSceneRelease);
@@ -428,6 +475,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       if (status.visible === visible) return controller;
       status.visible = visible;
       armedPointerId = null;
+      releaseLock(background);
       status.hovered = false;
       status.pressed = false;
       if (!visible) status.focused = false;
@@ -445,6 +493,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       if (status.enabled === enabled) return controller;
       status.enabled = enabled;
       armedPointerId = null;
+      releaseLock(background);
       if (!enabled) {
         status.hovered = false;
         status.pressed = false;
@@ -509,6 +558,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     },
     destroy() {
       armedPointerId = null;
+      releaseLock(background);
       accentPulse?.remove();
       motionTween?.remove();
       scene.input.off('pointerup', onSceneRelease);

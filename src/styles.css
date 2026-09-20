@@ -159,6 +159,19 @@ html[data-scanlines="off"] body::after {
   outline-offset: 4px;
 }
 
+/*
+ * The gate's parting shield. Transparent and briefly on top of everything,
+ * so the tail of the press that dismissed the gate cannot reach the console
+ * that has just appeared underneath.
+ */
+.intro-handover {
+  position: absolute;
+  inset: 0;
+  z-index: 101;
+  background: transparent;
+  touch-action: none;
+}
+
 .intro-video {
   position: absolute;
   inset: 0;

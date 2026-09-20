@@ -13,6 +13,69 @@ import { unlockSamples } from '../audio/sampleFeedback.js';
 const PLAYBACK_WATCHDOG_MS = 6000;
 
 /**
+ * How long the gate keeps swallowing input after it has handed over.
+ *
+ * Long enough to cover the compatibility mouse cascade, which a mobile
+ * browser sends up to about 300ms after an un-prevented touchend.
+ */
+const HANDOVER_SHIELD_MS = 450;
+
+const SHIELD_EVENTS = Object.freeze([
+  'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click',
+  'touchstart', 'touchend', 'contextmenu',
+]);
+
+/**
+ * Swallow the remainder of the gesture that dismissed the start gate.
+ *
+ * The gate is a DOM layer; the console behind it is a canvas. A press that
+ * dismisses the gate has to act on pointerdown, because that press is the
+ * session's one trusted gesture and video.play() and the audio unlock have
+ * to run inside it — so the gate is gone while the finger is still down.
+ * What arrives next is the rest of that same press. With no touchend handler
+ * left to call preventDefault, a mobile browser follows the tap with the
+ * compatibility mouse cascade — mousedown, mouseup, click — at the
+ * coordinates it was made, and mousedown plus mouseup is a complete press as
+ * far as Phaser is concerned. Measured on a 412x915 phone: one tap on START
+ * launched the COUNT mission that had appeared under the START button.
+ *
+ * So the gate does not simply vanish. It leaves behind a transparent shield
+ * that eats every input event until the tail of that gesture has passed.
+ *
+ * It stands for a fixed window rather than standing down on the click that
+ * ends a cascade: engines disagree about which events a dismissed layer
+ * still sees and in what order, and a shield that can be talked into leaving
+ * early is no shield. The window costs one ignored press at the handover, in
+ * exchange for never launching a mission the analyst did not choose.
+ *
+ * It deliberately outlives the scene: the press it is guarding against
+ * arrives after the console has already started.
+ */
+function shieldHandover(host) {
+  if (!host || typeof document === 'undefined') return;
+  const shield = document.createElement('div');
+  shield.className = 'intro-handover';
+  shield.setAttribute('aria-hidden', 'true');
+  let timer = null;
+
+  function remove() {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = null;
+    SHIELD_EVENTS.forEach((type) => shield.removeEventListener(type, swallow, true));
+    shield.remove();
+  }
+
+  function swallow(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  SHIELD_EVENTS.forEach((type) => shield.addEventListener(type, swallow, true));
+  host.appendChild(shield);
+  timer = window.setTimeout(remove, HANDOVER_SHIELD_MS);
+}
+
+/**
  * The only pre-menu route. Keeping the media gate in its own scene prevents
  * browser autoplay policy and DOM video lifecycle from leaking into missions.
  */
@@ -23,6 +86,10 @@ export default class StartIntroScene extends Phaser.Scene {
     musicManager.request(MUSIC_STATES.SILENT);
     this.started = false;
     this.finished = false;
+    // Set only by a press, and consumed by the handover: a gate dismissed by
+    // the keyboard, by the video ending, by the watchdog or by automation has
+    // no gesture still in flight and nothing to shield the console from.
+    this.dismissedByPress = false;
     // The branded intro is optional decoration. The start gate is not: it is
     // the one user gesture that unlocks Web Audio for the whole session.
     this.videoUsable = true;
@@ -49,6 +116,7 @@ export default class StartIntroScene extends Phaser.Scene {
 
     this.onStartPointer = (event) => {
       event.preventDefault();
+      this.dismissedByPress = true;
       this.beginIntro();
     };
     this.onKey = (event) => {
@@ -63,6 +131,7 @@ export default class StartIntroScene extends Phaser.Scene {
     this.onSkip = (event) => {
       event.preventDefault();
       event.stopPropagation();
+      this.dismissedByPress = true;
       this.finish();
     };
 
@@ -120,6 +189,10 @@ export default class StartIntroScene extends Phaser.Scene {
     this.skipButton.classList.add('is-visible');
     this.skipButton.focus({ preventScroll: true });
 
+    // The intro is going to play, so this press ends long before the gate
+    // does and leaves no tail for the handover to guard against.
+    this.dismissedByPress = false;
+
     // Playback is deliberately requested only here, in the initiating user
     // gesture. A rejected promise is a valid route onward, never a dead end.
     const playback = this.video.play();
@@ -143,6 +216,12 @@ export default class StartIntroScene extends Phaser.Scene {
     this.finished = true;
     this.clearWatchdog();
     this.video?.pause();
+    // Raised before the gate comes down, so the console never appears
+    // unguarded under a press that is still in progress.
+    if (this.dismissedByPress) {
+      this.dismissedByPress = false;
+      shieldHandover(this.overlay?.parentElement ?? document.getElementById('app'));
+    }
     this.destroyOverlay();
     this.scene.start('MainMenu');
   }

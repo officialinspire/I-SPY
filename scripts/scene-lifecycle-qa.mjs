@@ -295,6 +295,47 @@ check(
   'generated LOCATE can continue through multiple required contacts before mission completion',
 );
 
+/* --- Handover and press ownership -------------------------------------- *
+ * The gate is a DOM layer over a canvas and has to act on pointerdown, so it
+ * is gone while the finger is still down and the browser's compatibility
+ * mouse cascade lands on the console underneath. And a press belongs to the
+ * pointer that made it: the release safety nets used to fire for any pointer,
+ * so a second finger lifting cancelled the press the analyst was holding.   */
+check(
+  intro.includes('function shieldHandover(host)')
+    && /finish\(\) \{[\s\S]*?shieldHandover\([\s\S]*?this\.destroyOverlay\(\);/.test(intro),
+  'the start gate raises its handover shield before it comes down',
+);
+check(
+  /if \(this\.dismissedByPress\) \{\s*this\.dismissedByPress = false;\s*shieldHandover\(/.test(intro)
+    && intro.includes('this.dismissedByPress = true;'),
+  'the shield is raised only for a press, which is the only dismissal with a tail to guard',
+);
+check(
+  intro.includes("shield.className = 'intro-handover'")
+    && /SHIELD_EVENTS[\s\S]*?'mousedown', 'mouseup', 'click'/.test(intro)
+    && intro.includes('event.preventDefault();'),
+  'the shield swallows the compatibility mouse cascade, not just clicks',
+);
+check(
+  /\.intro-handover \{[\s\S]*?position: absolute;[\s\S]*?inset: 0;/.test(styles)
+    && /\.intro-handover \{[\s\S]*?z-index: 101;/.test(styles),
+  'the shield covers the console it is guarding',
+);
+check(
+  button.includes('const ownsPress = (pointer) => armedPointerId === null || armedPointerId === (pointer?.id ?? 0);')
+    && /const onSceneRelease = \(pointer\) => \{\s*if \(!ownsPress\(pointer\)\) return;/.test(button)
+    && /background\.on\('pointerout', \(pointer\) => \{\s*if \(!ownsPress\(pointer\)\) return;/.test(button),
+  'only the pointer that armed a control can release it',
+);
+check(
+  button.includes('let armLock = null;')
+    && button.includes('if (lockHeldByAnother(background)) return;')
+    && button.includes('if (armLock.pointer?.isDown) return true;')
+    && (button.match(/releaseLock\(background\)/g) ?? []).length >= 6,
+  'one control at a time, and a lock whose pointer is gone is taken over rather than stranding the console',
+);
+
 /* --- Touch targets ---------------------------------------------------- *
  * A control shorter than the 44px minimum grows its hit area to reach it.
  * Two grown hit areas that meet are worse than two small ones: Phaser gives
