@@ -32,8 +32,8 @@ check(
   'ReconScene resets resolvingIdentification for every mission create',
 );
 check(
-  /bindInput\(\) \{[\s\S]*?this\.controlPressed = false;[\s\S]*?this\.controlReleased = false;[\s\S]*?this\.tapPointer = null;/.test(recon),
-  'ReconScene resets transient pointer/control guards when rebinding input',
+  /bindInput\(\) \{[\s\S]*?this\.controlPointerIds = new Set\(\);[\s\S]*?this\.controlReleasedPointerIds = new Set\(\);[\s\S]*?this\.tapPointer = null;/.test(recon),
+  'ReconScene resets pointer-specific control ownership and tap state when rebinding input',
 );
 check(
   /create\(data = \{\}\) \{[\s\S]*?this\.totalPausedMs = 0;[\s\S]*?this\.pauseStartedAt = null;/.test(recon),
