@@ -516,6 +516,14 @@ export default class ReconScene extends Phaser.Scene {
     this.input.on('pointerupoutside', (pointer) => releasePointer(pointer, false));
     this.input.on('gameout', () => this.cancelActiveMapGesture());
 
+    // Phaser normally translates touch cancellation into a release, but
+    // Android/Chrome can cancel a contact at the DOM layer without a matching
+    // scene pointerup when the browser/OS temporarily takes the gesture.
+    // Never let stale touch ownership survive into the next interaction.
+    this.nativeGestureCancel = () => this.cancelActiveMapGesture();
+    this.game.canvas?.addEventListener('touchcancel', this.nativeGestureCancel, { passive: true });
+    this.game.canvas?.addEventListener('pointercancel', this.nativeGestureCancel, { passive: true });
+
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       if (this.paused || this.missionEnded || this.isHudPoint(pointer)) return;
       this.zoomAt(pointer, deltaY > 0 ? -GAME_CONFIG.recon.zoomStep : GAME_CONFIG.recon.zoomStep);
@@ -1527,6 +1535,12 @@ export default class ReconScene extends Phaser.Scene {
   }
 
   cleanup() {
+    if (this.nativeGestureCancel) {
+      this.game.canvas?.removeEventListener('touchcancel', this.nativeGestureCancel);
+      this.game.canvas?.removeEventListener('pointercancel', this.nativeGestureCancel);
+      this.nativeGestureCancel = null;
+    }
+    this.cancelActiveMapGesture();
     this.timerEvent?.remove(false);
     this.statusTimer?.remove(false);
     this.weatherOverlay?.destroy();
