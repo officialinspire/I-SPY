@@ -11,6 +11,8 @@ const recon = read('src/scenes/ReconScene.js');
 const briefing = read('src/scenes/MissionBriefingScene.js');
 const results = read('src/scenes/ResultsScene.js');
 const enhanced = read('src/scenes/EnhancedReconScene.js');
+const intro = read('src/scenes/StartIntroScene.js');
+const main = read('src/main.js');
 const weather = read('src/ui/weatherOverlay.js');
 
 check(
@@ -67,6 +69,19 @@ check(
   'weather overlay removes its timer and graphics on destroy',
 );
 check(
+  intro.includes("addEventListener('touchend', this.onStartPointer")
+    && intro.includes("addEventListener('touchend', this.onSkip")
+    && intro.includes("removeEventListener('touchend', this.onStartPointer")
+    && intro.includes("removeEventListener('touchend', this.onSkip"),
+  'intro start and skip retain explicit iPhone Safari touch fallbacks and cleanup',
+);
+check(
+  main.includes("new ResizeObserver(queueViewportSync)")
+    && main.includes("game.scale.setGameSize(width, height)")
+    && main.includes("window.visualViewport?.addEventListener('resize', queueViewportSync"),
+  'game host resynchronizes Phaser dimensions across mobile viewport and orientation changes',
+);
+check(
   briefing.includes("CONDITIONS: ${this.mission.condition ?? 'CLEAR'}"),
   'mission briefing surfaces the environmental condition',
 );
@@ -76,5 +91,5 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log('I SPY scene lifecycle QA passed: 14 repeat-mission, weather-lifecycle, and debrief-idempotency checks.');
+  console.log('I SPY scene lifecycle QA passed: 16 repeat-mission, viewport/touch, weather-lifecycle, and debrief-idempotency checks.');
 }
