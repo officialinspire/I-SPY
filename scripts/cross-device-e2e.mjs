@@ -49,6 +49,21 @@ const PROFILES = [
     webkitDomIntroClick: true,
   },
   {
+    // The narrow end of the phone range (iPhone SE, most 360px Androids), where
+    // a rail tuned on a wider handset used to stack its controls on top of each
+    // other and a short console pushed SETTINGS off the bottom of the screen.
+    name: 'compact-phone-chromium',
+    engine: chromium,
+    launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader'] },
+    viewport: { width: 360, height: 640 },
+    rotateTo: { width: 640, height: 360 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 3,
+    mode: 'COUNT',
+    map: 'greywall-district',
+  },
+  {
     name: 'android-chromium',
     engine: chromium,
     launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader'] },
@@ -136,6 +151,67 @@ async function assertViewport(page, expected, label) {
       || metrics.canvas.height < Math.max(1, metrics.innerHeight - 4)) {
     fail('canvas does not fill the safe viewport');
   }
+}
+
+/**
+ * Every live control has to own its own pixels.
+ *
+ * Phaser gives an overlapping hit area to whichever object is drawn last, so
+ * two controls sharing pixels is not a cosmetic problem: pressing one of them
+ * runs the other, with nothing on screen to say why. A control pushed outside
+ * the viewport is worse still, because nothing can reach it and no scene here
+ * scrolls. Both used to happen on narrow phones, so both are gated.
+ */
+async function assertTouchTargets(page, label) {
+  const report = await page.evaluate(() => window.__ISPY_QA__?.touchTargets?.() ?? null);
+  if (!report) throw new Error(`${label}: touch target audit unavailable`);
+
+  const overlaps = [];
+  for (let i = 0; i < report.targets.length; i += 1) {
+    for (let j = i + 1; j < report.targets.length; j += 1) {
+      const a = report.targets[i];
+      const b = report.targets[j];
+      const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+      const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      if (overlapX > 0.5 && overlapY > 0.5) {
+        overlaps.push(`${a.name} / ${b.name} share ${Math.round(overlapX)}x${Math.round(overlapY)}px`);
+      }
+    }
+  }
+  if (overlaps.length) throw new Error(`${label}: overlapping touch targets // ${overlaps.join(' | ')}`);
+
+  const unreachable = report.targets
+    .filter((target) => target.x < -0.5 || target.y < -0.5
+      || target.x + target.width > report.width + 0.5
+      || target.y + target.height > report.height + 0.5)
+    .map((target) => `${target.name} @ ${Math.round(target.x)},${Math.round(target.y)} `
+      + `${Math.round(target.width)}x${Math.round(target.height)} in ${report.width}x${report.height}`);
+  if (unreachable.length) throw new Error(`${label}: touch targets outside the viewport // ${unreachable.join(' | ')}`);
+}
+
+/** The narrow end of the phone range, where controls have the least room. */
+const PHONE_WIDTH_SWEEP = [
+  { width: 320, height: 568 },
+  { width: 360, height: 640 },
+  { width: 375, height: 667 },
+];
+
+/**
+ * Re-audit the live scene at each narrow phone size.
+ *
+ * Layout runs on resize, so this exercises every rail and console tier the
+ * scene has without paying for another browser, and it covers all three
+ * mission modes because each touch profile plays a different one.
+ */
+async function sweepPhoneWidths(page, profile, label) {
+  if (!profile.hasTouch) return;
+  for (const size of PHONE_WIDTH_SWEEP) {
+    await page.setViewportSize(size);
+    await page.waitForTimeout(260);
+    await assertTouchTargets(page, `${label}@${size.width}x${size.height}`);
+  }
+  await page.setViewportSize(profile.viewport);
+  await page.waitForTimeout(320);
 }
 
 async function activateAcquireImagery(page, profile) {
@@ -425,6 +501,8 @@ async function runProfile(profile) {
     await waitForScene(page, 'MainMenu', errors);
     await page.waitForTimeout(120);
     await assertViewport(page, profile.viewport, `${profile.name}/menu`);
+    await assertTouchTargets(page, `${profile.name}/menu`);
+    await sweepPhoneWidths(page, profile, `${profile.name}/menu`);
     const menuHash = await screenHash(page);
 
     // Desktop smoke-tests keyboard focus. Touch profiles ask the QA-only hook
@@ -445,6 +523,7 @@ async function runProfile(profile) {
     if (briefingHash === menuHash) throw new Error('menu did not visually transition to mission briefing');
 
     await assertViewport(page, profile.viewport, `${profile.name}/briefing`);
+    await assertTouchTargets(page, `${profile.name}/briefing`);
 
     // On touch profiles, ACQUIRE IMAGERY is tapped directly on the Phaser
     // canvas at its responsive layout coordinate. Desktop uses the keyboard.
@@ -458,6 +537,8 @@ async function runProfile(profile) {
     if (reconHash === briefingHash) throw new Error('briefing did not visually transition to recon');
 
     await assertViewport(page, profile.viewport, `${profile.name}/recon`);
+    await assertTouchTargets(page, `${profile.name}/recon`);
+    await sweepPhoneWidths(page, profile, `${profile.name}/recon`);
 
     if (profile.name === 'android-chromium') {
       await exerciseAndroidReconGestures(page, context);
@@ -475,10 +556,12 @@ async function runProfile(profile) {
     await page.setViewportSize(profile.rotateTo);
     await page.waitForTimeout(420);
     await assertViewport(page, profile.rotateTo, `${profile.name}/rotated-recon`);
+    await assertTouchTargets(page, `${profile.name}/rotated-recon`);
 
     await page.setViewportSize(profile.viewport);
     await page.waitForTimeout(420);
     await assertViewport(page, profile.viewport, `${profile.name}/restored-recon`);
+    await assertTouchTargets(page, `${profile.name}/restored-recon`);
 
     if (badResponses.length) throw new Error(`HTTP failures: ${badResponses.join(' | ')}`);
     if (errors.length) throw new Error(`browser errors: ${errors.join(' | ')}`);

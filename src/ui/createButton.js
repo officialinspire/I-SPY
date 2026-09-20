@@ -58,6 +58,11 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     padding: options.padding ?? 16,
     showDescription: options.showDescription !== false,
     showIcon: options.showIcon !== false,
+    // How far the hit area may grow past the drawn box on each axis. A layout
+    // that packs controls tightly passes half of the gap it left between them,
+    // so reaching the minimum touch target can never steal a neighbour's taps.
+    hitPaddingX: options.hitPaddingX ?? UI_TOKENS.metrics.maxHitPadding,
+    hitPaddingY: options.hitPaddingY ?? UI_TOKENS.metrics.maxHitPadding,
   };
 
   const status = {
@@ -85,7 +90,10 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     .setStrokeStyle(metrics.focusRingWidth, hexToNumber(variant.focus), metrics.focusRingAlpha)
     .setVisible(false);
 
-  const background = scene.add.rectangle(x, y, size.width, size.height, 0x000000, 1);
+  // Named for diagnostics: a QA sweep that finds two overlapping hit areas
+  // can then say which two controls are fighting over the same pixels.
+  const background = scene.add.rectangle(x, y, size.width, size.height, 0x000000, 1)
+    .setName(`button:${label}`);
 
   const accent = scene.add
     .rectangle(x, y, metrics.accentWidth, 10, hexToNumber(accentColor))
@@ -193,8 +201,8 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       icon.setVisible(status.visible && size.showIcon);
     }
 
-    const padX = touchPadding(size.width);
-    const padY = touchPadding(size.height);
+    const padX = touchPadding(size.width, size.hitPaddingX);
+    const padY = touchPadding(size.height, size.hitPaddingY);
     hitArea.setTo(-padX, -padY, size.width + padX * 2, size.height + padY * 2);
 
     measure();
