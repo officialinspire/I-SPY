@@ -59,7 +59,7 @@ export default class MissionBriefingScene extends Phaser.Scene {
       ? `\nOPERATION SERIES: ${series.kind === 'daily' ? 'DAILY DOSSIER' : series.id} // MISSION ${series.index + 1} OF ${series.modeOrder.length}${series.replay ? ' // REPLAY' : ''}${series.dailyDate ? `\nUTC DOSSIER DATE: ${series.dailyDate}` : ''}`
       : '';
 
-    this.fullBriefing = `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${sector}\nMODE: ${this.mission.mode}${regionLine}${operationLine}${generatedLine}${seedLine}\n\nPRIMARY OBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}${directiveLine}\n\nANALYSIS WINDOW: ${this.mission.timeLimitSeconds} SECONDS`;
+    this.fullBriefing = `${this.mission.operation}\n\nSATELLITE PASS: ${this.mission.satellitePass}\nSECTOR: ${sector}\nMODE: ${this.mission.mode}\nCONDITIONS: ${this.mission.condition ?? 'CLEAR'}${regionLine}${operationLine}${generatedLine}${seedLine}\n\nPRIMARY OBJECTIVE:\n${this.mission.objective}${countInstruction}${changeInstruction}${directiveLine}\n\nANALYSIS WINDOW: ${this.mission.timeLimitSeconds} SECONDS`;
 
     this.briefing = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family,
