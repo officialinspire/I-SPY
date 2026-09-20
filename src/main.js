@@ -61,6 +61,20 @@ if (qaMode) {
         return button?.background ? { x: button.background.x, y: button.background.y } : null;
       },
       finishIntro: () => game.scene.getScene('StartIntro')?.finish?.(),
+      reconState: () => {
+        const scene = game.scene.getScene('Recon');
+        const camera = scene?.cameras?.main;
+        return scene && camera ? {
+          zoom: camera.zoom,
+          scrollX: camera.scrollX,
+          scrollY: camera.scrollY,
+          marking: Boolean(scene.marking),
+          candidate: Boolean(scene.candidate),
+          pinchActive: Boolean(scene.pinchGesture),
+          completedTargets: scene.completedTargetIds?.length ?? 0,
+          requiredTargets: scene.locateTargets?.length ?? 0,
+        } : null;
+      },
     },
   });
 }
@@ -94,6 +108,14 @@ function syncGameViewport() {
 
   const canvas = game.canvas;
   if (canvas) {
+    // ScaleManager can update its logical gameSize before the browser-applied
+    // CSS canvas box catches up during tablet/mobile rotation. In that state a
+    // gameSize-only comparison incorrectly says everything is current while
+    // the player still sees the old landscape canvas. Make the host box the
+    // final authority for the displayed canvas as well.
+    const canvasRect = canvas.getBoundingClientRect();
+    if (Math.abs(canvasRect.width - width) > 1) canvas.style.width = `${width}px`;
+    if (Math.abs(canvasRect.height - height) > 1) canvas.style.height = `${height}px`;
     canvas.style.marginLeft = '0px';
     canvas.style.marginTop = '0px';
   }
