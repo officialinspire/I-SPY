@@ -713,7 +713,10 @@ async function centreOnTarget(page, profile, passId, context, targetId = null) {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const target = await page.evaluate(([pass, id]) => window.__qa.targetPoint(pass, id), [passId ?? null, targetId]);
     if (!target) throw new Error(`${context}: mission target entity is not on the map`);
-    const inside = target.screen.x > paneLeft + 24 && target.screen.x < paneRight - 24
+    // A camera clamped to the imagery cannot centre an object that was
+    // authored close to a map edge. The player does not need it centred; its
+    // mark point only needs to be visibly inside the pane and clear of HUD.
+    const inside = target.screen.x > paneLeft + 4 && target.screen.x < paneRight - 4
       && target.screen.y > safeTop && target.screen.y < safeBottom;
     if (inside) return target;
     const dx = centre.x - target.screen.x;
