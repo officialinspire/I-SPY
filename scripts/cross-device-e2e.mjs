@@ -933,10 +933,16 @@ async function exerciseAndroidTouchNavigation(page, context, label) {
 
     // Pinch outward over multiple frames.
     for (let index = 0; index < 6; index += 1) {
-      first = { ...first, x: first.x - 5, y: first.y + (index % 2) };
-      pinch = await movePair(first, second, 'pinch-out-a');
-      second = { ...second, x: second.x + 5, y: second.y + ((index + 1) % 2) };
-      pinch = await movePair(first, second, 'pinch-out-b');
+      pinch = await movePair(
+        { ...first, x: first.x - 5, y: first.y + (index % 2) },
+        second,
+        'pinch-out-a',
+      );
+      pinch = await movePair(
+        first,
+        { ...second, x: second.x + 5, y: second.y + ((index + 1) % 2) },
+        'pinch-out-b',
+      );
     }
     if (!(pinch.zoom > pinchStartZoom + 0.12)) {
       throw new Error(`${label}/pinch-out: zoom barely changed // ${JSON.stringify({ pinchStartZoom, pinch })}`);
@@ -946,10 +952,16 @@ async function exerciseAndroidTouchNavigation(page, context, label) {
     // changing zoom, despite each contact arriving on its own event.
     const beforeTwoFingerPan = pinch;
     for (let index = 0; index < 5; index += 1) {
-      first = { ...first, x: first.x + 6, y: first.y + 5 };
-      pinch = await movePair(first, second, 'two-finger-pan-a');
-      second = { ...second, x: second.x + 6, y: second.y + 5 };
-      pinch = await movePair(first, second, 'two-finger-pan-b');
+      pinch = await movePair(
+        { ...first, x: first.x + 6, y: first.y + 5 },
+        second,
+        'two-finger-pan-a',
+      );
+      pinch = await movePair(
+        first,
+        { ...second, x: second.x + 6, y: second.y + 5 },
+        'two-finger-pan-b',
+      );
     }
     const twoFingerScroll = Math.hypot(
       pinch.scrollX - beforeTwoFingerPan.scrollX,
@@ -962,19 +974,25 @@ async function exerciseAndroidTouchNavigation(page, context, label) {
     // Deliberately inject a large separation change. One rendered frame must
     // remain bounded, then normal samples must continue without spring-back.
     const beforeBadSample = await read();
-    first = { ...first, x: Math.max(24, first.x - 90) };
-    second = { ...second, x: Math.min(viewport.width - 24, second.x + 90) };
-    await touch('touchMove', [first, second]);
-    await settle(page, 1);
-    const afterBadSample = await read();
+    const afterBadSample = await movePair(
+      { ...first, x: Math.max(24, first.x - 90) },
+      { ...second, x: Math.min(viewport.width - 24, second.x + 90) },
+      'pinch-spike',
+    );
     assertFrameBounded(beforeBadSample, afterBadSample, 'pinch-spike');
 
     // Pinch back inward.
     for (let index = 0; index < 6; index += 1) {
-      first = { ...first, x: first.x + 5, y: first.y - (index % 2) };
-      pinch = await movePair(first, second, 'pinch-in-a');
-      second = { ...second, x: second.x - 5, y: second.y - ((index + 1) % 2) };
-      pinch = await movePair(first, second, 'pinch-in-b');
+      pinch = await movePair(
+        { ...first, x: first.x + 5, y: first.y - (index % 2) },
+        second,
+        'pinch-in-a',
+      );
+      pinch = await movePair(
+        first,
+        { ...second, x: second.x - 5, y: second.y - ((index + 1) % 2) },
+        'pinch-in-b',
+      );
     }
     if (!(pinch.zoom < afterBadSample.zoom - 0.08)) {
       throw new Error(`${label}/pinch-in: zoom did not return smoothly // ${JSON.stringify({ afterBadSample, pinch })}`);
