@@ -689,7 +689,15 @@ async function assertLiveTouchTargets(page, label) {
 }
 
 /** A tap where the device has a finger, a click where it has a pointer. */
-/** The most recent press the suite made, so a failure can say where it went. */
+/**
+ * The most recent press the suite made, so a failure can say where it went.
+ *
+ * Reset per profile: the profiles share this process, and a failure that
+ * happens before the first press of its own run would otherwise report the
+ * last press of the previous profile — at that profile's coordinates, on
+ * that profile's scene. One stale line like that sends the next reader
+ * looking in the wrong place entirely.
+ */
 let lastTap = null;
 
 async function tap(page, profile, point) {
@@ -1466,6 +1474,7 @@ async function exerciseMissionAbort(page, profile, context) {
 }
 
 async function runProfile(profile) {
+  lastTap = null;
   const executablePath = process.env.ISPY_E2E_CHROMIUM_PATH;
   const launchOptions = { headless: true, ...(profile.launchOptions ?? {}) };
   if (executablePath && profile.engine === chromium) launchOptions.executablePath = executablePath;
