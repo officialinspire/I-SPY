@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
 import { describeArmLock } from './ui/createButton.js';
+
+const inputLog = [];
+let inputRecorderAttached = false;
 import { registerOfflineSupport } from './pwa/registerServiceWorker.js';
 import './settings/userSettings.js';
 import BootScene from './scenes/BootScene.js';
@@ -107,13 +110,27 @@ if (qaMode) {
        * every later press vanish with nothing on screen to say why. The
        * browser suite cannot see either from the outside.
        */
+      /**
+       * Everything the input system is currently holding, plus a recorder
+       * for what it actually receives.
+       *
+       * A press that the DOM delivered and Phaser never saw, and a press
+       * Phaser saw but no control acted on, are the same from outside the
+       * page: nothing happens. Only a log of both layers separates them.
+       */
       inputState: () => {
-        const manager = game.input?.manager;
+        // game.input IS the InputManager; the InputPlugin with `.manager` on
+        // it is the per-scene one. Reading `.manager` here silently yields
+        // nothing and looks exactly like an input system with no pointers.
+        const manager = game.input;
         return {
           armLock: describeArmLock(),
+          pointersTotal: manager?.pointersTotal ?? null,
+          touchEnabled: Boolean(manager?.touch?.enabled),
+          mouseEnabled: Boolean(manager?.mouse?.enabled),
+          deviceTouch: Boolean(game.device?.input?.touch),
           pointers: (manager?.pointers ?? []).map((pointer) => ({
             id: pointer.id,
-            identifier: pointer.identifier ?? null,
             isDown: Boolean(pointer.isDown),
             active: Boolean(pointer.active),
             wasTouch: Boolean(pointer.wasTouch),
@@ -134,6 +151,40 @@ if (qaMode) {
             : null,
         };
       },
+      recordInput: () => {
+        inputLog.length = 0;
+        if (!inputRecorderAttached) {
+          inputRecorderAttached = true;
+          const canvas = game.canvas;
+          ['touchstart', 'touchend', 'touchcancel', 'pointerdown', 'pointerup', 'mousedown', 'mouseup']
+            .forEach((type) => {
+              canvas?.addEventListener(type, (event) => {
+                if (inputLog.length < 60) {
+                  inputLog.push({ layer: 'dom', type, target: event.target?.tagName ?? null });
+                }
+              }, { capture: true, passive: true });
+            });
+        }
+        game.scene.getScenes(true).forEach((scene) => {
+          ['pointerdown', 'pointerup', 'pointerupoutside', 'gameobjectdown', 'gameobjectup']
+            .forEach((type) => {
+              scene.input.on(type, (pointer) => {
+                if (inputLog.length < 60) {
+                  inputLog.push({
+                    layer: 'phaser',
+                    type,
+                    scene: scene.scene.key,
+                    id: pointer?.id ?? null,
+                    x: Math.round(pointer?.x ?? -1),
+                    y: Math.round(pointer?.y ?? -1),
+                  });
+                }
+              });
+            });
+        });
+        return true;
+      },
+      readInput: () => inputLog.slice(),
       reconState: () => {
         const scene = game.scene.getScene('Recon');
         const camera = scene?.cameras?.main;

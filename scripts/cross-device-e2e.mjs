@@ -441,6 +441,7 @@ async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
         // A press that never landed and a press that landed on a console
         // holding a stale lock look identical from out here.
         input: window.__ISPY_QA__?.inputState?.() ?? null,
+        events: window.__ISPY_QA__?.readInput?.() ?? null,
       })).catch((evaluationError) => ({ evaluationFailed: String(evaluationError) }));
       state.lastTap = lastTap;
       // A scene that never arrives is usually a scene whose create() threw,
@@ -1510,6 +1511,7 @@ async function runProfile(profile) {
     await assertViewport(page, profile.viewport, `${profile.name}/menu-after-recentre`);
     const menuHash = await screenHash(page);
 
+    await page.evaluate(() => window.__ISPY_QA__?.recordInput?.());
     await tapControl(page, profile, 'MainMenu', 'RANDOM MISSION', `${profile.name}/menu`);
 
     /* --- Briefing --------------------------------------------------- */
