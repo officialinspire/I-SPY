@@ -309,3 +309,44 @@ window.screen?.orientation?.addEventListener?.('change', queueViewportSync, { pa
 // its chrome, which never fires a window resize on some engines.
 window.visualViewport?.addEventListener('resize', queueViewportSync, { passive: true });
 queueViewportSync();
+
+/**
+ * Let go of contacts the browser has stopped reporting.
+ *
+ * Phaser gives a touch the first pointer object that is free, and matches
+ * that touch's end to whichever pointer holds the same `identifier`. When a
+ * stale pointer is still marked active those two rules pick different
+ * objects, and the pointer that took the press stays flagged down for the
+ * rest of the session. WebKit reuses identifier 0 between taps, so one
+ * mismatch is enough to strand a pointer — and a pointer stuck down is a
+ * finger the game believes is still on the glass: it makes the recon map
+ * read the next real touch as the second finger of a pinch, and it is
+ * invisible to everything except the input system itself.
+ *
+ * The browser is the authority on how many contacts exist. When it says
+ * none remain, nothing can still be down. This runs after Phaser's own
+ * handlers have had the event, so a normal release is already tidy by the
+ * time it looks and this corrects only what was actually stranded.
+ */
+function releaseStrandedTouchPointers() {
+  const pointers = game.input?.pointers ?? [];
+  pointers.forEach((pointer) => {
+    if (!pointer.wasTouch || (!pointer.isDown && !pointer.active)) return;
+    pointer.isDown = false;
+    pointer.active = false;
+    pointer.primaryDown = false;
+    pointer.buttons = 0;
+  });
+}
+
+function onTouchSequenceEnd(event) {
+  if (event.touches?.length) return;
+  // After every other listener for this event, Phaser's included: clearing
+  // `active` before Phaser matches the release would stop it dispatching the
+  // release at all, and no control would ever fire.
+  setTimeout(releaseStrandedTouchPointers, 0);
+}
+
+window.addEventListener('touchend', onTouchSequenceEnd, { passive: true });
+window.addEventListener('touchcancel', onTouchSequenceEnd, { passive: true });
+
