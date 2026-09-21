@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
+import { describeArmLock } from './ui/createButton.js';
+
+const inputLog = [];
+let inputRecorderAttached = false;
 import { registerOfflineSupport } from './pwa/registerServiceWorker.js';
 import './settings/userSettings.js';
 import BootScene from './scenes/BootScene.js';
@@ -99,6 +103,88 @@ if (qaMode) {
         });
         return { width, height, targets };
       },
+      /**
+       * Everything the input system is currently holding.
+       *
+       * A pointer that never lifts, or an arm lock nobody released, makes
+       * every later press vanish with nothing on screen to say why. The
+       * browser suite cannot see either from the outside.
+       */
+      /**
+       * Everything the input system is currently holding, plus a recorder
+       * for what it actually receives.
+       *
+       * A press that the DOM delivered and Phaser never saw, and a press
+       * Phaser saw but no control acted on, are the same from outside the
+       * page: nothing happens. Only a log of both layers separates them.
+       */
+      inputState: () => {
+        // game.input IS the InputManager; the InputPlugin with `.manager` on
+        // it is the per-scene one. Reading `.manager` here silently yields
+        // nothing and looks exactly like an input system with no pointers.
+        const manager = game.input;
+        return {
+          armLock: describeArmLock(),
+          pointersTotal: manager?.pointersTotal ?? null,
+          touchEnabled: Boolean(manager?.touch?.enabled),
+          mouseEnabled: Boolean(manager?.mouse?.enabled),
+          deviceTouch: Boolean(game.device?.input?.touch),
+          pointers: (manager?.pointers ?? []).map((pointer) => ({
+            id: pointer.id,
+            isDown: Boolean(pointer.isDown),
+            active: Boolean(pointer.active),
+            wasTouch: Boolean(pointer.wasTouch),
+            wasCanceled: Boolean(pointer.wasCanceled),
+            x: Math.round(pointer.x),
+            y: Math.round(pointer.y),
+          })),
+          canvasBounds: game.scale?.canvasBounds
+            ? {
+              x: Math.round(game.scale.canvasBounds.x),
+              y: Math.round(game.scale.canvasBounds.y),
+              width: Math.round(game.scale.canvasBounds.width),
+              height: Math.round(game.scale.canvasBounds.height),
+            }
+            : null,
+          gameSize: game.scale?.gameSize
+            ? { width: game.scale.gameSize.width, height: game.scale.gameSize.height }
+            : null,
+        };
+      },
+      recordInput: () => {
+        inputLog.length = 0;
+        if (!inputRecorderAttached) {
+          inputRecorderAttached = true;
+          const canvas = game.canvas;
+          ['touchstart', 'touchend', 'touchcancel', 'pointerdown', 'pointerup', 'mousedown', 'mouseup']
+            .forEach((type) => {
+              canvas?.addEventListener(type, (event) => {
+                if (inputLog.length < 60) {
+                  inputLog.push({ layer: 'dom', type, target: event.target?.tagName ?? null });
+                }
+              }, { capture: true, passive: true });
+            });
+        }
+        game.scene.getScenes(true).forEach((scene) => {
+          ['pointerdown', 'pointerup', 'pointerupoutside', 'gameobjectdown', 'gameobjectup']
+            .forEach((type) => {
+              scene.input.on(type, (pointer) => {
+                if (inputLog.length < 60) {
+                  inputLog.push({
+                    layer: 'phaser',
+                    type,
+                    scene: scene.scene.key,
+                    id: pointer?.id ?? null,
+                    x: Math.round(pointer?.x ?? -1),
+                    y: Math.round(pointer?.y ?? -1),
+                  });
+                }
+              });
+            });
+        });
+        return true;
+      },
+      readInput: () => inputLog.slice(),
       reconState: () => {
         const scene = game.scene.getScene('Recon');
         const camera = scene?.cameras?.main;
@@ -223,3 +309,44 @@ window.screen?.orientation?.addEventListener?.('change', queueViewportSync, { pa
 // its chrome, which never fires a window resize on some engines.
 window.visualViewport?.addEventListener('resize', queueViewportSync, { passive: true });
 queueViewportSync();
+
+/**
+ * Let go of contacts the browser has stopped reporting.
+ *
+ * Phaser gives a touch the first pointer object that is free, and matches
+ * that touch's end to whichever pointer holds the same `identifier`. When a
+ * stale pointer is still marked active those two rules pick different
+ * objects, and the pointer that took the press stays flagged down for the
+ * rest of the session. WebKit reuses identifier 0 between taps, so one
+ * mismatch is enough to strand a pointer — and a pointer stuck down is a
+ * finger the game believes is still on the glass: it makes the recon map
+ * read the next real touch as the second finger of a pinch, and it is
+ * invisible to everything except the input system itself.
+ *
+ * The browser is the authority on how many contacts exist. When it says
+ * none remain, nothing can still be down. This runs after Phaser's own
+ * handlers have had the event, so a normal release is already tidy by the
+ * time it looks and this corrects only what was actually stranded.
+ */
+function releaseStrandedTouchPointers() {
+  const pointers = game.input?.pointers ?? [];
+  pointers.forEach((pointer) => {
+    if (!pointer.wasTouch || (!pointer.isDown && !pointer.active)) return;
+    pointer.isDown = false;
+    pointer.active = false;
+    pointer.primaryDown = false;
+    pointer.buttons = 0;
+  });
+}
+
+function onTouchSequenceEnd(event) {
+  if (event.touches?.length) return;
+  // After every other listener for this event, Phaser's included: clearing
+  // `active` before Phaser matches the release would stop it dispatching the
+  // release at all, and no control would ever fire.
+  setTimeout(releaseStrandedTouchPointers, 0);
+}
+
+window.addEventListener('touchend', onTouchSequenceEnd, { passive: true });
+window.addEventListener('touchcancel', onTouchSequenceEnd, { passive: true });
+

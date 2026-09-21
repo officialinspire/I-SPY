@@ -36,6 +36,49 @@ function releaseLock(token) {
   if (armLock?.token === token) armLock = null;
 }
 
+/**
+ * Which physical contact a pointer is carrying.
+ *
+ * Phaser assigns a touch the first pointer object that is free, and matches
+ * that touch's end to whichever pointer holds the same `identifier`. Those
+ * two rules disagree whenever a stale pointer is still marked active: the
+ * press is handed to a new pointer object and the release to the old one, so
+ * a control armed by "pointer 2" is released by "pointer 1" and never fires.
+ * WebKit reuses identifier 0 for consecutive taps, which is exactly the case
+ * that produces it — and once it happens the pointer that took the press is
+ * left down for the rest of the session.
+ *
+ * So a press and its release are matched on the contact, not on the pointer
+ * object Phaser happened to route them through. Genuinely simultaneous
+ * fingers still carry distinct identifiers, so this keeps two fingers apart
+ * exactly as the pointer id did.
+ */
+function contactKey(pointer) {
+  if (!pointer) return 'p0';
+  if (pointer.wasTouch && pointer.identifier !== undefined && pointer.identifier !== null) {
+    return `t${pointer.identifier}`;
+  }
+  return `p${pointer.id ?? 0}`;
+}
+
+/**
+ * Read-only view of the arm lock, for the QA handle.
+ *
+ * A lock whose pointer never lifts silently disables every control on the
+ * console, which looks exactly like a tap that did not land. Diagnosing that
+ * from the outside is impossible without being able to see the lock.
+ */
+export function describeArmLock() {
+  if (!armLock) return null;
+  return {
+    label: armLock.token?.parentContainer?.list
+      ?.find((item) => item?.type === 'Text')?.text ?? null,
+    pointerId: armLock.pointer?.id ?? null,
+    pointerIsDown: Boolean(armLock.pointer?.isDown),
+    pointerWasTouch: Boolean(armLock.pointer?.wasTouch),
+  };
+}
+
 function hoverTick() {
   const now = globalThis.performance?.now?.() ?? Date.now();
   if (now - lastHoverTickAt < HOVER_TICK_INTERVAL_MS) return;
@@ -99,7 +142,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
 
   // Tracks which pointer armed this button, independent of the visual press
   // state, so a scene re-rendering the button mid-press cannot swallow a click.
-  let armedPointerId = null;
+  let armedContact = null;
   const origin = { x, y };
   const transform = { scale: 1, lift: 0 };
   // Icons come off a 2x-rasterized sheet, so their display size is a scale
@@ -324,7 +367,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   };
 
   const releasePress = () => {
-    armedPointerId = null;
+    armedContact = null;
     releaseLock(background);
     if (!status.pressed) return;
     status.pressed = false;
@@ -332,7 +375,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   };
 
   const clearPointerState = () => {
-    armedPointerId = null;
+    armedContact = null;
     releaseLock(background);
     if (!status.hovered && !status.pressed) return;
     status.hovered = false;
@@ -368,11 +411,11 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
    * and the press then did nothing when they let go. Measured with two
    * fingers on the recon rail: releasing the second one cancelled the first.
    */
-  const ownsPress = (pointer) => armedPointerId === null || armedPointerId === (pointer?.id ?? 0);
+  const ownsPress = (pointer) => armedContact === null || armedContact === contactKey(pointer);
 
   background.on('pointerout', (pointer) => {
     if (!ownsPress(pointer)) return;
-    armedPointerId = null;
+    armedContact = null;
     releaseLock(background);
     status.hovered = false;
     status.pressed = false;
@@ -397,7 +440,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     // the analyst did not mean to put down.
     if (lockHeldByAnother(background)) return;
     armLock = { token: background, pointer };
-    armedPointerId = pointer?.id ?? 0;
+    armedContact = contactKey(pointer);
     status.focused = false;
     status.pressed = true;
     applyVisual();
@@ -405,8 +448,8 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
   background.on('pointerup', (pointer) => {
     // Asked again on release: a press that began legitimately and turned into
     // a drag (scrolling a grid) must not activate when the finger lifts.
-    const armed = armedPointerId !== null && armedPointerId === (pointer?.id ?? 0) && pointerAllowed(pointer);
-    armedPointerId = null;
+    const armed = armedContact !== null && armedContact === contactKey(pointer) && pointerAllowed(pointer);
+    armedContact = null;
     releaseLock(background);
     status.pressed = false;
     if (pointer?.wasTouch) status.hovered = false;
@@ -474,7 +517,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     setVisible(visible) {
       if (status.visible === visible) return controller;
       status.visible = visible;
-      armedPointerId = null;
+      armedContact = null;
       releaseLock(background);
       status.hovered = false;
       status.pressed = false;
@@ -492,7 +535,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
     setEnabled(enabled) {
       if (status.enabled === enabled) return controller;
       status.enabled = enabled;
-      armedPointerId = null;
+      armedContact = null;
       releaseLock(background);
       if (!enabled) {
         status.hovered = false;
@@ -557,7 +600,7 @@ export function createButton(scene, x, y, label, onPress, options = {}) {
       return controller;
     },
     destroy() {
-      armedPointerId = null;
+      armedContact = null;
       releaseLock(background);
       accentPulse?.remove();
       motionTween?.remove();

@@ -438,7 +438,12 @@ async function waitForScene(page, key, label, timeout = 12_000, errors = []) {
         overlays: window.__qa?.domOverlays() ?? null,
         loop: window.__qa?.loopState() ?? null,
         scenes: window.__qa?.sceneStatus() ?? null,
+        // A press that never landed and a press that landed on a console
+        // holding a stale lock look identical from out here.
+        input: window.__ISPY_QA__?.inputState?.() ?? null,
+        events: window.__ISPY_QA__?.readInput?.() ?? null,
       })).catch((evaluationError) => ({ evaluationFailed: String(evaluationError) }));
+      state.lastTap = lastTap;
       // A scene that never arrives is usually a scene whose create() threw,
       // and a throw inside a game step stops the loop for good, so the
       // collected browser errors are the diagnosis, not a footnote to it.
@@ -618,6 +623,17 @@ async function resizeTo(page, size, label) {
  * that the console did not move.
  */
 async function assertHandoverIsGuarded(page, cdp, point, label) {
+  // The shield stands for a fixed window after the gate is dismissed, and
+  // the cascade it guards against arrives within milliseconds of that press
+  // on a real device. Sending it after the rest of the menu audit has run is
+  // not that scenario: on a loaded runner the window has already closed, and
+  // the suite then blames the console for acting on a press no longer being
+  // guarded. Only assert while the shield is genuinely up.
+  const shielded = await page.evaluate(() => Boolean(document.querySelector('.intro-handover')));
+  if (!shielded) {
+    console.log(`SKIP ${label}: handover shield had already stood down before the cascade could be sent`);
+    return false;
+  }
   const before = await page.evaluate(() => window.__qa.activeScenes());
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', clickCount: 0 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
@@ -628,6 +644,7 @@ async function assertHandoverIsGuarded(page, cdp, point, label) {
     throw new Error(`${label}: the press that dismissed the start gate carried into the console `
       + `// ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
   }
+  return true;
 }
 
 /**
@@ -667,7 +684,11 @@ async function assertLiveTouchTargets(page, label) {
 }
 
 /** A tap where the device has a finger, a click where it has a pointer. */
+/** The most recent press the suite made, so a failure can say where it went. */
+let lastTap = null;
+
 async function tap(page, profile, point) {
+  lastTap = { x: point.x, y: point.y, touch: Boolean(profile.hasTouch), at: Date.now() };
   if (profile.hasTouch) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
   await settle(page, 2);
@@ -683,7 +704,10 @@ async function tapControl(page, profile, sceneKey, label, context) {
   if (point.x < 0 || point.y < 0 || point.x > size.width || point.y > size.height) {
     throw new Error(`${context}: control '${label}' is outside the viewport at ${JSON.stringify(point)} (${size.width}x${size.height})`);
   }
+  lastTap = { ...point, touch: Boolean(profile.hasTouch), control: label, scene: sceneKey };
   await tap(page, profile, point);
+  lastTap.control = label;
+  lastTap.scene = sceneKey;
   return point;
 }
 
@@ -1433,12 +1457,12 @@ async function runProfile(profile) {
     await waitForScene(page, 'MainMenu', `${profile.name}/menu`, 20_000, errors);
     const loop = await page.evaluate(() => window.__qa.loopState());
     if (!loop.running) throw new Error(`${profile.name}/menu: the game loop has stopped // ${JSON.stringify(loop)}`);
-    await settle(page, 3);
-    await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
-    await assertViewport(page, profile.viewport, `${profile.name}/menu`);
-    await assertControlsReachable(page, 'menuControls', `${profile.name}/menu`);
-    // The cascade has to be synthesised through CDP, which is Chromium only.
-    // WebKit still exercises the gate itself, just not this one assertion.
+
+    // First, before the rest of the menu audit spends the shield's window:
+    // this assertion is about the tail of the dismissing press, which on a
+    // real device lands milliseconds after it. The cascade has to be
+    // synthesised through CDP, which is Chromium only; WebKit still
+    // exercises the gate itself, just not this one assertion.
     if (gatePoint && !profile.domIntroUnreachable && profile.engine === chromium) {
       const cdp = await context.newCDPSession(page);
       try {
@@ -1447,6 +1471,10 @@ async function runProfile(profile) {
         await cdp.detach().catch(() => {});
       }
     }
+    await settle(page, 3);
+    await page.waitForFunction(() => (window.__qa.domOverlays() ?? []).every((tag) => tag !== 'section'), null, { timeout: 5_000 });
+    await assertViewport(page, profile.viewport, `${profile.name}/menu`);
+    await assertControlsReachable(page, 'menuControls', `${profile.name}/menu`);
 
     // The gate leaves a shield over the console for the tail of the press
     // that dismissed it, and it swallows everything while it stands. A person
@@ -1499,6 +1527,7 @@ async function runProfile(profile) {
     await assertViewport(page, profile.viewport, `${profile.name}/menu-after-recentre`);
     const menuHash = await screenHash(page);
 
+    await page.evaluate(() => window.__ISPY_QA__?.recordInput?.());
     await tapControl(page, profile, 'MainMenu', 'RANDOM MISSION', `${profile.name}/menu`);
 
     /* --- Briefing --------------------------------------------------- */

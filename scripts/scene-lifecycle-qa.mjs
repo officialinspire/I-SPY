@@ -383,10 +383,10 @@ check(
   'the shield covers the console it is guarding',
 );
 check(
-  button.includes('const ownsPress = (pointer) => armedPointerId === null || armedPointerId === (pointer?.id ?? 0);')
+  button.includes('const ownsPress = (pointer) => armedContact === null || armedContact === contactKey(pointer);')
     && /const onSceneRelease = \(pointer\) => \{\s*if \(!ownsPress\(pointer\)\) return;/.test(button)
     && /background\.on\('pointerout', \(pointer\) => \{\s*if \(!ownsPress\(pointer\)\) return;/.test(button),
-  'only the pointer that armed a control can release it',
+  'only the contact that armed a control can release it',
 );
 check(
   button.includes('let armLock = null;')
@@ -447,6 +447,22 @@ check(
   menu.includes('const stackPad = hitGap(sectorGap(tier));')
     && (menu.match(/hitPadding[XY]: (stackPad|hitGap\()/g) ?? []).length >= 6,
   'every stacked console control is padded only into the gap below it',
+);
+
+check(
+  button.includes('function contactKey(pointer)')
+    && button.includes('armedContact = contactKey(pointer)')
+    && button.includes("armedContact === contactKey(pointer)")
+    && !button.includes('armedPointerId'),
+  'a control matches its release to the contact that armed it, not to the pointer object Phaser routed it through',
+);
+check(
+  main.includes('releaseStrandedTouchPointers')
+    && /onTouchSequenceEnd\(event\) \{[\s\S]*?if \(event\.touches\?\.length\) return;/.test(main)
+    && main.includes("window.addEventListener('touchend', onTouchSequenceEnd")
+    && main.includes("window.addEventListener('touchcancel', onTouchSequenceEnd")
+    && main.includes('setTimeout(releaseStrandedTouchPointers, 0)'),
+  'a touch sequence that ends with no contacts left releases any pointer the browser stopped reporting',
 );
 
 const appBlock = (styles.match(/#app\s*\{[^}]*\}/) ?? [''])[0];
