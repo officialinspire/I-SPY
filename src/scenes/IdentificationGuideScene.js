@@ -33,8 +33,18 @@ const DRAG_SLOP = 6;
 export default class IdentificationGuideScene extends Phaser.Scene {
   constructor() { super('IdentificationGuide'); }
 
-  create() {
-    musicManager.request(MUSIC_STATES.MENU);
+  /**
+   * `returnTo` is the scene key of a live mission this manual was opened
+   * over. Checking what a shape is supposed to look like is part of the
+   * analysis, so the manual is reachable from a held tasking as well as from
+   * the console — and when it came from a tasking it goes back to it, rather
+   * than throwing the mission away by starting the menu.
+   */
+  create(data = {}) {
+    this.returnTo = data.returnTo ?? null;
+    // Overlaying a held mission keeps the mission's own score playing: the
+    // manual is a moment inside the tasking, not a trip back to the console.
+    if (!this.returnTo) musicManager.request(MUSIC_STATES.MENU);
     this.cameras.main.setBackgroundColor(GAME_CONFIG.palette.black);
     this.chrome = createTerminalChrome(this, {
       station: 'INTELLIGENCE DIRECTORATE // RECOGNITION MANUAL',
@@ -180,7 +190,7 @@ export default class IdentificationGuideScene extends Phaser.Scene {
       color: UI_TOKENS.text.faint,
       letterSpacing: 1,
     }).setOrigin(1, 0.5).setDepth(3);
-    this.backButton = createButton(this, 0, 0, 'RETURN TO CONSOLE', () => this.scene.start('MainMenu'), {
+    this.backButton = createButton(this, 0, 0, this.returnTo ? 'RETURN TO MISSION' : 'RETURN TO CONSOLE', () => this.leave(), {
       variant: 'secondary',
       width: 220,
       height: 40,
@@ -189,8 +199,24 @@ export default class IdentificationGuideScene extends Phaser.Scene {
     this.backButton.setDepth(4);
   }
 
+  /**
+   * Hand control back to whoever opened the manual.
+   *
+   * The mission scene is looked up before this one stops, because stopping
+   * is what releases this scene's plugins.
+   */
+  leave() {
+    if (!this.returnTo) {
+      this.scene.start('MainMenu');
+      return;
+    }
+    const caller = this.scene.get(this.returnTo);
+    this.scene.stop();
+    caller?.closeIdentificationGuide?.();
+  }
+
   bindInput() {
-    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('guide-esc', () => this.scene.start('MainMenu')));
+    this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('guide-esc', () => this.leave()));
     // The wheel belongs to whatever the pointer is over: rolling it while
     // reading the detail panel must not scroll the grid behind the cursor.
     this.input.on('wheel', (pointer, objects, deltaX, deltaY) => {

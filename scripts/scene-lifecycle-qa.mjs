@@ -465,6 +465,65 @@ check(
   'a touch sequence that ends with no contacts left releases any pointer the browser stopped reporting',
 );
 
+/* --- Hold screen and the in-mission recognition manual ----------------- */
+check(
+  recon.includes('createPauseMenu()')
+    && recon.includes("createButton(this, 0, 0, 'RESUME'")
+    && recon.includes("createButton(this, 0, 0, 'IDENTIFICATION GUIDE'")
+    && recon.includes("createButton(this, 0, 0, 'ABORT MISSION'")
+    && recon.includes("createButton(this, 0, 0, 'CONFIRM ABORT'")
+    && recon.includes("createButton(this, 0, 0, 'KEEP ANALYSING'"),
+  'holding a mission opens a menu whose controls each carry one fixed label',
+);
+check(
+  /armAbort\(armed\) \{[\s\S]*?this\.abortArmed = armed;/.test(recon)
+    && recon.includes("this.abortButton = createButton(this, 0, 0, 'ABORT MISSION', () => this.armAbort(true)")
+    && recon.includes("this.abortConfirmButton = createButton(this, 0, 0, 'CONFIRM ABORT', () => this.abortMission()")
+    && recon.includes("this.abortCancelButton = createButton(this, 0, 0, 'KEEP ANALYSING', () => this.armAbort(false)"),
+  'aborting asks for confirmation instead of acting on the first press',
+);
+// Read the method's own body: `finishMission` and `Results` appear all over
+// this file, so a lazy match from the method name proves nothing about it.
+const abortBody = (recon.match(/\n  abortMission\(\) \{([\s\S]*?)\n  \}/) ?? [])[1] ?? '';
+check(
+  abortBody.includes('this.missionEnded = true;')
+    && abortBody.includes('this.timerEvent?.remove(false);')
+    && abortBody.includes("this.scene.start('MainMenu');")
+    && !abortBody.includes('finishMission')
+    && !abortBody.includes("'Results'"),
+  'an abandoned attempt goes straight to the console, never through the debrief',
+);
+check(
+  recon.includes('setRailHidden(hidden)')
+    && recon.includes('this.railVisibilityBeforeHold')
+    && recon.includes('holdableButtons()')
+    && recon.includes('holdableFurniture()'),
+  'the console rail leaves while the hold screen is up and returns exactly as it was',
+);
+check(
+  /openIdentificationGuide\(\) \{[\s\S]*?if \(!this\.paused\) this\.togglePause\(\);[\s\S]*?this\.setConsoleInputEnabled\(false\);[\s\S]*?this\.scene\.launch\('IdentificationGuide', \{ returnTo: this\.scene\.key \}\);/.test(recon)
+    && recon.includes('closeIdentificationGuide()')
+    && /setConsoleInputEnabled\(enabled\) \{[\s\S]*?this\.input\.keyboard\.enabled = enabled;/.test(recon),
+  'the manual opens over a held mission and the console underneath stops answering input',
+);
+check(
+  guide.includes('this.returnTo = data.returnTo ?? null;')
+    && /leave\(\) \{[\s\S]*?const caller = this\.scene\.get\(this\.returnTo\);[\s\S]*?this\.scene\.stop\(\);[\s\S]*?caller\?\.closeIdentificationGuide\?\.\(\);/.test(guide)
+    && !guide.includes("() => this.scene.start('MainMenu')")
+    && guide.includes("if (!this.returnTo) musicManager.request(MUSIC_STATES.MENU);"),
+  'the manual returns to the mission that opened it, and leaves its music alone',
+);
+check(
+  /layoutPauseMenu\(width, height\) \{[\s\S]*?this\.pauseTitle\.setFontSize[\s\S]*?setWordWrapWidth\(rowWidth\)[\s\S]*?const headerHeight = Math\.ceil\(this\.pauseTitle\.height/.test(recon)
+    && /while \(heightFor\(rowHeight, gap\) > available/.test(recon)
+    && /onResize\(gameSize\)[\s\S]*?this\.layoutPauseMenu\(width, height\);/.test(recon),
+  'the hold screen measures its own header and gives way on height, so a rotated phone keeps every control reachable',
+);
+check(
+  /cleanup\(\) \{[\s\S]*?if \(this\.guideOpen\) \{[\s\S]*?this\.scene\.stop\('IdentificationGuide'\);/.test(recon),
+  'a console that is shutting down takes the manual with it',
+);
+
 const appBlock = (styles.match(/#app\s*\{[^}]*\}/) ?? [''])[0];
 const canvasBlock = (styles.match(/\bcanvas\s*\{[^}]*\}/) ?? [''])[0];
 const suppressesNativeTouch = (block) => /touch-action:\s*none;/.test(block)

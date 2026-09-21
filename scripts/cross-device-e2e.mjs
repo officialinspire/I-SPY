@@ -289,6 +289,7 @@ const PAGE_HELPERS = () => {
       const all = [
         ...(scene.commonButtons ?? []), ...(scene.locateButtons ?? []),
         ...(scene.countButtons ?? []), ...(scene.changeButtons ?? []),
+        ...(scene.pauseButtons ?? []),
       ];
       return all.filter((button) => button.isVisible()).map(controlRect);
     },
@@ -303,6 +304,10 @@ const PAGE_HELPERS = () => {
         splitView: scene.splitView === true,
         paused: scene.paused === true,
         missionEnded: scene.missionEnded === true,
+        pauseMenuOpen: scene.pauseMenuOpen === true,
+        abortArmed: scene.abortArmed === true,
+        guideOpen: scene.guideOpen === true,
+        railVisible: (scene.holdableButtons?.() ?? []).some((button) => button?.isVisible?.()),
       };
     },
     resultsSummary() {
@@ -1338,6 +1343,128 @@ async function exerciseSplitViewGestures(page, context, profile, label) {
   }
 }
 
+/**
+ * The hold screen, and the recognition manual reached from it.
+ *
+ * A mission used to be a one-way door: the only exits were a finished
+ * debrief or a reload. This exercises the way out, the way back, and the
+ * thing that makes the manual usable mid-tasking — that the clock stops
+ * while it is open.
+ */
+/** Optional design-review capture; set ISPY_E2E_SHOTS to a directory. */
+async function shot(page, name) {
+  if (!process.env.ISPY_E2E_SHOTS) return;
+  await page.screenshot({ path: `${process.env.ISPY_E2E_SHOTS}/${name}.png` });
+}
+
+async function exercisePauseMenu(page, profile, context) {
+  const summary = () => page.evaluate(() => window.__qa.missionSummary());
+  const chrome = () => page.evaluate(() => window.__qa.reconChrome());
+
+  const beforeHold = await summary();
+  await tapControl(page, profile, 'Recon', 'PAUSE', `${context}/hold`);
+  let held = await chrome();
+  if (!held.paused) throw new Error(`${context}/hold: PAUSE did not hold the mission`);
+  if (!held.pauseMenuOpen) throw new Error(`${context}/hold: PAUSE did not open the hold screen`);
+  if (held.railVisible) {
+    throw new Error(`${context}/hold: the console rail is still reachable under the hold screen`);
+  }
+
+  await shot(page, `${profile.name}-hold`);
+  // The hold screen is the only thing on screen, so this audits its own
+  // layout: every control inside the viewport, none sharing hit area.
+  await assertControlsReachable(page, 'reconControls', `${context}/hold`);
+
+  /* --- the manual, over a held tasking ----------------------------- */
+  await tapControl(page, profile, 'Recon', 'IDENTIFICATION GUIDE', `${context}/guide`);
+  await waitForScene(page, 'IdentificationGuide', `${context}/guide`, 12_000);
+  await settle(page, 3);
+  const guideHeld = await chrome();
+  if (!guideHeld.guideOpen) throw new Error(`${context}/guide: the console did not record the manual as open`);
+  if (!guideHeld.paused) throw new Error(`${context}/guide: the mission resumed behind the manual`);
+  const stillLive = await summary();
+  if (!stillLive || stillLive.mapId !== beforeHold.mapId) {
+    throw new Error(`${context}/guide: the manual replaced the mission // ${JSON.stringify({ beforeHold, stillLive })}`);
+  }
+  await shot(page, `${profile.name}-guide`);
+  await assertLiveTouchTargets(page, `${context}/guide`);
+
+  await tapControl(page, profile, 'IdentificationGuide', 'RETURN TO MISSION', `${context}/guide`);
+  await settle(page, 3);
+  await page.waitForFunction(
+    () => !window.__qa.activeScenes().includes('IdentificationGuide'),
+    null,
+    { timeout: 8_000 },
+  ).catch(() => { throw new Error(`${context}/guide: RETURN TO MISSION left the manual open`); });
+  const returned = await chrome();
+  if (returned.guideOpen) throw new Error(`${context}/guide: the console still thinks the manual is open`);
+  if (!returned.paused) throw new Error(`${context}/guide: the hold was released by the manual closing`);
+
+  // Reading the manual is analysis, not a break. The clock may not have run.
+  const afterGuide = await summary();
+  if (afterGuide.remainingSeconds > beforeHold.remainingSeconds) {
+    throw new Error(`${context}/guide: the clock gained time across the hold // ${JSON.stringify({ beforeHold, afterGuide })}`);
+  }
+  if (beforeHold.remainingSeconds - afterGuide.remainingSeconds > 2) {
+    throw new Error(`${context}/guide: the mission clock ran while the manual was open // ${JSON.stringify({ beforeHold, afterGuide })}`);
+  }
+
+  // A phone turned sideways mid-hold is the least height this panel ever
+  // gets. It has to refit rather than push a control off the bottom.
+  await resizeTo(page, profile.rotateTo, `${context}/hold-rotated`);
+  const rotated = await chrome();
+  if (!rotated.pauseMenuOpen) throw new Error(`${context}/hold: rotating closed the hold screen`);
+  await assertControlsReachable(page, 'reconControls', `${context}/hold-rotated`);
+  await shot(page, `${profile.name}-hold-landscape`);
+  await resizeTo(page, profile.viewport, `${context}/hold-restored`);
+  await assertControlsReachable(page, 'reconControls', `${context}/hold-restored`);
+
+  /* --- abort asks before it acts ----------------------------------- */
+  await tapControl(page, profile, 'Recon', 'ABORT MISSION', `${context}/abort`);
+  held = await chrome();
+  if (!held.abortArmed) throw new Error(`${context}/abort: ABORT MISSION did not ask for confirmation`);
+  if (!held.paused || (await summary()) === null) {
+    throw new Error(`${context}/abort: arming the abort disturbed the mission`);
+  }
+  await shot(page, `${profile.name}-abort`);
+  await assertControlsReachable(page, 'reconControls', `${context}/abort`);
+
+  await tapControl(page, profile, 'Recon', 'KEEP ANALYSING', `${context}/abort`);
+  held = await chrome();
+  if (held.abortArmed) throw new Error(`${context}/abort: KEEP ANALYSING did not stand the abort down`);
+  if (!held.paused) throw new Error(`${context}/abort: standing down the abort released the hold`);
+
+  await tapControl(page, profile, 'Recon', 'RESUME', `${context}/hold`);
+  const resumed = await chrome();
+  if (resumed.paused) throw new Error(`${context}/hold: RESUME did not release the hold`);
+  if (resumed.pauseMenuOpen) throw new Error(`${context}/hold: the hold screen survived RESUME`);
+  if (!resumed.railVisible) throw new Error(`${context}/hold: the console rail did not come back`);
+
+  const live = await summary();
+  if (!live || live.mapId !== beforeHold.mapId || live.mode !== beforeHold.mode) {
+    throw new Error(`${context}/hold: the mission did not survive the hold // ${JSON.stringify({ beforeHold, live })}`);
+  }
+  console.log(`PASS ${context}: hold screen, in-mission manual and guarded abort`);
+}
+
+/** CONFIRM ABORT stands the tasking down without scoring it. */
+async function exerciseMissionAbort(page, profile, context) {
+  await tapControl(page, profile, 'Recon', 'PAUSE', `${context}/abort`);
+  await tapControl(page, profile, 'Recon', 'ABORT MISSION', `${context}/abort`);
+  const armed = await page.evaluate(() => window.__qa.reconChrome());
+  if (!armed.abortArmed) throw new Error(`${context}/abort: abort was not armed`);
+  await tapControl(page, profile, 'Recon', 'CONFIRM ABORT', `${context}/abort`);
+  await waitForScene(page, 'MainMenu', `${context}/abort`, 12_000);
+  await settle(page, 3);
+  const active = await page.evaluate(() => window.__qa.activeScenes());
+  if (active.includes('Recon')) throw new Error(`${context}/abort: the mission is still running // ${JSON.stringify(active)}`);
+  if (active.includes('Results')) {
+    throw new Error(`${context}/abort: an abandoned attempt was sent to the debrief // ${JSON.stringify(active)}`);
+  }
+  await assertControlsReachable(page, 'menuControls', `${context}/abort-menu`);
+  console.log(`PASS ${context}: CONFIRM ABORT stood the tasking down to the console`);
+}
+
 async function runProfile(profile) {
   const executablePath = process.env.ISPY_E2E_CHROMIUM_PATH;
   const launchOptions = { headless: true, ...(profile.launchOptions ?? {}) };
@@ -1571,12 +1698,7 @@ async function runProfile(profile) {
 
     // Pause/resume before playing: the timer, the rail and the weather layer
     // all have to survive a hold in the middle of a live mission.
-    await tapControl(page, profile, 'Recon', 'PAUSE', `${profile.name}/recon`);
-    const held = await page.evaluate(() => window.__qa.reconChrome());
-    if (!held.paused) throw new Error(`${profile.name}/recon: PAUSE did not hold the mission`);
-    await tapControl(page, profile, 'Recon', 'RESUME', `${profile.name}/recon`);
-    const resumed = await page.evaluate(() => window.__qa.reconChrome());
-    if (resumed.paused) throw new Error(`${profile.name}/recon: RESUME did not release the hold`);
+    await exercisePauseMenu(page, profile, `${profile.name}/recon`);
 
     // One key press is one action. Phaser re-delivers queued key events, so
     // a single ESC used to toggle the hold an even number of times and read
@@ -1713,6 +1835,10 @@ async function runProfile(profile) {
       const tally2 = await page.evaluate(() => window.__qa.missionSummary());
       if (tally2.answerValue !== 1) throw new Error(`${profile.name}/recon-2: tally is dead on the second mission`);
     }
+
+    // Standing the second tasking down proves the way out of a mission, and
+    // proves it does not arrive at a debrief.
+    await exerciseMissionAbort(page, profile, `${profile.name}/recon-2`);
 
     /* --- No leaked DOM ---------------------------------------------- */
     const overlays = await page.evaluate(() => window.__qa.domOverlays());
