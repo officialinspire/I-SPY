@@ -119,7 +119,12 @@ two sentence note on how to recognise *this game's drawing* of it. No frame appe
 Category tabs, a sprite grid sized to the space available, and a detail panel with an enlarged
 preview that keeps its place rather than opening as a modal, so a phone shows both at once. Tab and
 the arrows walk tabs, cells and the return control; Enter opens the focused entry and Escape returns
-to the console. The grid scrolls only when a comfortable cell will not fit.
+to wherever the manual was opened from. The grid scrolls only when a comfortable cell will not fit.
+
+The manual is also reachable **from inside a live mission**, through the hold screen or the `G` key.
+Opened that way it runs over the held tasking rather than replacing it, keeps the mission's own
+score playing, and its return control reads `RETURN TO MISSION`. Checking what a shape is supposed
+to look like is part of the analysis, so the mission clock is stopped for it.
 
 The manual carries no real-world specifications and no tactical advice — `validateIdentificationGuide()`
 rejects a note carrying a figure — and it is mission-blind, so reading it cannot spoil a mission.
@@ -162,6 +167,25 @@ Marking now resolves on pointer release after a drag-threshold check, so draggin
 Phase 13E gives the workspace one information hierarchy — objective, timer, mode state, primary action, secondary utilities — and then makes each mode's tools its own. A mode chip under the objective carries state (`LOCATE · MARKING`), tinted amber while marking, phosphor while a mark is pending and rust while held, and each mode shows one counter rather than a paragraph.
 
 COUNT defines its area by dimming everything outside it with phosphor corner brackets, and separates a captioned ADJUST group (larger steppers, a bordered tally readout) from a captioned SUBMIT action; a refused total turns the readout muted red until the number changes, without interrupting inspection. CHANGE replaces the VIEW PASS toggle with a PASS A | PASS B segmented control whose live segment is lit, and switching passes plays a brief opaque wipe that never shows both passes at once. Split view labels each pane with its own pass and time and keeps the two cameras exactly synchronised.
+
+## Mission hold and abort
+
+`PAUSE` opens a hold screen over the console rather than only stopping the clock. It offers three
+things: `RESUME`, `IDENTIFICATION GUIDE`, and `ABORT MISSION`. `ESC` opens and closes it, and `G`
+opens the manual directly.
+
+Aborting asks before it acts: `ABORT MISSION` replaces the menu with `CONFIRM ABORT` and
+`KEEP ANALYSING`, so a mission cannot be thrown away on one stray press. An abandoned attempt is
+not a debrief — it goes straight back to the console, nothing is scored, nothing is written to the
+analyst record, and an operation series is left exactly where it was. Standing down from
+`ANALYST TRAINING` keeps the analyst's place in the lesson, the same way `BACK TO MENU` does.
+
+The console's own controls leave while the hold screen is up rather than sitting greyed out beneath
+it, and come back exactly as they were — which of them belong on screen depends on the mode, the
+pass and whether a mark is pending. One column of full-width controls is the shape that works in one
+hand and still reads as a menu on a desktop; the panel measures its own header and gives way on row
+height and spacing together, so a phone turned sideways mid-hold refits instead of pushing a control
+off the bottom.
 
 ## Release-candidate audits
 

@@ -163,12 +163,204 @@ export default class ReconScene extends Phaser.Scene {
     [...this.commonButtons, ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])]
       .forEach((button) => button.setScrollFactor(0).setDepth(1002));
 
+    this.createPauseMenu();
+
     this.statusText = this.add.text(0, 0, '', {
       fontFamily: GAME_CONFIG.typography.family, fontSize: '12px', color: GAME_CONFIG.palette.offWhite,
       backgroundColor: GAME_CONFIG.palette.nearBlack, padding: { x: 10, y: 7 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1010).setVisible(false);
 
     if (this.isChangeMode) this.updatePassStatus();
+  }
+
+  /**
+   * The hold screen.
+   *
+   * PAUSE used to stop the clock and grey the mission controls, and that was
+   * all: the only ways out of a live tasking were a finished debrief or a
+   * reload. Holding now opens a menu — resume, open the recognition manual,
+   * or stand the tasking down and go back to the console.
+   *
+   * It is drawn over the mission rather than started as its own scene, so the
+   * cameras, the candidate and the clock accounting underneath are exactly
+   * where the analyst left them when the hold is released.
+   */
+  createPauseMenu() {
+    this.pauseMenuOpen = false;
+    this.abortArmed = false;
+    this.guideOpen = false;
+    this.pauseScrim = this.add.graphics().setScrollFactor(0).setDepth(1200).setVisible(false);
+    this.pausePanel = this.add.graphics().setScrollFactor(0).setDepth(1201).setVisible(false);
+
+    const label = (size, color, letterSpacing) => this.add.text(0, 0, '', {
+      fontFamily: GAME_CONFIG.typography.family,
+      fontSize: `${size}px`,
+      color,
+      letterSpacing,
+      align: 'center',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1202).setVisible(false);
+    this.pauseTitle = label(17, UI_TOKENS.text.body, 3);
+    this.pauseSubtitle = label(11, UI_TOKENS.text.muted, 1);
+
+    // Fixed labels rather than one button that renames itself: the console
+    // is read by a screen reader, a keyboard ring and a QA suite, and a
+    // control whose meaning depends on hidden state lies to all three.
+    this.resumeButton = createButton(this, 0, 0, 'RESUME', () => this.togglePause(),
+      { width: 260, height: 46, fontSize: 14, variant: 'primary', pressSound: false });
+    this.guideButton = createButton(this, 0, 0, 'IDENTIFICATION GUIDE', () => this.openIdentificationGuide(),
+      { width: 260, height: 46, fontSize: 13, variant: 'secondary' });
+    this.abortButton = createButton(this, 0, 0, 'ABORT MISSION', () => this.armAbort(true),
+      { width: 260, height: 46, fontSize: 13, variant: 'danger' });
+    this.abortConfirmButton = createButton(this, 0, 0, 'CONFIRM ABORT', () => this.abortMission(),
+      { width: 260, height: 46, fontSize: 14, variant: 'danger' });
+    this.abortCancelButton = createButton(this, 0, 0, 'KEEP ANALYSING', () => this.armAbort(false),
+      { width: 260, height: 46, fontSize: 13, variant: 'primary' });
+
+    this.pauseButtons = [this.resumeButton, this.guideButton, this.abortButton,
+      this.abortConfirmButton, this.abortCancelButton];
+    this.pauseButtons.forEach((button) => button.setScrollFactor(0).setDepth(1203).setVisible(false));
+  }
+
+  /** Every control that has to stand down while the hold screen is up. */
+  holdableButtons() {
+    return [...(this.commonButtons ?? []), ...(this.locateButtons ?? []),
+      ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
+  }
+
+  /**
+   * The rail's furniture, which is not pressable but is still the rail.
+   *
+   * The tally, its frame and the captions that label the mode's controls
+   * belong to the controls that have just left; leaving them lit under the
+   * panel reads as a console that is half held.
+   */
+  holdableFurniture() {
+    return [this.tallyFrame, this.answerText, this.adjustCaption, this.submitCaption,
+      this.passCaption, this.passStatusText];
+  }
+
+  /**
+   * The console's own controls leave while the hold screen is up.
+   *
+   * Greying them out is not enough: they would still sit under the panel,
+   * still be found by anything that looks for a control by name, and a press
+   * that lands on one nobody can see is the defect this console keeps
+   * relearning. Their visibility is restored exactly as it was, because which
+   * of them are on screen depends on the mode, the pass and whether a mark is
+   * pending — it is not simply "all of them".
+   */
+  setRailHidden(hidden) {
+    const buttons = this.holdableButtons();
+    const furniture = this.holdableFurniture();
+    if (hidden) {
+      if (!this.railVisibilityBeforeHold) {
+        this.railVisibilityBeforeHold = {
+          buttons: buttons.map((button) => button?.isVisible() ?? false),
+          furniture: furniture.map((object) => object?.visible ?? false),
+        };
+      }
+      buttons.forEach((button) => button?.setVisible(false));
+      furniture.forEach((object) => object?.setVisible(false));
+      // A status line from before the hold is stale by the time the panel is
+      // up, and its own timer will have taken it away by the time this ends.
+      this.statusText?.setVisible(false);
+      return;
+    }
+    const before = this.railVisibilityBeforeHold;
+    buttons.forEach((button, index) => button?.setVisible(before ? (before.buttons[index] ?? false) : true));
+    furniture.forEach((object, index) => object?.setVisible(before ? (before.furniture[index] ?? false) : true));
+    this.railVisibilityBeforeHold = null;
+  }
+
+  setPauseMenuVisible(visible) {
+    if (!this.pauseScrim) return;
+    this.pauseMenuOpen = visible;
+    if (!visible) this.abortArmed = false;
+    this.pauseScrim.setVisible(visible);
+    this.pausePanel.setVisible(visible);
+    this.pauseTitle.setVisible(visible);
+    this.pauseSubtitle.setVisible(visible);
+    this.refreshPauseMenu();
+    this.setRailHidden(visible);
+    if (visible) this.layoutPauseMenu(this.scale.gameSize.width, this.scale.gameSize.height);
+  }
+
+  /** Arming the abort swaps the choices rather than acting on the first press. */
+  armAbort(armed) {
+    if (!this.pauseMenuOpen) return;
+    this.abortArmed = armed;
+    this.refreshPauseMenu();
+    this.layoutPauseMenu(this.scale.gameSize.width, this.scale.gameSize.height);
+  }
+
+  refreshPauseMenu() {
+    if (!this.pauseTitle) return;
+    const open = this.pauseMenuOpen;
+    const armed = this.abortArmed;
+    this.resumeButton.setVisible(open && !armed);
+    this.guideButton.setVisible(open && !armed);
+    this.abortButton.setVisible(open && !armed);
+    this.abortConfirmButton.setVisible(open && armed);
+    this.abortCancelButton.setVisible(open && armed);
+    if (!open) return;
+    this.pauseTitle.setText(armed ? 'ABORT THIS TASKING?' : 'RECON HELD');
+    this.pauseSubtitle
+      .setText(armed
+        ? 'ATTEMPT DISCARDED \u00b7 NOTHING SCORED'
+        : `${this.mission.mode} \u00b7 ${this.formatTime(this.remainingSeconds)} REMAINING`)
+      .setColor(armed ? UI_TOKENS.text.negative : UI_TOKENS.text.muted);
+  }
+
+  /**
+   * The recognition manual, over a held mission.
+   *
+   * Checking what a shape is supposed to look like is analysis, not a break,
+   * so the clock stops for it: opening the manual holds the mission first.
+   * The manual runs as its own scene on top rather than replacing this one,
+   * which is what lets the tasking still be here afterwards.
+   */
+  openIdentificationGuide() {
+    if (this.guideOpen || this.missionEnded) return;
+    if (!this.paused) this.togglePause();
+    this.guideOpen = true;
+    this.setConsoleInputEnabled(false);
+    this.scene.launch('IdentificationGuide', { returnTo: this.scene.key });
+    this.scene.bringToTop('IdentificationGuide');
+  }
+
+  /** Called by the manual on its way out. */
+  closeIdentificationGuide() {
+    if (!this.guideOpen) return;
+    this.guideOpen = false;
+    this.setConsoleInputEnabled(true);
+    this.layoutPauseMenu(this.scale.gameSize.width, this.scale.gameSize.height);
+  }
+
+  /**
+   * Stop answering input without tearing anything down.
+   *
+   * Both scenes are live while the manual is open, and Phaser offers a press
+   * to every one of them. Without this the console keeps its keyboard: ESC
+   * meant for the manual would release the hold underneath it.
+   */
+  setConsoleInputEnabled(enabled) {
+    if (this.input) this.input.enabled = enabled;
+    if (this.input?.keyboard) this.input.keyboard.enabled = enabled;
+  }
+
+  /**
+   * Stand the tasking down.
+   *
+   * Deliberately not a route through finishMission: an abandoned attempt is
+   * not a debrief, so nothing is scored, nothing is written to the analyst
+   * record, and an operation series is left exactly where it was.
+   */
+  abortMission() {
+    if (this.missionEnded) return;
+    this.missionEnded = true;
+    this.timerEvent?.remove(false);
+    this.setPauseMenuVisible(false);
+    this.scene.start('MainMenu');
   }
 
   /** One word for what the console is doing right now. */
@@ -555,6 +747,9 @@ export default class ReconScene extends Phaser.Scene {
     // and a COUNT stepper used to move the tally by three or five at once.
     this.input.keyboard?.on('keydown-ESC', oncePerKeyEvent('recon-esc', () => {
       if (!this.isCountMode && this.candidate) this.cancelCandidate(); else this.togglePause();
+    }));
+    this.input.keyboard?.on('keydown-G', oncePerKeyEvent('recon-guide', () => {
+      if (!this.missionEnded) this.openIdentificationGuide();
     }));
     this.input.keyboard?.on('keydown', oncePerKeyEvent('recon-key', (event) => this.handleKeyboard(event)));
   }
@@ -1203,8 +1398,9 @@ export default class ReconScene extends Phaser.Scene {
 
   getUiObjects() {
     const objects = [this.hud, this.statusText, this.answerText, this.passStatusText, this.atmosphereGraphics,
-      this.weatherOverlay?.graphics, this.tallyFrame, this.adjustCaption, this.submitCaption, this.passCaption];
-    const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? [])];
+      this.weatherOverlay?.graphics, this.tallyFrame, this.adjustCaption, this.submitCaption, this.passCaption,
+      this.pauseScrim, this.pausePanel, this.pauseTitle, this.pauseSubtitle];
+    const buttons = [...(this.commonButtons ?? []), ...(this.locateButtons ?? []), ...(this.countButtons ?? []), ...(this.changeButtons ?? []), ...(this.pauseButtons ?? [])];
     buttons.forEach((button) => objects.push(...button.getObjects()));
     return objects.filter(Boolean);
   }
@@ -1400,8 +1596,9 @@ export default class ReconScene extends Phaser.Scene {
     this.pauseButton.setLabel(this.paused ? 'RESUME' : 'PAUSE').setVariant(this.paused ? 'warning' : 'secondary');
     this.setMissionControlsEnabled(!this.paused);
     this.weatherOverlay?.setPaused(this.paused);
+    this.setPauseMenuVisible(this.paused);
     this.refreshModeStrip();
-    this.flashStatus(this.paused ? 'RECON PAUSED // ESC TO RESUME' : 'RECON RESUMED');
+    if (!this.paused) this.flashStatus('RECON RESUMED');
   }
 
   /** Mission actions read as unavailable while the recon feed is held. */
@@ -1429,6 +1626,81 @@ export default class ReconScene extends Phaser.Scene {
     this.statusText.setText(message).setVisible(true);
     this.statusTimer?.remove(false);
     this.statusTimer = this.time.delayedCall(1700, () => this.statusText.setVisible(false));
+  }
+
+  /**
+   * The hold screen, fitted to the console it is covering.
+   *
+   * One column of full-width controls, because that is the shape that works
+   * on a phone held in one hand and still reads as a menu on a desktop. The
+   * row height and the gaps give way together when a landscape phone leaves
+   * almost no height, so the panel never grows past the viewport and never
+   * pushes a control off the bottom where nothing can reach it.
+   */
+  layoutPauseMenu(width, height) {
+    if (!this.pauseScrim || !this.pauseMenuOpen) return;
+    const buttons = (this.pauseButtons ?? []).filter((button) => button.isVisible());
+    if (!buttons.length) return;
+
+    const compact = width < 680;
+    const panelWidth = Math.min(width - 32, compact ? 336 : 420);
+    const padding = compact ? 18 : 22;
+    const rowWidth = panelWidth - padding * 2;
+
+    // The header is measured rather than assumed: the abort's warning is
+    // longer than the mission line it replaces, and on a 360px phone a fixed
+    // header let it run straight out through the side of the panel.
+    this.pauseTitle.setFontSize(compact ? 16 : 17).setWordWrapWidth(rowWidth);
+    this.pauseSubtitle.setFontSize(compact ? 10 : 11).setWordWrapWidth(rowWidth);
+    const headerHeight = Math.ceil(this.pauseTitle.height + 8 + this.pauseSubtitle.height + 16);
+
+    let rowHeight = compact ? 48 : 46;
+    let gap = 12;
+    const available = height - GAME_CONFIG.recon.hudHeight - 24;
+    const heightFor = (row, space) => headerHeight + padding * 2
+      + buttons.length * row + (buttons.length - 1) * space;
+    while (heightFor(rowHeight, gap) > available && (rowHeight > 38 || gap > 8)) {
+      if (gap > 8) gap -= 1;
+      else rowHeight -= 1;
+    }
+
+    const panelHeight = heightFor(rowHeight, gap);
+    const left = Math.round((width - panelWidth) / 2);
+    const top = Math.round(Math.max(
+      GAME_CONFIG.recon.hudHeight + 8,
+      (height - panelHeight) / 2,
+    ));
+    const centreX = Math.round(width / 2);
+
+    this.pauseScrim.clear();
+    this.pauseScrim.fillStyle(hexToNumber(GAME_CONFIG.palette.black), 0.78);
+    this.pauseScrim.fillRect(0, 0, width, height);
+
+    this.pausePanel.clear();
+    this.pausePanel.fillStyle(hexToNumber(GAME_CONFIG.palette.nearBlack), 0.98);
+    this.pausePanel.fillRect(left, top, panelWidth, panelHeight);
+    this.pausePanel.lineStyle(1, hexToNumber(UI_TOKENS.color.phosphorDim), 0.9);
+    this.pausePanel.strokeRect(left + 0.5, top + 0.5, panelWidth - 1, panelHeight - 1);
+
+    const titleY = top + padding + this.pauseTitle.height / 2;
+    this.pauseTitle.setPosition(centreX, Math.round(titleY));
+    this.pauseSubtitle.setPosition(
+      centreX,
+      Math.round(titleY + this.pauseTitle.height / 2 + 8 + this.pauseSubtitle.height / 2),
+    );
+
+    let y = top + padding + headerHeight + Math.round(rowHeight / 2);
+    buttons.forEach((button) => {
+      button
+        .resize({
+          width: rowWidth,
+          height: rowHeight,
+          hitPaddingX: 0,
+          hitPaddingY: hitGap(gap),
+        })
+        .setPosition(centreX, y);
+      y += rowHeight + gap;
+    });
   }
 
   onResize(gameSize) {
@@ -1465,6 +1737,7 @@ export default class ReconScene extends Phaser.Scene {
     this.clampCameraScroll(this.cameras.main);
     if (this.isChangeMode && this.splitView) this.syncChangeCameras(this.cameras.main);
     if (this.candidate) this.drawCandidateMarker();
+    this.layoutPauseMenu(width, height);
 
     if (this.isCountMode) {
       // Tally module (adjust) sits apart from the submit action, each captioned.
@@ -1626,6 +1899,12 @@ export default class ReconScene extends Phaser.Scene {
       this.nativeGestureCancel = null;
     }
     this.cancelActiveMapGesture();
+    // The manual outlives this scene's shutdown if it is still open, and a
+    // console that is going away cannot be returned to.
+    if (this.guideOpen) {
+      this.guideOpen = false;
+      this.scene.stop('IdentificationGuide');
+    }
     this.timerEvent?.remove(false);
     this.statusTimer?.remove(false);
     this.weatherOverlay?.destroy();

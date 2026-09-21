@@ -192,6 +192,23 @@ export default class TrainingScene extends EnhancedReconScene {
     this.panelButtons.forEach((button) => button.setScrollFactor(0).setDepth(1022));
   }
 
+  /** The tutorial's own panel stands down behind the hold screen as well. */
+  holdableButtons() {
+    return [...super.holdableButtons(), ...(this.panelButtons ?? [])];
+  }
+
+  /**
+   * Standing down from training keeps the analyst's place in it, the same
+   * way BACK TO MENU does — the lesson is not an attempt to be discarded.
+   */
+  abortMission() {
+    if (this.missionEnded) return;
+    this.missionEnded = true;
+    this.timerEvent?.remove(false);
+    this.setPauseMenuVisible(false);
+    this.backToMenu();
+  }
+
   getUiObjects() {
     const objects = [...super.getUiObjects(), this.panelGraphics, this.panelStep, this.panelTitle,
       this.panelBody, this.panelChecklist];
