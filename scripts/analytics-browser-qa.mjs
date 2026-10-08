@@ -24,8 +24,8 @@ async function tap(sceneKey, control) {
 }
 
 try {
-  await page.goto('http://127.0.0.1:4173/?qa=1&mode=LOCATE&seed=ANALYTICS-QA');
-  await scene('StartIntro');
+  await page.goto('http://127.0.0.1:4173/?qa=1&mode=LOCATE&seed=ANALYTICS-QA', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().some((key) => key === 'StartIntro' || key === 'MainMenu'));
   await page.evaluate(() => window.__ISPY_QA__.finishIntro());
   await scene('MainMenu');
   await tap('MainMenu', 'randomCard');
@@ -47,8 +47,8 @@ try {
   assert.equal(errors.length, 0, errors.join(' | '));
 
   rejectAnalytics = true;
-  await page.reload();
-  await scene('StartIntro');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().some((key) => key === 'StartIntro' || key === 'MainMenu'));
   await page.evaluate(() => window.__ISPY_QA__.finishIntro());
   await scene('MainMenu');
   assert.equal(errors.length, 0, errors.join(' | '));
