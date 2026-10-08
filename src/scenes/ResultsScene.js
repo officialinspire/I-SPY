@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
+import { getReconMapEntry } from '../world/mapRegistry.js';
 import { trackGameEvent } from '../analytics.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome } from '../ui/presentation.js';
@@ -47,7 +48,9 @@ export default class ResultsScene extends Phaser.Scene {
     const operationLabel = operationContext?.kind === 'daily' ? 'DAILY DOSSIER' : 'OPERATION SERIES';
     if (!recordUpdate.duplicate) {
       const details = {
+        game_state: 'Results',
         mode: mission.mode,
+        difficulty: getReconMapEntry(mission.mapId)?.difficulty,
         round: (mission.operationSeries?.index ?? 0) + 1,
         score: score.totalScore ?? 0,
         high_score: recordUpdate.record.byMode[mission.mode]?.bestScore ?? 0,

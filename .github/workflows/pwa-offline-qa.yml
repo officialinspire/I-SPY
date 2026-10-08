@@ -62,4 +62,4 @@ jobs:
         run: npm run qa:offline
 
       - name: Verify anonymous analytics and network failure isolation
-        run: node scripts/analytics-browser-qa.mjs
+        run: node scripts/analytics-safety-qa.mjs && node scripts/analytics-browser-qa.mjs

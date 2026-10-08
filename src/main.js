@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
-import { initAnalytics } from './analytics.js';
+import { initAnalytics, setAnalyticsContext } from './analytics.js';
+import { getReconMapEntry } from './world/mapRegistry.js';
 import { describeArmLock } from './ui/createButton.js';
 
 const inputLog = [];
@@ -52,6 +53,13 @@ const config = {
 
 initAnalytics();
 const game = new Phaser.Game(config);
+setAnalyticsContext(() => {
+  const active = game.scene.getScenes(true)[0];
+  const mission = active?.mission ?? active?.debrief?.mission;
+  return { game_state: active?.scene.key ?? 'loading', mode: mission?.mode,
+    round: (mission?.operationSeries?.index ?? 0) + 1,
+    difficulty: mission ? getReconMapEntry(mission.mapId)?.difficulty : undefined };
+});
 registerOfflineSupport();
 
 /**

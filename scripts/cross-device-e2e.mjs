@@ -1503,6 +1503,7 @@ async function runProfile(profile) {
   });
 
   await page.addInitScript(({ settingsKey, recordKey }) => {
+    Object.defineProperty(navigator, 'globalPrivacyControl', { value: true });
     localStorage.setItem(settingsKey, JSON.stringify({
       masterVolume: 0,
       musicEnabled: false,

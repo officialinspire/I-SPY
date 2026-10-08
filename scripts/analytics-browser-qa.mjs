@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const browser = await chromium.launch({ args: ['--enable-webgl', '--use-angle=swiftshader'] });
+const browser = await chromium.launch({ args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const context = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true });
 await context.addInitScript(() => {
   localStorage.setItem('i-spy-settings-v1', JSON.stringify({
@@ -53,11 +53,50 @@ try {
   assert.equal(captured.find((item) => item.event === 'game_over').properties.score >= 0, true);
   assert.equal(errors.length, 0, errors.join(' | '));
 
+  // Play a second attempt to success through the same existing result transition.
+  await page.evaluate(() => {
+    const qa = window.__ISPY_QA__;
+    const mission = qa.game.scene.getScene('Results').debrief.mission;
+    qa.game.scene.start('Recon', { mission });
+  });
+  await scene('Recon');
+  await page.evaluate(() => window.__ISPY_QA__.game.scene.getScene('Recon').finishMission(true));
+  await scene('Results');
+  await page.waitForTimeout(400);
+  assert.equal(captured.filter((e) => e.event === 'game_completed').length, 1);
+  assert.equal(captured.filter((e) => e.event === 'high_score_achieved').length, 1);
+  const completed = captured.find((e) => e.event === 'game_completed');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('i-spy-analyst-record-v2')));
+  assert.equal(completed.properties.score, saved.byMode.LOCATE.bestScore);
+  assert.ok(completed.properties.difficulty >= 1);
+  const beforeReplay = captured.length;
+  await page.evaluate(() => {
+    const game = window.__ISPY_QA__.game;
+    game.scene.start('Results', game.scene.getScene('Results').debrief);
+  });
+  await scene('Results');
+  await page.waitForTimeout(400);
+  assert.equal(captured.length, beforeReplay, 'duplicate debrief emits no events');
+  await page.evaluate(() => {
+    window.dispatchEvent(new ErrorEvent('error', { error: new TypeError('PRIVATE QA MESSAGE'), message: 'PRIVATE QA MESSAGE' }));
+  });
+  await page.waitForTimeout(200);
+  const error = captured.find((e) => e.event === 'error_encountered');
+  assert.equal(error.properties.error_name, 'TypeError');
+  assert.equal(error.properties.game_state, 'Results');
+  assert.ok(!JSON.stringify(captured).includes('PRIVATE QA MESSAGE'));
   rejectAnalytics = true;
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__ISPY_QA__?.activeScenes().some((key) => key === 'StartIntro' || key === 'MainMenu'));
   await page.evaluate(() => window.__ISPY_QA__.finishIntro());
   await scene('MainMenu');
+  assert.equal(errors.length, 0, errors.join(' | '));
+  await tap('MainMenu', 'randomCard');
+  await scene('MissionBriefing');
+  await tap('MissionBriefing', 'begin');
+  await scene('Recon');
+  await page.evaluate(() => window.__ISPY_QA__.game.scene.getScene('Recon').finishMission(true));
+  await scene('Results');
   assert.equal(errors.length, 0, errors.join(' | '));
   console.log(`ANALYTICS_QA_CAPTURE ${JSON.stringify(captured)}`);
   console.log('I-SPY analytics browser QA passed.');
