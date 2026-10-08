@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
+import { getReconMapEntry } from '../world/mapRegistry.js';
+import { trackGameEvent } from '../analytics.js';
 import { createButton } from '../ui/createButton.js';
 import { UI_TOKENS, hexToNumber, hitGap } from '../ui/designTokens.js';
 import { createAuthoredReconMap, applyReconOperations, entityNearPoint } from '../world/authoredReconMap.js';
@@ -69,6 +71,13 @@ export default class ReconScene extends Phaser.Scene {
     this.scale.on('resize', this.onResize, this);
     this.events.once('shutdown', () => this.cleanup());
     this.onResize(this.scale.gameSize);
+    if (this.scene.key === 'Recon') {
+      const details = { game_state: 'Recon', mode: this.mission.mode, difficulty: getReconMapEntry(this.mission.mapId)?.difficulty, round: (this.mission.operationSeries?.index ?? 0) + 1 };
+      if (!this.mission.operationSeries || this.mission.operationSeries.index === 0) {
+        trackGameEvent('game_started', { ...details, mode: this.mission.operationSeries?.kind ?? details.mode });
+      }
+      trackGameEvent('round_started', details);
+    }
   }
 
   createWorldState() {

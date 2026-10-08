@@ -26,6 +26,7 @@ async function waitForScene(page, key, timeout = 12_000) {
 async function prepareOnlineInstall() {
   const context = await chromium.launchPersistentContext(profileDir, launchOptions);
   await context.addInitScript(({ key }) => {
+    Object.defineProperty(navigator, 'globalPrivacyControl', { value: true });
     localStorage.setItem(key, JSON.stringify({
       masterVolume: 0,
       musicEnabled: false,
