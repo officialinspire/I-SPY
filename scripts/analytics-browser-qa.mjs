@@ -3,6 +3,13 @@ import { chromium } from 'playwright';
 
 const browser = await chromium.launch({ args: ['--enable-webgl', '--use-angle=swiftshader'] });
 const context = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true });
+await context.addInitScript(() => {
+  localStorage.setItem('i-spy-settings-v1', JSON.stringify({
+    masterVolume: 0, musicEnabled: false, sfxEnabled: false, hapticsLevel: 'off',
+    scanlinesEnabled: true, imageGrainEnabled: true, sector: 'any',
+    tutorialCompleted: false, tutorialStep: 0, orientationSeen: true,
+  }));
+});
 const captured = [];
 let rejectAnalytics = false;
 await context.route('https://us.i.posthog.com/i/v0/e/', async (route) => {
