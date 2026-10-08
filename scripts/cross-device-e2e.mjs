@@ -55,6 +55,9 @@ const ALL_PROFILES = [
   {
     name: 'iphone-webkit',
     engine: webkit,
+    // Use CI's virtual display: merely wrapping a headless browser in xvfb
+    // does not avoid WebKit's documented animation-frame starvation.
+    launchOptions: { headless: !process.env.DISPLAY },
     viewport: { width: 393, height: 852 },
     rotateTo: { width: 852, height: 393 },
     isMobile: true,
