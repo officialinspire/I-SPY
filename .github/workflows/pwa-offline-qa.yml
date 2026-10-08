@@ -60,3 +60,6 @@ jobs:
 
       - name: Prove cold offline restart and gameplay
         run: npm run qa:offline
+
+      - name: Verify anonymous analytics and network failure isolation
+        run: node scripts/analytics-browser-qa.mjs

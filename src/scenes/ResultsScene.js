@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../runtime-config.js';
+import { trackGameEvent } from '../analytics.js';
 import { createButton } from '../ui/createButton.js';
 import { createTerminalChrome } from '../ui/presentation.js';
 import { createFocusGroup } from '../ui/focusGroup.js';
@@ -44,6 +45,28 @@ export default class ResultsScene extends Phaser.Scene {
     const operationContext = operationOutcome?.context ?? null;
     const operationScore = operationContext?.cumulative?.score ?? score.totalScore ?? 0;
     const operationLabel = operationContext?.kind === 'daily' ? 'DAILY DOSSIER' : 'OPERATION SERIES';
+    if (!recordUpdate.duplicate) {
+      const details = {
+        mode: mission.mode,
+        round: (mission.operationSeries?.index ?? 0) + 1,
+        score: score.totalScore ?? 0,
+        high_score: recordUpdate.record.byMode[mission.mode]?.bestScore ?? 0,
+        duration_seconds: data.elapsedSeconds ?? 0,
+      };
+      trackGameEvent('round_completed', details, data.resultId);
+      if (recordUpdate.newBestScore) trackGameEvent('high_score_achieved', details, data.resultId);
+      if (!operationOutcome) trackGameEvent(success ? 'game_completed' : 'game_over', details, data.resultId);
+      if (operationFinal && !operationRecord?.duplicate) {
+        const series = { ...details, mode: operationContext.kind, score: operationScore,
+          high_score: operationContext.kind === 'daily'
+            ? operationRecord.record.daily[operationContext.dailyDate]?.bestScore ?? 0
+            : operationRecord.record.operations.bestScore };
+        trackGameEvent(operationOutcome.status === 'complete' ? 'game_completed' : 'game_over', series, data.resultId);
+        if (operationRecord.newBest || operationRecord.newDailyBest) {
+          trackGameEvent('high_score_achieved', series, `series:${data.resultId}`);
+        }
+      }
+    }
     const titleText = operationOutcome
       ? operationOutcome.status === 'complete' ? `${operationLabel} COMPLETE`
         : operationOutcome.status === 'failed' ? `${operationLabel} FAILED`

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GAME_CONFIG } from './runtime-config.js';
+import { initAnalytics } from './analytics.js';
 import { describeArmLock } from './ui/createButton.js';
 
 const inputLog = [];
@@ -49,6 +50,7 @@ const config = {
   scene: [BootScene, StartIntroScene, MainMenuScene, MissionBriefingScene, EnhancedReconScene, TrainingScene, IdentificationGuideScene, ResultsScene, AnalystRecordScene],
 };
 
+initAnalytics();
 const game = new Phaser.Game(config);
 registerOfflineSupport();
 
